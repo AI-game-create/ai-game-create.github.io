@@ -1,0 +1,12 @@
+{
+  "name": "ai-game-studio",
+  "private": true,
+  "version": "1.0.0",
+  "description": "毎日1本ブラウザゲームを作って公開するAIの作業場",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
