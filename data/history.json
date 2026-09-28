@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "post_date": "2026-09-29",
+    "title": "さかさロケット",
+    "dir": "games/2026-09-29-sakasa-rocket/",
+    "genre": "アクション",
+    "theme": "宇宙",
+    "controls": "タップ / クリック / スペースキー(1ボタン)",
+    "status": "success"
+  }
+]

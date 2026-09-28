@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>さかさロケット</title>
+<style>
+  :root {
+    --bg: #070b1c;
+    --panel: #121a38;
+    --line: #2b3a6b;
+    --text: #e8ecff;
+    --sub: #8fa0d4;
+    --accent: #ffd166;
+    --danger: #ef476f;
+    --orb: #06d6a0;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 16px 28px;
+    min-height: 100vh;
+  }
+  h1 { margin: 4px 0 2px; font-size: clamp(20px, 5vw, 28px); letter-spacing: 0.04em; }
+  .lead { margin: 0 0 12px; color: var(--sub); font-size: 13px; text-align: center; }
+  .stage { position: relative; width: 100%; max-width: 640px; }
+  canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 8 / 5;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #070b1c;
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  .veil {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 18px;
+    text-align: center;
+    background: rgba(7, 11, 28, 0.82);
+    border-radius: 14px;
+  }
+  .veil.hide { display: none; }
+  .veil h2 { margin: 0; font-size: clamp(18px, 4.4vw, 24px); }
+  .veil p { margin: 0; color: var(--sub); font-size: 13px; line-height: 1.7; }
+  .big { font-size: clamp(26px, 7vw, 38px); font-weight: 700; color: var(--accent); }
+  button {
+    margin-top: 4px;
+    padding: 11px 26px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+    color: #10142c;
+    background: var(--accent);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  button:active { transform: translateY(1px); }
+  .note {
+    width: 100%;
+    max-width: 640px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--sub);
+  }
+  .note b { color: var(--text); }
+  .foot {
+    margin-top: 12px;
+    font-size: 11px;
+    color: #5d6b9c;
+  }
+</style>
+</head>
+<body>
+
+<h1>さかさロケット</h1>
+<p class="lead">押すたびに重力がひっくり返る。天井と床を行き来して、どこまで飛べるかな。</p>
+
+<div class="stage">
+  <canvas id="cv" width="640" height="400" aria-label="ゲーム画面"></canvas>
+  <div class="veil" id="veil">
+    <h2 id="vTitle">さかさロケット</h2>
+    <p id="vBody">タップ、またはスペースキーで重力が反転します。<br>赤い岩をよけて、緑の光を集めよう。</p>
+    <button id="btn" type="button">スタート</button>
+  </div>
+</div>
+
+<div class="note">
+  <b>操作</b>:タップ / クリック / スペースキー / ↑キー のどれかで重力が反転します。<br>
+  <b>スコア</b>:飛んだ距離 + 緑の光1個につき5点。進むほど速くなります。<br>
+  <b>リトライ</b>:ぶつかったら「もう一度あそぶ」でやり直せます。
+</div>
+
+<p class="foot">ゲームつくるAI(仮)が作りました</p>
+
+<script>
+(function () {
+  'use strict';
+
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+  var veil = document.getElementById('veil');
+  var vTitle = document.getElementById('vTitle');
+  var vBody = document.getElementById('vBody');
+  var btn = document.getElementById('btn');
+
+  var W = 640, H = 400;
+  var TOP = 26, BOT = H - 26;
+  var GRAV = 0.78, KICK = 2.4;
+
+  var state = 'title';
+  var p, rocks, orbs, speed, dist, bonus, rockT, orbT, flash, best = 0;
+
+  try {
+    var saved = window.localStorage.getItem('sakasa-best');
+    if (saved) { best = parseInt(saved, 10) || 0; }
+  } catch (e) { best = 0; }
+
+  var stars = [];
+  for (var i = 0; i < 70; i++) {
+    stars.push({ x: Math.random() * W, y: Math.random() * H, z: 0.3 + Math.random() * 1.2 });
+  }
+
+  function reset() {
+    p = { x: 130, y: BOT - 16, vy: 0, dir: 1, tilt: 0 };
+    rocks = [];
+    orbs = [];
+    speed = 3.2;
+    dist = 0;
+    bonus = 0;
+    rockT = 46;
+    orbT = 70;
+    flash = 0;
+  }
+
+  function score() {
+    return Math.floor(dist / 10) + bonus;
+  }
+
+  function start() {
+    reset();
+    state = 'play';
+    veil.classList.add('hide');
+  }
+
+  function over() {
+    state = 'over';
+    flash = 14;
+    var s = score();
+    if (s > best) {
+      best = s;
+      try { window.localStorage.setItem('sakasa-best', String(best)); } catch (e) {}
+    }
+    vTitle.textContent = 'ぶつかりました';
+    vBody.innerHTML = '<span class="big">' + s + '</span> 点<br>ベスト ' + best + ' 点';
+    btn.textContent = 'もう一度あそぶ';
+    veil.classList.remove('hide');
+  }
+
+  function poke() {
+    if (state === 'play') {
+      p.dir = -p.dir;
+      p.vy = p.dir * KICK;
+    } else {
+      start();
+    }
+  }
+
+  function spawnRock() {
+    var fromTop = Math.random() < 0.5;
+    var h = 46 + Math.random() * 96;
+    rocks.push({ x: W + 30, w: 26 + Math.random() * 14, h: h, top: fromTop });
+  }
+
+  function spawnOrb() {
+    orbs.push({ x: W + 30, y: TOP + 34 + Math.random() * (BOT - TOP - 68), got: false, t: 0 });
+  }
+
+  function hit(r) {
+    var px = p.x - 13, py = p.y - 11, pw = 26, ph = 22;
+    var ry = r.top ? TOP : BOT - r.h;
+    return px < r.x + r.w && px + pw > r.x && py < ry + r.h && py + ph > ry;
+  }
+
+  function update(dt) {
+    for (var i = 0; i < stars.length; i++) {
+      var st = stars[i];
+      st.x -= st.z * (state === 'play' ? speed * 0.34 : 0.35) * dt;
+      if (st.x < 0) { st.x = W; st.y = Math.random() * H; }
+    }
+    if (flash > 0) { flash -= dt; }
+    if (state !== 'play') { return; }
+
+    dist += speed * dt;
+    speed = 3.2 + Math.min(3.4, dist / 950);
+
+    p.vy += GRAV * p.dir * dt;
+    p.y += p.vy * dt;
+    if (p.dir === 1 && p.y > BOT - 12) { p.y = BOT - 12; p.vy = 0; }
+    if (p.dir === -1 && p.y < TOP + 12) { p.y = TOP + 12; p.vy = 0; }
+    p.tilt += ((p.vy * 0.05) - p.tilt) * 0.2 * dt;
+
+    rockT -= dt;
+    if (rockT <= 0) {
+      spawnRock();
+      rockT = Math.max(26, 54 - dist / 260) + Math.random() * 22;
+    }
+    orbT -= dt;
+    if (orbT <= 0) {
+      spawnOrb();
+      orbT = 70 + Math.random() * 60;
+    }
+
+    for (var j = rocks.length - 1; j >= 0; j--) {
+      rocks[j].x -= speed * dt;
+      if (hit(rocks[j])) { over(); return; }
+      if (rocks[j].x + rocks[j].w < -10) { rocks.splice(j, 1); }
+    }
+    for (var k = orbs.length - 1; k >= 0; k--) {
+      var o = orbs[k];
+      o.x -= speed * dt;
+      o.t += dt;
+      if (!o.got && Math.abs(o.x - p.x) < 20 && Math.abs(o.y - p.y) < 20) {
+        o.got = true;
+        bonus += 5;
+        flash = 6;
+      }
+      if (o.got || o.x < -20) { orbs.splice(k, 1); }
+    }
+  }
+
+  function draw() {
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0a1030');
+    g.addColorStop(1, '#070b1c');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    for (var i = 0; i < stars.length; i++) {
+      var st = stars[i];
+      ctx.globalAlpha = 0.25 + st.z * 0.5;
+      ctx.fillStyle = '#cfe0ff';
+      ctx.fillRect(st.x, st.y, st.z * 1.6, st.z * 1.6);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#16204a';
+    ctx.fillRect(0, 0, W, TOP);
+    ctx.fillRect(0, BOT, W, H - BOT);
+    ctx.fillStyle = '#3a86ff';
+    ctx.fillRect(0, TOP - 2, W, 2);
+    ctx.fillRect(0, BOT, W, 2);
+
+    for (var j = 0; j < rocks.length; j++) {
+      var r = rocks[j];
+      var ry = r.top ? TOP : BOT - r.h;
+      ctx.fillStyle = '#ef476f';
+      ctx.fillRect(r.x, ry, r.w, r.h);
+      ctx.fillStyle = 'rgba(255,255,255,0.16)';
+      ctx.fillRect(r.x, r.top ? ry + r.h - 5 : ry, r.w, 5);
+    }
+
+    for (var k = 0; k < orbs.length; k++) {
+      var o = orbs[k];
+      var pulse = 8 + Math.sin(o.t * 0.12) * 1.6;
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = '#06d6a0';
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, pulse + 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#06d6a0';
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (p) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.tilt);
+      ctx.scale(1, p.dir);
+      ctx.fillStyle = '#ff9f1c';
+      ctx.beginPath();
+      ctx.moveTo(-13, -5);
+      ctx.lineTo(-13 - (8 + Math.random() * 7), 0);
+      ctx.lineTo(-13, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.moveTo(15, 0);
+      ctx.lineTo(-12, -10);
+      ctx.lineTo(-12, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#12306b';
+      ctx.beginPath();
+      ctx.arc(1, 0, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.fillStyle = '#e8ecff';
+    ctx.font = 'bold 20px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('スコア ' + score(), 14, 20);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#8fa0d4';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillText('ベスト ' + best, W - 14, 19);
+
+    if (flash > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (flash / 60) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  var last = 0;
+  function loop(now) {
+    if (!last) { last = now; }
+    var dt = (now - last) / 16.667;
+    last = now;
+    if (dt > 2.5) { dt = 2.5; }
+    update(dt);
+    draw();
+    window.requestAnimationFrame(loop);
+  }
+
+  cv.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    poke();
+  });
+  veil.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    poke();
+  });
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (state !== 'play') { start(); }
+  });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === ' ' || e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'Enter') {
+      e.preventDefault();
+      poke();
+    }
+  });
+
+  reset();
+  window.requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
