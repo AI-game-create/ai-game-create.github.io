@@ -304,7 +304,7 @@
   var inv = 0, shake = 0, flash = 0, flashColor = '255,255,255';
   var slowT = 0, bannerT = 0, bannerText = '', nextWaveT = 0, overT = 0, hintT = 0, time = 0;
   var waveT = 0, waveMax = 1;
-  var bestCombo = 0, caughtTotal = 0, lastResult = null;
+  var bestCombo = 0, caughtTotal = 0, lastResult = null, loopCount = 0, lastCatchN = 0, lastCatchAt = -99;
   var target = { x: 0, y: 0, on: false };
   var keys = {};
 
@@ -598,6 +598,7 @@
 
   function closeLoop(poly) {
     var caught = [], bossHit = false, i;
+    loopCount++;
     for (i = enemies.length - 1; i >= 0; i--) {
       var e = enemies[i];
       if (!inPoly(e.x, e.y, poly)) { continue; }
@@ -648,6 +649,8 @@
     var gain = sum * mult + bcount * 2;
     score += gain;
     caughtTotal += mult;
+    lastCatchN = mult;
+    lastCatchAt = time;
     if (mult > bestCombo) { bestCombo = mult; }
     var label = mult > 1 ? mult + '体まとめて ×' + mult + '  +' + gain : '+' + gain;
     popText(c.x, c.y, label, mult >= 3 ? '#ffd166' : '#eef2ff', mult >= 3 ? 1.5 : 1);
@@ -686,7 +689,7 @@
     maxLives = 3 + lv('heart');
     lives = maxLives;
     inv = 0; shake = 0; flash = 0; slowT = 0; overT = 0; nextWaveT = 0;
-    bestCombo = 0; caughtTotal = 0;
+    bestCombo = 0; caughtTotal = 0; loopCount = 0;
     hintT = save.runs === 0 ? 8 : 0;
     state = 'play';
     veil.classList.add('hide');
@@ -1255,6 +1258,27 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) { pause(); }
   });
+
+  // ================================================================
+  //  テスト用の窓口(読み取り専用。ゲームの中身は変えられない)
+  // ================================================================
+  window.gameTest = {
+    state: function () { return state; },
+    score: function () { return score; },
+    wave: function () { return wave; },
+    lives: function () { return lives; },
+    shards: function () { return save.shards; },
+    loops: function () { return loopCount; },
+    lastCatch: function () { return { n: lastCatchN, ago: time - lastCatchAt }; },
+    snapshot: function () {
+      return {
+        W: W, H: H, S: S,
+        P: P ? { x: P.x, y: P.y } : null,
+        enemies: enemies.map(function (e) { return { x: e.x, y: e.y, type: e.type }; }),
+        bullets: bullets.map(function (b) { return { x: b.x, y: b.y }; })
+      };
+    }
+  };
 
   // ================================================================
   //  はじめる

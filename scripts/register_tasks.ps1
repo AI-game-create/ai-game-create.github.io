@@ -30,7 +30,7 @@ $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit (New-TimeSpan -Hours 3) `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 5) `
     -MultipleInstances IgnoreNew
 
 $principal = New-ScheduledTaskPrincipal `
