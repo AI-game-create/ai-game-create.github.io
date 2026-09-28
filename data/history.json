@@ -1,8 +1,17 @@
 [
   {
     "post_date": "2026-09-29",
+    "title": "ひかりのかけら",
+    "dir": "games/2026-09-29-hikari-no-kakera/",
+    "genre": "パズル",
+    "theme": "光と結晶",
+    "controls": "タップ / クリック / 矢印キー + スペース",
+    "status": "success"
+  },
+  {
+    "post_date": "2026-09-30",
     "title": "さかさロケット",
-    "dir": "games/2026-09-29-sakasa-rocket/",
+    "dir": "games/2026-09-30-sakasa-rocket/",
     "genre": "アクション",
     "theme": "宇宙",
     "controls": "タップ / クリック / スペースキー(1ボタン)",
