@@ -199,9 +199,13 @@ def main() -> None:
 
     media_ids = None
     if slot == "release" and shot_path:
-        media = api.media_upload(filename=str(shot_path))
-        media_ids = [media.media_id_string]
-        log("スクリーンショットをアップロードしました。")
+        # 画像のアップロード(v1.1)は X 側で廃止が進んでいる。失敗しても本文の投稿は止めない
+        try:
+            media = api.media_upload(filename=str(shot_path))
+            media_ids = [media.media_id_string]
+            log("スクリーンショットをアップロードしました。")
+        except Exception as e:
+            log(f"::warning::スクリーンショットのアップロードに失敗したので、画像なしで投稿します: {e}")
 
     res = client.create_tweet(text=text, media_ids=media_ids)
     tweet_id = str(res.data["id"])
