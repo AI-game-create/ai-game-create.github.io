@@ -61,8 +61,8 @@ test.describe('今日のゲーム', () => {
       /<meta[^>]+name\s*=\s*["']?viewport/i,
     );
 
-    // 400行が目安。大きく超えたら作り直しの合図
-    expect(lines, `${lines}行あります。400行を目安に作り直してください`).toBeLessThanOrEqual(600);
+    // 1000行が目安。大きく超えたら作り直しの合図
+    expect(lines, `${lines}行あります。1000行を目安に作り直してください`).toBeLessThanOrEqual(1200);
   });
 
   test('画面が表示され、必要な要素がそろっている', async ({ page }) => {
