@@ -97,14 +97,15 @@ Write-Log "使う実行ファイル: $claude"
 
 # 4. 今日の作業を頼む
 $today = Get-Date -Format 'yyyy-MM-dd'
+$now = Get-Date -Format 'HH:mm'
 $weekday = $weekdayMap[[string](Get-Date).DayOfWeek]
 $prompt = @"
-今日は $today($weekday)です。
+今日は $today($weekday)、いまの時刻は $now です。
 CLAUDE.md の「2. 毎日のワークフロー」に従って、今日の作業を最後まで進めてください。
 投稿は GitHub Actions が行うので、自分では投稿しないでください。
 "@
 
-Write-Log "今日の日付を渡します: $today($weekday)"
+Write-Log "今日の日付を渡します: $today($weekday) $now"
 
 # 制作に使うモデルを固定する(既定モデルに任せると、夜ごとに変わる可能性があるため)
 $Model = 'claude-opus-5-5'
