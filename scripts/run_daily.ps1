@@ -1,4 +1,4 @@
-<#
+﻿<#
   毎晩の制作を1回だけ動かす。
     powershell -ExecutionPolicy Bypass -File scripts\run_daily.ps1
 
@@ -106,7 +106,11 @@ CLAUDE.md の「2. 毎日のワークフロー」に従って、今日の作業�
 
 Write-Log "今日の日付を渡します: $today($weekday)"
 
-$claudeArgs = @('-p', $prompt, '--permission-mode', 'acceptEdits', '--allowedTools') + $AllowedTools
+# 制作に使うモデルを固定する(既定モデルに任せると、夜ごとに変わる可能性があるため)
+$Model = 'claude-opus-5-5'
+Write-Log "使うモデル: $Model"
+
+$claudeArgs = @('-p', $prompt, '--model', $Model, '--permission-mode', 'acceptEdits', '--allowedTools') + $AllowedTools
 
 try {
     & $claude @claudeArgs 2>&1 |

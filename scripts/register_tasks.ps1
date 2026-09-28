@@ -1,4 +1,4 @@
-<#
+﻿<#
   毎晩20:05の自動制作を Windows のタスクスケジューラに登録する。
     powershell -ExecutionPolicy Bypass -File scripts\register_tasks.ps1
 
