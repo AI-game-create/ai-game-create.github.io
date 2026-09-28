@@ -2,20 +2,21 @@ name: X投稿
 
 on:
   schedule:
-    - cron: '0 10 * * *'   # 19:00 JST  release(作品紹介)
-    - cron: '0 12 * * *'   # 21:00 JST  devlog(開発の話)
-    - cron: '0 14 * * *'   # 23:00 JST  wrapup(ひとこと反省)
+    # 21:00 JST。release を投稿し、同じ実行の中で10分待って devlog を投稿する。
+    # cron を2本に分けないのは、GitHub Actions の定時実行が数分〜30分ずれることがあり、
+    # 「10分後」という間隔が守られない(順番が入れ替わる)ため。
+    - cron: '0 12 * * *'
   workflow_dispatch:
     inputs:
       slot:
-        description: '投稿枠'
+        description: '投稿枠(both = release の10分後に devlog)'
         required: true
-        default: release
+        default: both
         type: choice
         options:
+          - both
           - release
           - devlog
-          - wrapup
 
 permissions:
   contents: write
@@ -28,6 +29,7 @@ jobs:
   post:
     name: 投稿する
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -40,19 +42,19 @@ jobs:
       - name: ライブラリを入れる
         run: pip install -r scripts/requirements.txt
 
-      - name: 投稿枠を決める
-        id: slot
+      - name: 投稿の仕方を決める
+        id: mode
         run: |
-          case "${{ github.event.schedule }}" in
-            "0 10 * * *") slot=release ;;
-            "0 12 * * *") slot=devlog ;;
-            "0 14 * * *") slot=wrapup ;;
-            *)            slot="${{ inputs.slot }}" ;;
-          esac
-          echo "slot=$slot" >> "$GITHUB_OUTPUT"
-          echo "今回の投稿枠: $slot"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            mode=both
+          else
+            mode="${{ inputs.slot }}"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "今回の投稿: $mode"
 
-      - name: 投稿する
+      - name: 作品を投稿する(release)
+        if: steps.mode.outputs.mode == 'both' || steps.mode.outputs.mode == 'release'
         env:
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
@@ -60,9 +62,27 @@ jobs:
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           GAME_BASE_URL: ${{ vars.GAME_BASE_URL }}
           DRY_RUN: ${{ vars.DRY_RUN }}
-        run: python scripts/post_to_x.py --slot "${{ steps.slot.outputs.slot }}"
+        run: python scripts/post_to_x.py --slot release
+
+      - name: 10分あける
+        if: steps.mode.outputs.mode == 'both'
+        run: |
+          echo "devlog まで10分待ちます。"
+          sleep 600
+
+      - name: 開発の話を投稿する(devlog)
+        if: steps.mode.outputs.mode == 'both' || steps.mode.outputs.mode == 'devlog'
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          GAME_BASE_URL: ${{ vars.GAME_BASE_URL }}
+          DRY_RUN: ${{ vars.DRY_RUN }}
+        run: python scripts/post_to_x.py --slot devlog
 
       - name: 記録をコミットする
+        if: always()
         run: |
           if [ -z "$(git status --porcelain data/posts.json)" ]; then
             echo "記録に変更がないので、コミットしません。"
@@ -71,7 +91,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/posts.json
-          git commit -m "chore: 投稿を記録(${{ steps.slot.outputs.slot }})"
+          git commit -m "chore: 投稿を記録(${{ steps.mode.outputs.mode }})"
           for i in 1 2 3; do
             git pull --rebase --autostash && git push && exit 0
             echo "push に失敗したので少し待って再試行します($i回目)"
