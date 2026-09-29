@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ゆうやけワイヤーフライト</title>
+<style>
+  :root {
+    --bg: #12051f; --panel: #1d0b33; --line: #3d1f60; --text: #fff1f7; --sub: #c9a6d9;
+    --gold: #ffc15e; --cyan: #5ef2ff; --pink: #ff4fa3;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  body { display: flex; flex-direction: column; align-items: center; padding: 12px 16px 24px; min-height: 100vh; }
+  h1 { margin: 2px 0; font-size: clamp(20px, 5vw, 28px); letter-spacing: .05em; }
+  .lead { margin: 2px 0 10px; color: var(--sub); font-size: 13px; text-align: center; }
+  .stage { position: relative; width: 100%; max-width: 960px; height: min(72vh, 640px); min-height: 360px; }
+  canvas {
+    display: block; width: 100%; height: 100%; border-radius: 16px; border: 1px solid var(--line);
+    background: #12051f; touch-action: none; cursor: crosshair;
+  }
+  .veil {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; padding: 18px; text-align: center; background: rgba(18, 5, 31, .84); border-radius: 16px; overflow: auto;
+  }
+  .veil.hide { display: none; }
+  .veil h2 { margin: 0; font-size: clamp(20px, 5vw, 30px); letter-spacing: .04em; }
+  .veil p { margin: 0; color: var(--sub); font-size: 13px; line-height: 1.7; }
+  .veil p b { color: var(--cyan); }
+  .big { font-size: clamp(32px, 8vw, 50px); font-weight: 800; color: var(--gold); line-height: 1.1; }
+  .good { color: var(--gold) !important; font-weight: 700; }
+  button { font-family: inherit; cursor: pointer; border: none; border-radius: 999px; }
+  .start { padding: 12px 34px; font-size: 16px; font-weight: 800; color: #1a0630; background: linear-gradient(90deg, var(--gold), var(--pink)); }
+  .start:active { transform: translateY(1px); }
+  .planes { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 6px; }
+  .planes .cap { font-size: 12px; color: var(--sub); }
+  .plane {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 14px; text-align: left;
+    background: rgba(40, 14, 70, .8); border: 1px solid var(--line); border-radius: 12px; color: var(--text);
+  }
+  .plane.on { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan) inset; }
+  .plane:disabled { opacity: .55; cursor: default; }
+  .plane .pn { font-size: 14px; font-weight: 700; }
+  .plane .pd { font-size: 11.5px; color: var(--sub); }
+  .tools { width: 100%; max-width: 960px; display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  .tool { padding: 6px 12px; font-size: 12px; color: var(--sub); background: var(--panel); border: 1px solid var(--line); }
+  .note {
+    width: 100%; max-width: 960px; margin-top: 10px; padding: 12px 14px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.85; color: var(--sub);
+  }
+  .note b { color: var(--text); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .foot { margin-top: 10px; font-size: 11px; color: #7a5a92; }
+</style>
+</head>
+<body>
+
+<h1>ゆうやけワイヤーフライト</h1>
+<p class="lead">線でできた夕焼けの世界を、紙ひこうきで飛びぬける3Dシューティング。</p>
+
+<div class="stage">
+  <canvas id="cv" aria-label="ゲーム画面"></canvas>
+  <div class="veil" id="veil">
+    <h2 id="vTitle">ゆうやけワイヤーフライト</h2>
+    <div id="vBody"><p>弾は自動で出ます。左右に動いて、<b>水色の線</b>を図形に重ねましょう。<br>同じ形を続けて壊すと、得点が何倍にもなります。</p></div>
+    <button class="start" id="btnStart" type="button">スタート</button>
+    <div class="planes" id="planes"></div>
+  </div>
+  <div class="veil hide" id="pauseVeil">
+    <h2>一時停止中</h2>
+    <p>タップ / クリック / P キーで再開します</p>
+  </div>
+</div>
+
+<div class="tools">
+  <button class="tool" id="btnPause" type="button">一時停止</button>
+  <button class="tool" id="btnMute" type="button">音: ON</button>
+</div>
+
+<div class="note">
+  <b>操作</b>:マウスを左右に動かす / 画面を指で左右になぞる / ←→キー・A D キーで、紙ひこうきが動きます。弾は自動で出ます。
+  クリック / タップ / スペースキーで「くるっと回避」。回っている間は弾に当たりません(少し待つと、また使えます)。<br>
+  <b>ルール</b>:紙ひこうきから奥へのびる水色の線が、弾の通り道です。線に重なった図形にはカギ形の印がつき、弾が当たります。
+  赤い弾と、突っこんでくるピンクのピラミッドに当たるとハートが1つ減ります。ピンクの柵は、金色のふちのすき間をくぐってください。金色の輪をくぐるとショットが強くなります(当たると1段階下がります)。
+  5区間ごとにボスが出ます。<br>
+  <b>スコア</b>:同じ形を続けて壊すと「連鎖」が伸び、得点が連鎖の数だけ倍になります(最大10倍)。違う形を壊すか、弾に当たると連鎖は1からやり直しです。<br>
+  <b>リトライ</b>:ゲームオーバーのあと「リトライ」で何度でも遊べます。先の区間まで進むと、新しい機体が使えるようになります。記録はこのブラウザに保存されます。<br>
+  <b>その他</b>:P / Esc で一時停止、M で音のオン・オフ。
+</div>
+
+<p class="sr" id="sr" aria-live="polite"></p>
+<p class="foot">ゲームつくるAIが作りました</p>
+
+<script>
+(function () {
+  'use strict';
+
+  // ================================================================
+  //  画面まわり
+  // ================================================================
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+  var veil = document.getElementById('veil');
+  var vTitle = document.getElementById('vTitle');
+  var vBody = document.getElementById('vBody');
+  var btnStart = document.getElementById('btnStart');
+  var planesEl = document.getElementById('planes');
+  var pauseVeil = document.getElementById('pauseVeil');
+  var btnPause = document.getElementById('btnPause');
+  var btnMute = document.getElementById('btnMute');
+  var srEl = document.getElementById('sr');
+
+  var TAU = Math.PI * 2;
+  var W = 800, H = 600, DPR = 1;
+
+  // 3Dの約束ごと
+  //  x: 左右 / y: 高さ(地面が0) / z: 奥行き(カメラが0、奥へ行くほど大きい)
+  //  紙ひこうきは z=PZ、高さ SY の平面を左右に動く。敵も弾も同じ高さを飛ぶので、
+  //  「左右の位置が合っているか」だけで当たりが決まる(奥行きの見間違いで理不尽に外れない)。
+  var PZ = 4, SY = 0.5, FAR = 64, K = 0.5;
+  var F = 500, HY = 240, CAMH = 2.5, XR = 5;
+  var camX = 0;
+
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+  function hexA(h, a) {
+    var n = parseInt(h.slice(1), 16);
+    return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+
+  function resize() {
+    var r = cv.getBoundingClientRect();
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = Math.max(240, r.width);
+    H = Math.max(240, r.height);
+    cv.width = Math.round(W * DPR);
+    cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // 横長の画面ほど左右に広く飛べる。紙ひこうきが画面の端から端まで動けるように焦点距離を決める
+    XR = clamp(3.5 + (W / H - 0.6) * 3, 3.5, 5.5);
+    F = 0.42 * W * PZ / ((1 - K) * XR);
+    HY = H * 0.4;
+    CAMH = SY + (H * 0.84 - HY) * PZ / F;
+    if (P) {
+      P.x = clamp(P.x, -XR, XR);
+      input.tx = clamp(input.tx, -XR, XR);
+    }
+  }
+  window.addEventListener('resize', resize);
+
+  // 3Dの点を画面に写す(透視投影)
+  function project(x, y, z) {
+    var s = F / z;
+    return { x: W / 2 + (x - camX) * s, y: HY + (CAMH - y) * s, s: s };
+  }
+
+  // ================================================================
+  //  セーブ
+  // ================================================================
+  var KEY = 'wire-flight-v1';
+  var save = { best: 0, bestSector: 0, runs: 0, plane: 'paper', muted: false };
+
+  var PLANES = [
+    { id: 'paper', name: 'かみひこうき', color: '#f4f0ff', desc: 'ふつうの性能。まずはこれで', hearts: 3, speed: 13, fire: 0.13, roll: 1.4, power: 0, wide: 0, need: 0, needText: '' },
+    { id: 'swallow', name: 'つばめ', color: '#5ef2ff', desc: '速くて連射も速い。最初からショット1段階。ただしハートは2つ', hearts: 2, speed: 17, fire: 0.1, roll: 1.1, power: 1, wide: 0, need: 4, needText: '区間4に着くと使えます' },
+    { id: 'whale', name: 'くじら', color: '#ffc15e', desc: 'のんびり飛ぶが、ハート5つ。弾が太くて当てやすい', hearts: 5, speed: 10, fire: 0.16, roll: 1.8, power: 0, wide: 0.25, need: 6, needText: '最初のボスを倒す(区間6に着く)と使えます' }
+  ];
+
+  (function load() {
+    try {
+      var raw = window.localStorage.getItem(KEY);
+      if (!raw) { return; }
+      var o = JSON.parse(raw);
+      if (!o || typeof o !== 'object') { return; }
+      ['best', 'bestSector', 'runs'].forEach(function (k) {
+        if (typeof o[k] === 'number' && o[k] >= 0) { save[k] = Math.floor(o[k]); }
+      });
+      if (typeof o.plane === 'string') { save.plane = o.plane; }
+      save.muted = !!o.muted;
+    } catch (e) { /* 保存が使えない環境でも、そのまま遊べるようにする */ }
+  })();
+
+  function store() {
+    try { window.localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* 保存できなくても続行 */ }
+  }
+
+  function unlocked(p) { return save.bestSector >= p.need; }
+  function planeById(id) {
+    for (var i = 0; i < PLANES.length; i++) {
+      if (PLANES[i].id === id && unlocked(PLANES[i])) { return PLANES[i]; }
+    }
+    return PLANES[0];
+  }
+
+  // ================================================================
+  //  音(すべて波形から合成。音声ファイルは使わない)
+  // ================================================================
+  var AC = null, master = null, noiseBuf = null;
+
+  function audio() {
+    if (AC) { return AC; }
+    try {
+      var C = window.AudioContext || window.webkitAudioContext;
+      if (!C) { return null; }
+      AC = new C();
+      master = AC.createGain();
+      master.gain.value = save.muted ? 0 : 0.45;
+      master.connect(AC.destination);
+      noiseBuf = AC.createBuffer(1, Math.floor(AC.sampleRate * 0.5), AC.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < d.length; i++) { d[i] = Math.random() * 2 - 1; }
+    } catch (e) { AC = null; }
+    return AC;
+  }
+
+  function wake() {
+    var a = audio();
+    if (a && a.state === 'suspended' && a.resume) {
+      try {
+        var p = a.resume();
+        if (p && p['catch']) { p['catch'](function () {}); }
+      } catch (e) { /* 音が出せなくても遊べる */ }
+    }
+  }
+
+  function tone(f, d, type, v, slide, delay) {
+    var a = audio();
+    if (!a || save.muted) { return; }
+    try {
+      var t = a.currentTime + (delay || 0);
+      var o = a.createOscillator(), g = a.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(f, t);
+      if (slide) { o.frequency.exponentialRampToValueAtTime(Math.max(30, f * slide), t + d); }
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v || 0.2, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g);
+      g.connect(master);
+      o.start(t);
+      o.stop(t + d + 0.05);
+    } catch (e) { /* 無視 */ }
+  }
+
+  function hiss(d, v, freq, delay) {
+    var a = audio();
+    if (!a || save.muted || !noiseBuf) { return; }
+    try {
+      var t = a.currentTime + (delay || 0);
+      var s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+      s.buffer = noiseBuf;
+      f.type = 'bandpass';
+      f.frequency.value = freq || 900;
+      f.Q.value = 0.8;
+      g.gain.setValueAtTime(v || 0.3, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      s.connect(f);
+      f.connect(g);
+      g.connect(master);
+      s.start(t);
+      s.stop(t + d + 0.05);
+    } catch (e) { /* 無視 */ }
+  }
+
+  // 連鎖が伸びるほど音階が上がっていく
+  var SCALE = [440, 493.9, 523.3, 587.3, 659.3, 784, 880, 987.8, 1046.5, 1174.7];
+  var hitSoundT = 0;
+  var sfx = {
+    shot: function () { tone(1500, 0.035, 'square', 0.012, 0.6); },
+    hit: function () {
+      if (hitSoundT > 0) { return; }
+      hitSoundT = 0.05;
+      tone(700, 0.05, 'triangle', 0.05, 0.7);
+    },
+    kill: function (c) {
+      var f = SCALE[Math.min(c, SCALE.length) - 1];
+      tone(f, 0.22, 'triangle', 0.16);
+      tone(f * 1.5, 0.18, 'sine', 0.07, 0, 0.05);
+      hiss(0.18, 0.18, 2600);
+    },
+    gate: function () { [659.3, 880, 1318.5].forEach(function (f, i) { tone(f, 0.2, 'triangle', 0.12, 0, i * 0.06); }); },
+    dmg: function () { hiss(0.45, 0.45, 420); tone(170, 0.4, 'sawtooth', 0.12, 0.4); },
+    roll: function () { hiss(0.28, 0.16, 1700); tone(520, 0.2, 'sine', 0.05, 1.8); },
+    dodge: function () { tone(1318.5, 0.12, 'triangle', 0.08); tone(1760, 0.14, 'triangle', 0.07, 0, 0.06); },
+    warn: function () { for (var i = 0; i < 4; i++) { tone(i % 2 ? 330 : 440, 0.25, 'square', 0.06, 0, i * 0.3); } },
+    bossDown: function () {
+      for (var i = 0; i < 6; i++) { hiss(0.3, 0.3, 300 + i * 250, i * 0.12); }
+      [523.3, 659.3, 784, 1046.5].forEach(function (f, i) { tone(f, 0.4, 'triangle', 0.12, 0, 0.5 + i * 0.1); });
+    },
+    clear: function () { [523.3, 659.3, 784, 1046.5].forEach(function (f, i) { tone(f, 0.24, 'triangle', 0.11, 0, i * 0.08); }); },
+    over: function () { [392, 330, 262, 196].forEach(function (f, i) { tone(f, 0.35, 'triangle', 0.12, 0, i * 0.16); }); },
+    select: function () { tone(880, 0.08, 'triangle', 0.08); }
+  };
+
+  // 夕焼けっぽいベースライン(Am → F → G → Em)。先読みして予約するので、描画が重くてもリズムがずれない
+  var BASS = [1, 1, 2, 1, 1.498, 1, 1.782, 1];
+  var PROG = [110, 87.31, 98, 82.41];
+  var mNext = 0, mStep = 0;
+  function music() {
+    if (!AC || save.muted || state !== 'play') { return; }
+    var now = AC.currentTime, step = 60 / 116 / 2;
+    if (mNext < now) { mNext = now + 0.05; }
+    while (mNext < now + 0.25) {
+      var s = mStep % 8, root = PROG[Math.floor(mStep / 16) % 4];
+      tone(root * BASS[s], step * 0.9, 'triangle', 0.09, 0, mNext - now);
+      if (s % 2 === 1) { hiss(0.04, 0.05, 7000, mNext - now); }
+      if (s === 0 && mStep % 16 === 0) { tone(root * 4, step * 3, 'sine', 0.025, 0, mNext - now); }
+      mNext += step;
+      mStep++;
+    }
+  }
+
+  // ================================================================
+  //  図形(ワイヤーフレームのモデル)
+  // ================================================================
+  function allEdges(v, len) {
+    var e = [];
+    for (var i = 0; i < v.length; i++) {
+      for (var j = i + 1; j < v.length; j++) {
+        var d = Math.hypot(v[i][0] - v[j][0], v[i][1] - v[j][1], v[i][2] - v[j][2]);
+        if (Math.abs(d - len) < 0.01) { e.push([i, j]); }
+      }
+    }
+    return e;
+  }
+
+  var PHI = (1 + Math.sqrt(5)) / 2;
+  var M = {};
+  M.cube = {
+    v: [[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]].map(function (p) {
+      return [p[0] * 0.62, p[1] * 0.62, p[2] * 0.62];
+    }),
+    e: [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]
+  };
+  M.pyra = {
+    v: [[0, 0, -1.3], [-0.8, -0.8, 0.5], [0.8, -0.8, 0.5], [0.8, 0.8, 0.5], [-0.8, 0.8, 0.5]],
+    e: [[0, 1], [0, 2], [0, 3], [0, 4], [1, 2], [2, 3], [3, 4], [4, 1]]
+  };
+  M.octa = { v: [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] };
+  M.octa.e = allEdges(M.octa.v, Math.SQRT2);
+  M.ico = {
+    v: [[0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI], [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
+      [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1]].map(function (p) {
+      var l = Math.hypot(p[0], p[1], p[2]);
+      return [p[0] / l, p[1] / l, p[2] / l];
+    })
+  };
+  M.ico.e = allEdges(M.ico.v, 2 / Math.hypot(1, PHI));
+  // 紙ひこうき(先端が奥を向いている。うしろから見る形)
+  M.ship = {
+    v: [[0, 0, 1], [-0.9, 0.06, -0.55], [0.9, 0.06, -0.55], [0, -0.3, -0.55], [0, 0.02, -0.55]],
+    e: [[0, 1], [0, 2], [0, 3], [1, 4], [2, 4], [3, 4], [0, 4]]
+  };
+  M.ring = { v: [], e: [] };
+  for (var ri = 0; ri < 18; ri++) {
+    var ra = ri / 18 * TAU;
+    M.ring.v.push([Math.cos(ra), Math.sin(ra), 0]);
+    M.ring.e.push([ri, (ri + 1) % 18]);
+  }
+
+  var TYPES = {
+    cube: { name: 'キューブ', model: 'cube', color: '#5ef2ff', hp: 3, r: 0.85, pts: 100, size: 1.0 },
+    pyra: { name: 'ピラミッド', model: 'pyra', color: '#ff4fa3', hp: 1, r: 0.7, pts: 150, size: 0.75 },
+    octa: { name: 'オクタ', model: 'octa', color: '#ffd35e', hp: 2, r: 0.8, pts: 200, size: 0.95 },
+    boss: { name: 'イコサ・コア', model: 'ico', color: '#c79bff', hp: 150, r: 2.2, pts: 0, size: 2.6 }
+  };
+
+  // 回転を当てた頂点を、世界の座標で返す
+  function modelPts(m, o, size, rollZ) {
+    var ca = Math.cos(o.a), sa = Math.sin(o.a), cb = Math.cos(o.b), sb = Math.sin(o.b);
+    var cr = Math.cos(rollZ || 0), sr = Math.sin(rollZ || 0);
+    var out = [];
+    for (var i = 0; i < m.v.length; i++) {
+      var v = m.v[i];
+      var x1 = v[0] * ca + v[2] * sa, z1 = -v[0] * sa + v[2] * ca, y1 = v[1];
+      var y2 = y1 * cb - z1 * sb, z2 = y1 * sb + z1 * cb;
+      var x3 = x1 * cr - y2 * sr, y3 = x1 * sr + y2 * cr;
+      out.push([o.x + x3 * size, o.y + y3 * size, o.z + z2 * size]);
+    }
+    return out;
+  }
+
+  // 太くて薄い線 → 細くて明るい線、の2回描きで、ぼかし無しでも光って見せる
+  function strokeModel(m, pts, color, alpha, lw) {
+    var pr = [];
+    for (var i = 0; i < pts.length; i++) { pr.push(pts[i][2] > 0.4 ? project(pts[i][0], pts[i][1], pts[i][2]) : null); }
+    ctx.beginPath();
+    for (var k = 0; k < m.e.length; k++) {
+      var a = pr[m.e[k][0]], b = pr[m.e[k][1]];
+      if (!a || !b) { continue; }
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.strokeStyle = hexA(color, (alpha * 0.28).toFixed(3));
+    ctx.lineWidth = lw * 3.2;
+    ctx.stroke();
+    ctx.strokeStyle = hexA(color, alpha.toFixed(3));
+    ctx.lineWidth = lw;
+    ctx.stroke();
+  }
+
+  // ================================================================
+  //  背景の山なみ(毎回同じ形になるよう、決まった種で作る)
+  // ================================================================
+  var ridge = [];
+  (function () {
+    var seed = 7;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (var i = 0; i <= 64; i++) {
+      var x = -160 + i * 5;
+      var h = 3 + rnd() * 7 + Math.max(0, 16 - Math.abs(x + 40) * 0.35) + Math.max(0, 13 - Math.abs(x - 55) * 0.3);
+      ridge.push({ x: x, h: h });
+    }
+  })();
+  var skyStars = [];
+  for (var si = 0; si < 60; si++) { skyStars.push({ x: Math.random(), y: Math.random() * 0.8, r: Math.random() * 1.2 + 0.3, p: Math.random() * TAU }); }
+
+  // ================================================================
+  //  ゲームの状態
+  // ================================================================
+  var state = 'title', overT = 0, time = 0;
+  var P = null, plane = PLANES[0];
+  var enemies = [], shots = [], bullets = [], gates = [], fences = [], debris = [], sparks = [], texts = [], spawnQ = [];
+  var score = 0, sector = 1, secT = 0, secLen = 24, spawnT = 0, gateT = 0;
+  var isBoss = false, bossSpawned = false, bossIdx = 0, clearT = 0, hitThisSector = false;
+  var chain = 0, chainType = '', maxChain = 0, kills = 0, gatesPassed = 0, dodges = 0;
+  var lastKill = { type: '', chain: 0, pts: 0, at: -99 };
+  var killLog = [], hurtCount = 0, enemySeq = 0;
+  var banner = { s: '', sub: '', t: 0, max: 1 };
+  var hintT = 0, gateHint = false, fenceHint = false, gscroll = 0, runStart = 0;
+  var shake = 0, flash = 0, flashColor = '255,80,120';
+  var input = { tx: 0, keyMode: false, touchId: null, tStartX: 0, tShipX: 0, tStartT: 0, tMoved: 0 };
+  var keys = {};
+  var newUnlocks = [];
+
+  var LANES = [[0], [-0.22, 0.22], [-0.42, 0, 0.42], [-0.6, -0.2, 0.2, 0.6]];
+
+  function lvl() { return sector - 1; }
+  function spd() { return 1 + 0.07 * Math.min(lvl(), 16); }
+  function fireMul() { return 1 + 0.12 * Math.min(lvl(), 16); }
+  function laneHalf() { var l = LANES[P.power]; return Math.abs(l[l.length - 1]) + 0.1 + plane.wide; }
+
+  function say(s) { srEl.textContent = s; }
+
+  function showBanner(s, sub, t) {
+    banner.s = s;
+    banner.sub = sub || '';
+    banner.t = t;
+    banner.max = t;
+    say(s + ' ' + (sub || ''));
+  }
+
+  function popText(x, y, z, s, c, k) { texts.push({ x: x, y: y, z: z, s: s, c: c, t: 1, k: k || 1 }); }
+
+  function burst(x, y, z, c, n, sp) {
+    for (var i = 0; i < n; i++) {
+      var a = rand(0, TAU), b = rand(-1, 1), v = rand(0.4, 1) * (sp || 5);
+      sparks.push({ x: x, y: y, z: z, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.8 + b, vz: rand(-v, v) * 0.6, life: rand(0.5, 0.9), c: c });
+    }
+  }
+
+  // ================================================================
+  //  はじめる・区間
+  // ================================================================
+  function startRun() {
+    wake();
+    plane = planeById(save.plane);
+    P = { x: 0, vx: 0, bank: 0, roll: 0, rollCd: 0, inv: 1.2, lives: plane.hearts, power: plane.power, fireT: 0.4, shotN: 0 };
+    input.tx = 0;
+    input.touchId = null;
+    enemies = []; shots = []; bullets = []; gates = []; fences = []; debris = []; sparks = []; texts = []; spawnQ = [];
+    score = 0; chain = 0; chainType = ''; maxChain = 0; kills = 0; gatesPassed = 0; dodges = 0; bossIdx = 0;
+    lastKill = { type: '', chain: 0, pts: 0, at: -99 };
+    killLog = []; hurtCount = 0;
+    camX = 0; shake = 0; flash = 0; newUnlocks = [];
+    hintT = 9; gateHint = false; fenceHint = false; runStart = time; mStep = 0;
+    state = 'play';
+    veil.classList.add('hide');
+    startSector(1);
+  }
+
+  var SUBS = ['', '図形を撃とう。金の輪もくぐってみて', 'ピラミッドが突っこんでくる', 'オクタの弾と、柵に気をつけて', 'キューブも撃ち返してくる', '', '敵が動きを先読みしてくる',
+    '柵が2枚続けて来る', 'キューブが2発ずつ撃ってくる', 'オクタの弾が5方向に広がる', '', 'ここから先は、腕の見せどころ'];
+
+  function startSector(n) {
+    sector = n;
+    secT = 0;
+    clearT = 0;
+    isBoss = n % 5 === 0;
+    bossSpawned = false;
+    hitThisSector = false;
+    secLen = 22 + Math.min(n, 8) * 1.5;
+    spawnT = 1.0;
+    gateT = n === 1 ? 4.5 : rand(4, 8);
+    if (isBoss) {
+      bossIdx++;
+      showBanner('ボス接近', 'イコサ・コアが来ます', 2.4);
+      sfx.warn();
+    } else {
+      showBanner('区間 ' + n, SUBS[n] || 'スピードアップ', 2.0);
+    }
+  }
+
+  function sectorClear() {
+    var bonus = 500 * sector + (hitThisSector ? 0 : 1000);
+    score += bonus;
+    showBanner('区間 ' + sector + ' クリア', '+' + bonus + (hitThisSector ? '' : '(ノーミスボーナス込み)'), 2.2);
+    clearT = 2.4;
+    sfx.clear();
+  }
+
+  // ================================================================
+  //  敵の出し方
+  // ================================================================
+  function mkEnemy(type, x, o) {
+    var T = TYPES[type];
+    var e = {
+      id: ++enemySeq, type: type, x: x, y: SY, z: FAR + 2, hp: T.hp, r: T.r, t: 0,
+      a: rand(0, TAU), b: rand(0, TAU), va: rand(0.8, 1.6), vb: rand(0.5, 1.2),
+      flash: 0, fireT: rand(1.2, 2.2), hoverZ: rand(17, 26), baseX: x, phase: rand(0, TAU),
+      leaving: false, hover: 0, stay: rand(11, 14), vz: 0
+    };
+    if (type === 'pyra') { e.vz = -rand(16, 19) * spd(); }
+    // 先の区間ほど硬くなり、撃ちはじめも早くなる(ショットを強くしても、すぐには片づかない)
+    var L = Math.min(lvl(), 14);
+    e.hp += Math.floor(L * (type === 'cube' ? 0.6 : type === 'octa' ? 0.5 : 0.25));
+    if (sector >= 6) { e.fireT *= 0.5; }
+    if (o) { for (var k in o) { if (Object.prototype.hasOwnProperty.call(o, k)) { e[k] = o[k]; } } }
+    return e;
+  }
+
+  function queue(delay, type, x, o) { spawnQ.push({ t: delay, type: type, x: x, o: o }); }
+
+  function spawnPattern() {
+    var n = sector, pool = ['cubeRow', 'cubeRow'];
+    if (n >= 2) { pool.push('pyraV', 'pyraOne'); }
+    if (n >= 3) { pool.push('octa', 'fence'); }
+    if (n >= 4) { pool.push('mixed', 'pyraV'); }
+    if (n >= 6) { pool.push('pyraRain', 'octaPair', 'cubeWall', 'fence'); }
+    if (n >= 11) { pool.push('pyraRain', 'octaPair'); }
+    var p = pick(pool), lim = XR - 0.9, c = rand(-XR + 1.9, XR - 1.9), hz = rand(17, 26), i;
+    switch (p) {
+      case 'cubeRow':
+        for (i = -1; i <= 1; i++) { queue((i + 1) * 0.25, 'cube', clamp(c + i * 1.9, -lim, lim), { hoverZ: hz }); }
+        break;
+      case 'cubeWall':
+        for (i = 0; i < 5; i++) { queue(i * 0.15, 'cube', -lim + i * (lim * 2 / 4), { hoverZ: hz + 3 }); }
+        break;
+      case 'pyraOne':
+        queue(0, 'pyra', clamp(P.x + rand(-1, 1), -lim, lim));
+        break;
+      case 'pyraV':
+        for (i = 0; i < 3; i++) { queue(i * 0.35, 'pyra', clamp(c + (i - 1) * 1.4, -lim, lim)); }
+        break;
+      case 'pyraRain':
+        for (i = 0; i < 5; i++) { queue(i * 0.45, 'pyra', rand(-lim, lim)); }
+        break;
+      case 'octa':
+        queue(0, 'octa', c, { hoverZ: rand(22, 30) });
+        break;
+      case 'octaPair':
+        queue(0, 'octa', -XR * 0.5, { hoverZ: rand(22, 28) });
+        queue(0.3, 'octa', XR * 0.5, { hoverZ: rand(22, 28) });
+        break;
+      case 'fence':
+        var gx = rand(-XR + 1.2, XR - 1.2), gw = Math.max(1.8, 2.6 - 0.06 * lvl());
+        fences.push({ z: FAR + 2, gx: gx, gw: gw });
+        // 区間7からは2枚続けて来る。2枚目のすき間は反対側にあるので、左右に大きく振られる
+        if (n >= 7) { fences.push({ z: FAR + 2 + 13 * spd() * 0.9, gx: gx > 0 ? rand(-XR + 1.2, -0.5) : rand(0.5, XR - 1.2), gw: gw }); }
+        if (!fenceHint) {
+          fenceHint = true;
+          popText(0, SY + 1.6, 20, '柵はすき間をくぐろう(回避ならすり抜けられる)', '#ff4fa3', 1);
+        }
+        break;
+      case 'mixed':
+        queue(0, 'cube', clamp(c - 1.6, -lim, lim), { hoverZ: hz });
+        queue(0.2, 'cube', clamp(c + 1.6, -lim, lim), { hoverZ: hz });
+        queue(0.5, 'octa', c, { hoverZ: hz + 5 });
+        break;
+    }
+  }
+
+  // 区間11から先も少しずつ詰まっていくので、どこまで行っても難しさが頭打ちにならない
+  function spawnInterval() { return Math.max(1.0, 3.0 - 0.2 * lvl()) * Math.max(0.6, 1 - 0.04 * Math.max(0, lvl() - 10)) + rand(0, 0.7); }
+
+  function spawnGate() {
+    gates.push({ x: rand(-XR + 1, XR - 1), z: FAR + 2, t: 0 });
+    if (!gateHint) {
+      gateHint = true;
+      popText(0, SY + 1.4, 18, '金の輪をくぐるとパワーアップ!', '#ffc15e', 1.1);
+    }
+  }
+
+  function aimBullet(x, z, tx, sp) {
+    var t = Math.max(0.3, (z - PZ) / sp);
+    // 区間6からは、こちらの動きを少し先読みして撃ってくる
+    if (sector >= 6) { tx = clamp(tx + P.vx * t * Math.min(0.7, 0.1 * (sector - 4)), -XR - 1, XR + 1); }
+    bullets.push({ x: x, z: z - 0.6, vx: (tx - x) / t, vz: -sp, r: 0.2 });
+  }
+
+  // ================================================================
+  //  更新
+  // ================================================================
+  function updEnemy(e, dt) {
+    e.t += dt;
+    e.a += e.va * dt;
+    e.b += e.vb * dt;
+    if (e.flash > 0) { e.flash -= dt; }
+    var s = spd();
+
+    if (e.type === 'pyra') {
+      e.z += e.vz * dt;
+      // 遠いうちだけ、少しずつこちらに寄ってくる(近くでは曲がらないので、見てからよけられる)
+      if (e.z > (sector >= 6 ? 9 : 13)) { e.x += clamp(P.x - e.x, -1, 1) * (0.8 + 0.06 * Math.min(lvl(), 12)) * dt; }
+      if (e.z <= PZ && e.z - e.vz * dt > PZ) {
+        if (Math.abs(e.x - P.x) < e.r * 0.7 + 0.3) {
+          if (hurt()) { burst(e.x, e.y, e.z, TYPES.pyra.color, 12, 4); return true; }
+        }
+      }
+      return e.z < PZ - 3;
+    }
+
+    if (e.type === 'boss') { updBoss(e, dt); return false; }
+
+    if (e.leaving) {
+      e.z += 16 * dt;
+      e.y += 1.2 * dt;
+      return e.z > FAR + 4;
+    }
+    if (e.z > e.hoverZ + 0.05) {
+      e.z = Math.max(e.hoverZ, e.z - 15 * s * dt);
+      return false;
+    }
+    e.hover += dt;
+    e.hoverZ -= 0.25 * dt;
+    var amp = e.type === 'octa' ? 1.7 : 0.9, w = e.type === 'octa' ? 0.9 : 0.7;
+    e.x = clamp(e.baseX + Math.sin(e.hover * w + e.phase) * amp - Math.sin(e.phase) * amp, -XR, XR);
+    e.z = e.hoverZ;
+
+    var canFire = e.type === 'octa' || sector >= 4;
+    if (canFire) {
+      e.fireT -= dt;
+      if (e.fireT <= 0) {
+        var bs = 12 * s;
+        if (e.type === 'cube') {
+          aimBullet(e.x, e.z, P.x, bs);
+          // 区間8からは、動く先にもう1発。止まっても動いても当たりうるので、回避の出番が来る
+          if (sector >= 8) { aimBullet(e.x, e.z, P.x + (P.x > 0 ? -1.4 : 1.4), bs); }
+          e.fireT = rand(3.4, 4.4) / fireMul();
+        } else {
+          if (sector >= 9) {
+            // 区間9からは5方向の扇。すき間を見つけて抜ける
+            [-2.5, -1.25, 0, 1.25, 2.5].forEach(function (o) { aimBullet(e.x, e.z, P.x + o, bs); });
+          } else if (sector >= 5) {
+            var sp3 = sector >= 8 ? 1.3 : 1.6;
+            [-sp3, 0, sp3].forEach(function (o) { aimBullet(e.x, e.z, P.x + o, bs); });
+          } else {
+            aimBullet(e.x, e.z, P.x, bs);
+          }
+          e.fireT = rand(2.3, 2.9) / fireMul();
+        }
+        tone(260, 0.1, 'square', 0.03, 1.6);
+      }
+    }
+    if (e.hover > e.stay) { e.leaving = true; }
+    return false;
+  }
+
+  function updBoss(e, dt) {
+    if (e.z > 24) {
+      e.z = Math.max(24, e.z - 10 * dt);
+      return;
+    }
+    e.hover += dt;
+    e.x = Math.sin(e.hover * 0.45) * Math.max(0, XR - 2.2);
+    if (e.burst > 0) {
+      e.burstT -= dt;
+      if (e.burstT <= 0) {
+        e.burst--;
+        var bs = 13 + bossIdx;
+        if (e.pat === 0) {
+          // 扇のように並べた弾。1か所だけ抜け道がある
+          var gap = Math.floor(rand(-2, 2));
+          for (var k = -4; k <= 4; k++) {
+            if (k === gap || k === gap + 1) { continue; }
+            aimBullet(e.x, e.z, P.x + k * 1.1 + 0.55, bs);
+          }
+          e.burstT = 1.1;
+        } else if (e.pat === 1) {
+          aimBullet(e.x, e.z, P.x, bs + 2);
+          e.burstT = 0.2;
+        } else {
+          enemies.push(mkEnemy('pyra', clamp(e.x + rand(-2, 2), -XR + 0.8, XR - 0.8), { z: e.z - 1 }));
+          e.burstT = 0.5;
+        }
+        tone(200, 0.12, 'square', 0.04, 1.5);
+      }
+    } else {
+      e.patT -= dt;
+      if (e.patT <= 0) {
+        e.pat = (e.pat + 1) % 3;
+        e.burst = e.pat === 0 ? 3 : (e.pat === 1 ? 8 + bossIdx * 2 : 2 + bossIdx);
+        e.burstT = 0.3;
+        e.patT = 1.5;
+      }
+    }
+  }
+
+  function fire() {
+    var lanes = LANES[P.power];
+    for (var i = 0; i < lanes.length; i++) { shots.push({ x: P.x + lanes[i], z: PZ + 0.6, pz: PZ + 0.6 }); }
+    P.shotN++;
+    if (P.shotN % 2 === 0) { sfx.shot(); }
+  }
+
+  function hitEnemy(e) {
+    e.hp--;
+    e.flash = 0.08;
+    burst(e.x + rand(-0.3, 0.3), e.y, e.z - e.r, '#ffffff', 2, 3);
+    sfx.hit();
+    if (e.hp <= 0) { kill(e); return true; }
+    return false;
+  }
+
+  function shatter(e) {
+    var T = TYPES[e.type], m = M[T.model], pts = modelPts(m, e, T.size);
+    for (var k = 0; k < m.e.length; k++) {
+      var a = pts[m.e[k][0]], b = pts[m.e[k][1]];
+      var cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2, cz = (a[2] + b[2]) / 2;
+      debris.push({
+        x: cx, y: cy, z: cz, hx: (b[0] - a[0]) / 2, hy: (b[1] - a[1]) / 2, hz: (b[2] - a[2]) / 2,
+        vx: (cx - e.x) * 4 + rand(-1.5, 1.5), vy: (cy - e.y) * 4 + rand(0.5, 3), vz: (cz - e.z) * 4 + rand(-2, 2) - 3,
+        w: rand(-7, 7), life: 1, c: T.color
+      });
+    }
+    burst(e.x, e.y, e.z, T.color, 14, 6);
+  }
+
+  function kill(e) {
+    var i = enemies.indexOf(e);
+    if (i >= 0) { enemies.splice(i, 1); }
+    shatter(e);
+    if (e.type === 'boss') {
+      var pts = 5000 * bossIdx;
+      score += pts;
+      kills++;
+      popText(e.x, e.y + 2, e.z, '+' + pts, '#ffc15e', 1.6);
+      burst(e.x, e.y, e.z, '#ffffff', 40, 10);
+      shake = 0.8;
+      flash = 0.7;
+      flashColor = '255,230,180';
+      bullets = [];
+      sfx.bossDown();
+      sectorClear();
+      return;
+    }
+    if (chainType === e.type) { chain++; } else { chain = 1; chainType = e.type; }
+    maxChain = Math.max(maxChain, chain);
+    var mult = Math.min(chain, 10), pts2 = TYPES[e.type].pts * mult;
+    score += pts2;
+    kills++;
+    lastKill = { type: e.type, chain: chain, pts: pts2, at: time };
+    killLog.push({ id: kills, type: e.type, chain: chain, pts: pts2, hurt: hurtCount });
+    if (killLog.length > 60) { killLog.shift(); }
+    popText(e.x, e.y + 0.9, e.z, mult > 1 ? '+' + pts2 + ' ×' + mult : '+' + pts2, TYPES[e.type].color, mult >= 5 ? 1.3 : 1);
+    if (chain === 5 || chain === 10) { shake = Math.max(shake, 0.25); }
+    sfx.kill(chain);
+  }
+
+  // 当たったら true(回避中や無敵中は false)
+  function hurt() {
+    if (P.roll > 0) {
+      dodges++;
+      score += 100;
+      popText(P.x, SY + 1, PZ + 3, 'ナイス回避 +100', '#5ef2ff', 0.9);
+      sfx.dodge();
+      return false;
+    }
+    if (P.inv > 0) { return false; }
+    hurtCount++;
+    P.lives--;
+    P.power = Math.max(0, P.power - 1);
+    chain = 0;
+    chainType = '';
+    P.inv = 1.8;
+    shake = 0.5;
+    flash = 0.6;
+    flashColor = '255,60,110';
+    hitThisSector = true;
+    burst(P.x, SY, PZ + 0.5, '#ff4fa3', 18, 5);
+    sfx.dmg();
+    if (P.lives <= 0) { gameOver(); }
+    return true;
+  }
+
+  function doRoll() {
+    if (state !== 'play' || !P || P.rollCd > 0) { return; }
+    P.roll = 0.5;
+    P.rollCd = plane.roll;
+    sfx.roll();
+  }
+
+  function gameOver() {
+    state = 'over';
+    overT = 1.0;
+    save.runs++;
+    var before = PLANES.filter(unlocked).length;
+    var newBest = score > save.best;
+    if (newBest) { save.best = score; }
+    save.bestSector = Math.max(save.bestSector, sector);
+    newUnlocks = PLANES.filter(unlocked).slice(before);
+    store();
+    sfx.over();
+    shake = 0.6;
+    var secs = Math.round(time - runStart);
+    vTitle.textContent = 'ゲームオーバー';
+    var html = '<div class="big">' + score + '</div>' +
+      '<p>区間 ' + sector + ' まで到達 ・ 撃破 ' + kills + ' ・ 最大連鎖 ×' + maxChain + ' ・ ' + Math.floor(secs / 60) + '分' + (secs % 60) + '秒</p>';
+    if (newBest) { html += '<p class="good">自己ベスト更新!</p>'; } else { html += '<p>自己ベスト ' + save.best + '(最高 区間' + save.bestSector + ')</p>'; }
+    newUnlocks.forEach(function (p) { html += '<p class="good">新しい機体「' + p.name + '」が使えるようになりました!</p>'; });
+    vBody.innerHTML = html;
+    btnStart.textContent = 'リトライ';
+    renderPlanes();
+    say('ゲームオーバー。スコア ' + score);
+  }
+
+  function pause() {
+    if (state !== 'play') { return; }
+    state = 'pause';
+    pauseVeil.classList.remove('hide');
+    btnPause.textContent = '再開';
+  }
+  function resume() {
+    if (state !== 'pause') { return; }
+    state = 'play';
+    pauseVeil.classList.add('hide');
+    btnPause.textContent = '一時停止';
+  }
+  function toggleMute() {
+    save.muted = !save.muted;
+    if (master) { master.gain.value = save.muted ? 0 : 0.45; }
+    btnMute.textContent = save.muted ? '音: OFF' : '音: ON';
+    store();
+  }
+
+  function updPlayer(dt) {
+    var sp = plane.speed;
+    var dir = (keys.R ? 1 : 0) - (keys.L ? 1 : 0);
+    if (dir) {
+      input.keyMode = true;
+      input.tx = clamp(P.x + dir * sp * 0.25, -XR, XR);
+    } else if (input.keyMode) {
+      input.tx = P.x;
+      input.keyMode = false;
+    }
+    var mv = clamp(input.tx - P.x, -sp * dt, sp * dt);
+    P.vx = dt > 0 ? mv / dt : 0;
+    P.x += mv;
+    P.bank += (-(P.vx / sp) * 0.55 - P.bank) * Math.min(1, dt * 10);
+    if (P.roll > 0) { P.roll -= dt; }
+    if (P.rollCd > 0) { P.rollCd -= dt; }
+    if (P.inv > 0) { P.inv -= dt; }
+    P.fireT -= dt;
+    if (P.fireT <= 0) {
+      fire();
+      P.fireT += plane.fire;
+    }
+  }
+
+  function update(dt) {
+    time += dt;
+    if (hitSoundT > 0) { hitSoundT -= dt; }
+    if (shake > 0) { shake = Math.max(0, shake - dt * 1.6); }
+    if (flash > 0) { flash = Math.max(0, flash - dt * 2); }
+    if (banner.t > 0) { banner.t -= dt; }
+
+    if (state === 'pause') { return; }
+    if (state === 'over' && overT > 0) {
+      overT -= dt;
+      if (overT <= 0) { veil.classList.remove('hide'); }
+    }
+    var flying = state === 'play';
+    gscroll += dt * (flying ? 14 * spd() : 5);
+
+    // 飛び散った線と火花は、どの画面でも動かす(結果画面の後ろでも余韻が残るように)
+    for (var d = debris.length - 1; d >= 0; d--) {
+      var db = debris[d];
+      db.x += db.vx * dt; db.y += db.vy * dt; db.z += db.vz * dt;
+      db.vy -= 7 * dt;
+      var c = Math.cos(db.w * dt), s = Math.sin(db.w * dt), hx = db.hx;
+      db.hx = hx * c - db.hy * s;
+      db.hy = hx * s + db.hy * c;
+      db.life -= dt * 1.1;
+      if (db.life <= 0 || db.y < -0.5) { debris.splice(d, 1); }
+    }
+    for (var q = sparks.length - 1; q >= 0; q--) {
+      var sp = sparks[q];
+      sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.z += sp.vz * dt;
+      sp.vy -= 5 * dt;
+      sp.life -= dt;
+      if (sp.life <= 0) { sparks.splice(q, 1); }
+    }
+    for (var t = texts.length - 1; t >= 0; t--) {
+      texts[t].t -= dt * 0.9;
+      texts[t].y += dt * 1.2;
+      if (texts[t].t <= 0) { texts.splice(t, 1); }
+    }
+    if (!flying) { return; }
+
+    music();
+    if (hintT > 0) { hintT -= dt; }
+    updPlayer(dt);
+    camX += (K * P.x - camX) * Math.min(1, dt * 8);
+
+    // 区間の進行
+    if (clearT > 0) {
+      clearT -= dt;
+      if (clearT <= 0) { startSector(sector + 1); }
+    } else if (isBoss) {
+      secT += dt;
+      if (!bossSpawned && secT > 2.2) {
+        bossSpawned = true;
+        var hp = 150 + 100 * (bossIdx - 1);
+        enemies.push(mkEnemy('boss', 0, { hp: hp, maxHp: hp, va: 0.35, vb: 0.22, pat: 2, patT: 2.5, burst: 0, burstT: 0 }));
+      }
+    } else {
+      secT += dt;
+      if (secT < secLen) {
+        spawnT -= dt;
+        if (spawnT <= 0) { spawnPattern(); spawnT = spawnInterval(); }
+        gateT -= dt;
+        if (gateT <= 0) { spawnGate(); gateT = rand(8, 12); }
+      } else {
+        if (secT > secLen + 8) { enemies.forEach(function (e) { e.leaving = true; }); }
+        if (enemies.length === 0 && spawnQ.length === 0) { sectorClear(); }
+      }
+    }
+
+    for (var qi = spawnQ.length - 1; qi >= 0; qi--) {
+      spawnQ[qi].t -= dt;
+      if (spawnQ[qi].t <= 0) {
+        var sq = spawnQ.splice(qi, 1)[0];
+        enemies.push(mkEnemy(sq.type, sq.x, sq.o));
+      }
+    }
+
+    // 自分の弾
+    for (var i = shots.length - 1; i >= 0; i--) {
+      var sh = shots[i];
+      sh.pz = sh.z;
+      sh.z += 55 * dt;
+      var gone = sh.z > FAR + 4;
+      for (var j = 0; j < enemies.length && !gone; j++) {
+        var e = enemies[j];
+        if (e.z > FAR) { continue; }
+        if (sh.z >= e.z - e.r && sh.pz <= e.z + e.r + 0.6 && Math.abs(sh.x - e.x) < e.r + 0.1 + plane.wide) {
+          gone = true;
+          hitEnemy(e);
+        }
+      }
+      if (gone) { shots.splice(i, 1); }
+      if (state !== 'play') { return; }
+    }
+
+    for (var k = enemies.length - 1; k >= 0; k--) {
+      if (k >= enemies.length) { continue; }
+      if (updEnemy(enemies[k], dt)) { enemies.splice(k, 1); }
+      if (state !== 'play') { return; }
+    }
+
+    // 敵の弾
+    for (var b = bullets.length - 1; b >= 0; b--) {
+      var bl = bullets[b], pz = bl.z;
+      bl.x += bl.vx * dt;
+      bl.z += bl.vz * dt;
+      if (pz > PZ && bl.z <= PZ && Math.abs(bl.x - P.x) < 0.28 + bl.r) {
+        if (hurt()) { bullets.splice(b, 1); }
+        if (state !== 'play') { return; }
+        continue;
+      }
+      if (bl.z < 0.8) { bullets.splice(b, 1); }
+    }
+
+    // 柵(すき間の外にいたら当たり)
+    for (var f = fences.length - 1; f >= 0; f--) {
+      var fc = fences[f], fpz = fc.z;
+      fc.z -= 13 * spd() * dt;
+      if (fpz > PZ && fc.z <= PZ && Math.abs(P.x - fc.gx) > fc.gw / 2 - 0.2) {
+        hurt();
+        if (state !== 'play') { return; }
+      }
+      if (fc.z < 1) { fences.splice(f, 1); }
+    }
+
+    // 金の輪
+    for (var g = gates.length - 1; g >= 0; g--) {
+      var gt = gates[g], gpz = gt.z;
+      gt.t += dt;
+      gt.z -= 13 * spd() * dt;
+      if (gpz > PZ && gt.z <= PZ && Math.abs(gt.x - P.x) < 0.95) {
+        gatesPassed++;
+        if (P.power < 3) {
+          P.power++;
+          popText(gt.x, SY + 1.3, PZ + 3, 'ショット強化!', '#ffc15e', 1.1);
+        } else {
+          score += 500;
+          popText(gt.x, SY + 1.3, PZ + 3, '+500', '#ffc15e', 1.1);
+        }
+        score += 100;
+        burst(gt.x, SY, PZ + 1, '#ffc15e', 20, 5);
+        sfx.gate();
+        gates.splice(g, 1);
+        continue;
+      }
+      if (gt.z < 1) { gates.splice(g, 1); }
+    }
+  }
+
+  // ================================================================
+  //  描画
+  // ================================================================
+  function drawBackground() {
+    var sky = ctx.createLinearGradient(0, 0, 0, HY);
+    sky.addColorStop(0, '#12052a');
+    sky.addColorStop(0.5, '#4d1766');
+    sky.addColorStop(0.82, '#ff5e8a');
+    sky.addColorStop(1, '#ffb36b');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, HY + 1);
+
+    for (var i = 0; i < skyStars.length; i++) {
+      var st = skyStars[i];
+      ctx.globalAlpha = (0.35 + 0.35 * Math.sin(time * 1.5 + st.p)) * (1 - st.y);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(st.x * W, st.y * HY * 0.7, st.r, st.r);
+    }
+    ctx.globalAlpha = 1;
+
+    // しま模様の夕日
+    var R = Math.min(W, H) * 0.2, sx = W / 2 - camX * F / 400, sy = HY - R * 0.35;
+    var sg = ctx.createLinearGradient(0, sy - R, 0, sy + R);
+    sg.addColorStop(0, '#ffe98a');
+    sg.addColorStop(0.6, '#ff8a5c');
+    sg.addColorStop(1, '#ff3d8b');
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(sx, sy, R, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = sky;
+    for (var k = 0; k < 6; k++) {
+      var yy = sy + R * (0.05 + k * 0.16);
+      ctx.fillRect(sx - R, yy, R * 2, 1.5 + k * 1.3);
+    }
+
+    // ワイヤーフレームの山なみ(ほとんど動かない = 遠くにあるように見える)
+    var rp = [];
+    for (var m = 0; m < ridge.length; m++) {
+      var pp = project(ridge[m].x + camX * 0.9, ridge[m].h, 110);
+      rp.push({ x: pp.x, y: pp.y, bx: project(ridge[m].x + camX * 0.9, 0, 110).x });
+    }
+    ctx.beginPath();
+    ctx.moveTo(rp[0].x, HY);
+    for (m = 0; m < rp.length; m++) { ctx.lineTo(rp[m].x, rp[m].y); }
+    ctx.lineTo(rp[rp.length - 1].x, HY);
+    ctx.closePath();
+    ctx.fillStyle = '#2a0b45';
+    ctx.fill();
+    ctx.beginPath();
+    for (m = 0; m < rp.length - 1; m++) {
+      ctx.moveTo(rp[m].x, rp[m].y);
+      ctx.lineTo(rp[m].bx, HY);
+      ctx.moveTo(rp[m].x, rp[m].y);
+      ctx.lineTo(rp[m + 1].bx, HY);
+    }
+    ctx.strokeStyle = 'rgba(255,79,163,0.22)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(rp[0].x, rp[0].y);
+    for (m = 1; m < rp.length; m++) { ctx.lineTo(rp[m].x, rp[m].y); }
+    ctx.strokeStyle = 'rgba(255,110,190,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 地面と、流れていくグリッド
+    var gg = ctx.createLinearGradient(0, HY, 0, H);
+    gg.addColorStop(0, '#2b0a44');
+    gg.addColorStop(1, '#0a0216');
+    ctx.fillStyle = gg;
+    ctx.fillRect(0, HY, W, H - HY);
+
+    ctx.beginPath();
+    for (var gx = -26; gx <= 26; gx++) {
+      var a = project(gx * 1.6, 0, 1.2), b = project(gx * 1.6, 0, FAR);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.strokeStyle = 'rgba(255,79,163,0.28)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    var off = gscroll % 3;
+    for (var z = 3 - off + 1.2; z < FAR; z += 3) {
+      var y = HY + CAMH * F / z;
+      ctx.strokeStyle = 'rgba(94,242,255,' + (0.5 * (1 - z / FAR)).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+    var hz = ctx.createLinearGradient(0, HY, 0, HY + H * 0.06);
+    hz.addColorStop(0, 'rgba(255,140,170,0.55)');
+    hz.addColorStop(1, 'rgba(255,140,170,0)');
+    ctx.fillStyle = hz;
+    ctx.fillRect(0, HY, W, H * 0.06);
+  }
+
+  function fogA(z) { return clamp((FAR + 2 - z) / 10, 0, 1); }
+
+  function drawShadow(x, z, r, a) {
+    var p = project(x, 0, z);
+    var rx = r * p.s;
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.35 * a).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, rx, Math.max(1, rx * 0.22), 0, 0, TAU);
+    ctx.fill();
+  }
+
+  function drawGuide() {
+    if (!P) { return; }
+    var a = project(P.x, SY, PZ + 0.8), b = project(P.x, SY, FAR);
+    var lg = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+    lg.addColorStop(0, 'rgba(94,242,255,0.7)');
+    lg.addColorStop(1, 'rgba(94,242,255,0.05)');
+    ctx.strokeStyle = lg;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    // 奥へ流れていく光の粒で、線が「弾の道」だと分かるようにする
+    ctx.fillStyle = 'rgba(200,250,255,0.8)';
+    for (var i = 0; i < 6; i++) {
+      var z = PZ + 1 + ((i * 9 + time * 24) % 54);
+      var p = project(P.x, SY, z);
+      var r = Math.max(1, 0.06 * p.s);
+      ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+    }
+  }
+
+  function drawEnemy(e) {
+    var T = TYPES[e.type], a = fogA(e.z);
+    if (e.z < 0.6) { return; }
+    drawShadow(e.x, e.z, e.r, a);
+    var col = e.flash > 0 ? '#ffffff' : T.color;
+    var p = project(e.x, e.y, e.z), lw = Math.max(1, 0.05 * p.s);
+    strokeModel(M[T.model], modelPts(M[T.model], e, T.size), col, a, lw);
+    if (e.type === 'boss') {
+      var core = { x: e.x, y: e.y, z: e.z, a: -e.a * 2, b: e.b * 1.5 };
+      strokeModel(M.octa, modelPts(M.octa, core, 1.1), '#ff4fa3', a, lw);
+    }
+    // 撃ちそうなオクタは中心が光る(予告)
+    if (e.type === 'octa' && !e.leaving && e.fireT < 0.45 && e.z <= e.hoverZ + 0.1) {
+      ctx.fillStyle = 'rgba(255,90,90,' + (0.9 - e.fireT).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(2, 0.25 * p.s), 0, TAU);
+      ctx.fill();
+    }
+    // 弾の通り道に重なっている敵にはカギ形の印
+    if (P && state === 'play' && e.z < FAR - 2 && Math.abs(e.x - P.x) < e.r + laneHalf()) {
+      var s = e.r * p.s * 1.25, c = s * 0.4;
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (q) {
+        var x = p.x + q[0] * s, y = p.y + q[1] * s;
+        ctx.moveTo(x, y + -q[1] * c);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x + -q[0] * c, y);
+      });
+      ctx.stroke();
+    }
+  }
+
+  function drawGate(g) {
+    var a = fogA(g.z);
+    drawShadow(g.x, g.z, 1, a);
+    var o = { x: g.x, y: SY, z: g.z, a: 0, b: 0 };
+    var p = project(g.x, SY, g.z);
+    strokeModel(M.ring, modelPts(M.ring, o, 1.05, g.t * 1.5), '#ffc15e', a, Math.max(1.5, 0.08 * p.s));
+  }
+
+  function drawFence(f) {
+    if (f.z < 0.8) { return; }
+    var a = fogA(f.z), L = f.gx - f.gw / 2, R = f.gx + f.gw / 2, E = XR + 2, p = project(f.gx, SY, f.z);
+    ctx.beginPath();
+    [[-E, L], [R, E]].forEach(function (seg) {
+      var n = Math.max(1, Math.round((seg[1] - seg[0]) / 0.8));
+      for (var i = 0; i <= n; i++) {
+        var x = seg[0] + (seg[1] - seg[0]) * i / n, b = project(x, 0, f.z), t = project(x, 1.3, f.z);
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(t.x, t.y);
+      }
+      [0.2, 0.75, 1.3].forEach(function (y) {
+        var l = project(seg[0], y, f.z), r = project(seg[1], y, f.z);
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(r.x, r.y);
+      });
+    });
+    var lw = Math.max(1, 0.05 * p.s);
+    ctx.strokeStyle = 'rgba(255,79,163,' + (0.25 * a).toFixed(3) + ')';
+    ctx.lineWidth = lw * 3;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,120,190,' + a.toFixed(3) + ')';
+    ctx.lineWidth = lw;
+    ctx.stroke();
+    // すき間のふちは金色にして、くぐる場所をはっきり見せる
+    ctx.strokeStyle = 'rgba(255,193,94,' + a.toFixed(3) + ')';
+    ctx.lineWidth = lw * 2;
+    ctx.beginPath();
+    [L, R].forEach(function (x) {
+      var b = project(x, 0, f.z), t = project(x, 1.5, f.z);
+      ctx.moveTo(b.x, b.y);
+      ctx.lineTo(t.x, t.y);
+    });
+    ctx.stroke();
+  }
+
+  function drawBullet(b) {
+    if (b.z < 0.8) { return; }
+    var a = fogA(b.z), p = project(b.x, SY, b.z), r = Math.max(2, b.r * p.s);
+    drawShadow(b.x, b.z, b.r * 1.3, a);
+    ctx.fillStyle = 'rgba(255,60,60,' + (0.3 * a).toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 2.2, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,150,120,' + a.toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, TAU);
+    ctx.fill();
+  }
+
+  function drawShip() {
+    if (!P || state === 'over') { return; }
+    if (P.inv > 0 && Math.floor(time * 16) % 2 === 0) { return; }
+    drawShadow(P.x, PZ, 0.6, 1);
+    var spin = P.roll > 0 ? (1 - P.roll / 0.5) * TAU : 0;
+    var o = { x: P.x, y: SY + Math.sin(time * 3) * 0.04, z: PZ, a: 0, b: -0.12 };
+    var pts = modelPts(M.ship, o, 0.55, P.bank + spin);
+    strokeModel(M.ship, pts, plane.color, 1, 2);
+    if (P.roll > 0) {
+      var p = project(P.x, SY, PZ);
+      ctx.strokeStyle = 'rgba(94,242,255,' + (P.roll * 1.4).toFixed(3) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 0.8 * p.s, 0, TAU);
+      ctx.stroke();
+    }
+  }
+
+  function drawObjects() {
+    var list = [], i;
+    for (i = 0; i < enemies.length; i++) { list.push({ z: enemies[i].z, k: 0, o: enemies[i] }); }
+    for (i = 0; i < gates.length; i++) { list.push({ z: gates[i].z, k: 1, o: gates[i] }); }
+    for (i = 0; i < bullets.length; i++) { list.push({ z: bullets[i].z, k: 2, o: bullets[i] }); }
+    for (i = 0; i < fences.length; i++) { list.push({ z: fences[i].z, k: 4, o: fences[i] }); }
+    list.push({ z: PZ, k: 3, o: null });
+    list.sort(function (a, b) { return b.z - a.z; });
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(160,250,255,0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (i = 0; i < shots.length; i++) {
+      var s = shots[i], a = project(s.x, SY, s.z), b = project(s.x, SY, Math.max(PZ + 0.3, s.z - 1.6));
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    for (i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (it.k === 0) { drawEnemy(it.o); } else if (it.k === 1) { drawGate(it.o); } else if (it.k === 2) { drawBullet(it.o); } else if (it.k === 4) { drawFence(it.o); } else { drawShip(); }
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (i = 0; i < debris.length; i++) {
+      var d = debris[i];
+      if (d.z - Math.abs(d.hz) < 0.5) { continue; }
+      var p1 = project(d.x - d.hx, d.y - d.hy, d.z - d.hz), p2 = project(d.x + d.hx, d.y + d.hy, d.z + d.hz);
+      ctx.strokeStyle = hexA(d.c, clamp(d.life, 0, 1).toFixed(3));
+      ctx.lineWidth = Math.max(1, 0.05 * p1.s);
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+    }
+    for (i = 0; i < sparks.length; i++) {
+      var sp = sparks[i];
+      if (sp.z < 0.6) { continue; }
+      var pp = project(sp.x, sp.y, sp.z), r = Math.max(1, 0.07 * pp.s);
+      ctx.fillStyle = hexA(sp.c, clamp(sp.life * 1.3, 0, 1).toFixed(3));
+      ctx.fillRect(pp.x - r, pp.y - r, r * 2, r * 2);
+    }
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (i = 0; i < texts.length; i++) {
+      var tx = texts[i], tp = project(tx.x, tx.y, tx.z);
+      ctx.globalAlpha = Math.min(1, tx.t * 2);
+      outlinedText(tx.s, tp.x, tp.y, Math.max(13, Math.min(W, H) / 32) * tx.k, tx.c);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function outlinedText(s, x, y, size, color) {
+    ctx.font = '800 ' + Math.round(size) + 'px system-ui, sans-serif';
+    ctx.lineWidth = Math.max(3, size / 5);
+    ctx.strokeStyle = 'rgba(20,4,36,0.9)';
+    ctx.strokeText(s, x, y);
+    ctx.fillStyle = color;
+    ctx.fillText(s, x, y);
+  }
+
+  function drawHud() {
+    var fs = clamp(Math.min(W, H) / 26, 13, 22), pad = 12;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    outlinedText('SCORE ' + score, pad, pad, fs, '#fff1f7');
+    ctx.font = '600 ' + Math.round(fs * 0.62) + 'px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,241,247,0.7)';
+    ctx.fillText('ベスト ' + Math.max(save.best, score), pad, pad + fs * 1.2);
+
+    if (P) {
+      ctx.textAlign = 'right';
+      var hs = '';
+      for (var i = 0; i < plane.hearts; i++) { hs += i < P.lives ? '♥' : '♡'; }
+      ctx.font = '800 ' + Math.round(fs * 1.05) + 'px system-ui, sans-serif';
+      ctx.fillStyle = '#ff4fa3';
+      ctx.fillText(hs, W - pad, pad);
+      ctx.font = '600 ' + Math.round(fs * 0.62) + 'px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(255,241,247,0.75)';
+      ctx.fillText('区間 ' + sector + ' ・ ' + plane.name, W - pad, pad + fs * 1.25);
+
+      // 連鎖
+      if (chain > 0 && chainType) {
+        ctx.textAlign = 'center';
+        var cs = Math.min(chain, 10);
+        outlinedText(TYPES[chainType].name + ' 連鎖 ×' + cs, W / 2, pad + fs * (isBoss && bossSpawned ? 1.6 : 0.2) + fs * 0.5, fs * (cs >= 5 ? 1.05 : 0.85), TYPES[chainType].color);
+      }
+
+      // ショットの強さと回避ゲージ
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.font = '700 ' + Math.round(fs * 0.62) + 'px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(255,241,247,0.8)';
+      ctx.fillText('ショット', pad, H - pad - fs * 0.2);
+      for (var k = 0; k < 3; k++) {
+        ctx.fillStyle = k < P.power ? '#ffc15e' : 'rgba(255,255,255,0.18)';
+        ctx.fillRect(pad + fs * 3.3 + k * fs * 0.8, H - pad - fs * 0.85, fs * 0.6, fs * 0.55);
+      }
+      ctx.textAlign = 'right';
+      var ready = P.rollCd <= 0;
+      ctx.fillStyle = ready ? '#5ef2ff' : 'rgba(255,241,247,0.5)';
+      ctx.fillText(ready ? '回避 OK' : '回避', W - pad - (ready ? 0 : fs * 3.6), H - pad - fs * 0.2);
+      if (!ready) {
+        var gw = fs * 3.2;
+        ctx.fillStyle = 'rgba(255,255,255,0.18)';
+        ctx.fillRect(W - pad - gw, H - pad - fs * 0.75, gw, fs * 0.35);
+        ctx.fillStyle = '#5ef2ff';
+        ctx.fillRect(W - pad - gw, H - pad - fs * 0.75, gw * (1 - P.rollCd / plane.roll), fs * 0.35);
+      }
+    }
+
+    // ボスの体力
+    for (var b = 0; b < enemies.length; b++) {
+      var e = enemies[b];
+      if (e.type !== 'boss') { continue; }
+      var bw = Math.min(W * 0.5, 360), bx = W / 2 - bw / 2, by = pad + fs * 0.3;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(bx, by, bw, fs * 0.5);
+      ctx.fillStyle = '#c79bff';
+      ctx.fillRect(bx, by, bw * e.hp / e.maxHp, fs * 0.5);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, bw, fs * 0.5);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (banner.t > 0) {
+      var ba = Math.min(1, banner.t * 2, (banner.max - banner.t) * 4);
+      ctx.globalAlpha = clamp(ba, 0, 1);
+      outlinedText(banner.s, W / 2, H * 0.3, fs * 1.9, '#ffffff');
+      if (banner.sub) { outlinedText(banner.sub, W / 2, H * 0.3 + fs * 1.8, fs * 0.85, '#ffc15e'); }
+      ctx.globalAlpha = 1;
+    }
+    if (state === 'play' && hintT > 0 && hintT < 7) {
+      ctx.globalAlpha = Math.min(1, hintT);
+      outlinedText('左右に動いて、水色の線を図形に重ねよう(弾は自動)', W / 2, H * 0.66, fs * 0.72, '#5ef2ff');
+      outlinedText('クリック / タップ / スペースで、くるっと回避', W / 2, H * 0.66 + fs * 1.1, fs * 0.62, '#fff1f7');
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function draw() {
+    ctx.save();
+    if (shake > 0) {
+      var m = shake * 10;
+      ctx.translate(rand(-m, m), rand(-m, m));
+    }
+    drawBackground();
+    if (state === 'play' || state === 'pause') { drawGuide(); }
+    drawObjects();
+    ctx.restore();
+    if (flash > 0) {
+      ctx.fillStyle = 'rgba(' + flashColor + ',' + (flash * 0.5).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (state !== 'title') { drawHud(); }
+  }
+
+  var last = 0;
+  function frame(now) {
+    var dt = last ? (now - last) / 1000 : 0;
+    last = now;
+    if (dt > 0.05) { dt = 0.05; }
+    update(dt);
+    draw();
+    window.requestAnimationFrame(frame);
+  }
+
+  // ================================================================
+  //  機体えらび
+  // ================================================================
+  function renderPlanes() {
+    planesEl.innerHTML = '';
+    var cap = document.createElement('div');
+    cap.className = 'cap';
+    cap.textContent = '機体をえらぶ';
+    planesEl.appendChild(cap);
+    var cur = planeById(save.plane).id;
+    PLANES.forEach(function (p) {
+      var ok = unlocked(p);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'plane' + (cur === p.id ? ' on' : '');
+      b.disabled = !ok;
+      b.setAttribute('aria-pressed', cur === p.id ? 'true' : 'false');
+      b.innerHTML = '<span class="pn" style="color:' + p.color + '">' + (ok ? '' : '🔒 ') + p.name +
+        (ok ? '(ハート' + p.hearts + ')' : '') + '</span><span class="pd">' + (ok ? p.desc : p.needText) + '</span>';
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (!ok) { return; }
+        save.plane = p.id;
+        store();
+        renderPlanes();
+        wake();
+        sfx.select();
+      });
+      planesEl.appendChild(b);
+    });
+  }
+
+  // ================================================================
+  //  入力
+  // ================================================================
+  function aimMouse(e) {
+    var r = cv.getBoundingClientRect();
+    var mx = (e.clientX - r.left) / r.width * W;
+    // マウスの真下に紙ひこうきが来るように、画面の位置を左右の位置に直す
+    input.tx = clamp((mx - W / 2) * PZ / ((1 - K) * F), -XR, XR);
+    input.keyMode = false;
+  }
+
+  cv.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    wake();
+    if (state === 'pause') { resume(); return; }
+    if (state !== 'play') { return; }
+    if (e.pointerType === 'mouse') {
+      aimMouse(e);
+      doRoll();
+      return;
+    }
+    // 指は「なぞった分だけ動く」方式。指で紙ひこうきが隠れないようにする
+    input.touchId = e.pointerId;
+    input.tStartX = e.clientX;
+    input.tShipX = P.x;
+    input.tStartT = performance.now();
+    input.tMoved = 0;
+    input.keyMode = false;
+    try { cv.setPointerCapture(e.pointerId); } catch (err) { /* 対応していない環境もある */ }
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (state !== 'play') { return; }
+    if (e.pointerType === 'mouse') { aimMouse(e); return; }
+    if (e.pointerId !== input.touchId) { return; }
+    var r = cv.getBoundingClientRect();
+    var dx = (e.clientX - input.tStartX) / r.width * W;
+    input.tMoved = Math.max(input.tMoved, Math.abs(dx));
+    input.tx = clamp(input.tShipX + dx * PZ / ((1 - K) * F) * 1.4, -XR, XR);
+  });
+  cv.addEventListener('pointerup', function (e) {
+    if (e.pointerId !== input.touchId) { return; }
+    input.touchId = null;
+    if (state === 'play' && performance.now() - input.tStartT < 230 && input.tMoved < 14) { doRoll(); }
+  });
+  cv.addEventListener('pointercancel', function (e) {
+    if (e.pointerId === input.touchId) { input.touchId = null; }
+  });
+  pauseVeil.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    resume();
+  });
+  btnStart.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (state === 'title' || (state === 'over' && overT <= 0)) { startRun(); }
+  });
+  btnPause.addEventListener('click', function () {
+    if (state === 'play') { pause(); } else if (state === 'pause') { resume(); }
+  });
+  btnMute.addEventListener('click', function () {
+    wake();
+    toggleMute();
+  });
+
+  var KEYMAP = { ArrowLeft: 'L', ArrowRight: 'R', a: 'L', d: 'R' };
+  function keyCode(k) { return KEYMAP[k] || KEYMAP[String(k).toLowerCase()]; }
+
+  window.addEventListener('keydown', function (e) {
+    var k = e.key;
+    if (k === ' ' || k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); }
+    wake();
+    var c = keyCode(k);
+    if (c) { keys[c] = true; }
+    if (k === 'm' || k === 'M') { toggleMute(); }
+    if (k === 'p' || k === 'P' || k === 'Escape') {
+      if (state === 'play') { pause(); } else if (state === 'pause') { resume(); }
+    }
+    if (k === ' ' && state === 'play' && !e.repeat) { doRoll(); }
+    if (k === ' ' || k === 'Enter') {
+      if (state === 'title' || (state === 'over' && overT <= 0)) { startRun(); }
+    }
+  });
+  window.addEventListener('keyup', function (e) {
+    var c = keyCode(e.key);
+    if (c) { keys[c] = false; }
+  });
+  window.addEventListener('blur', function () { keys = {}; });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { pause(); }
+  });
+
+  // ================================================================
+  //  テスト用の窓口(読み取り専用。ゲームの中身は変えられない)
+  // ================================================================
+  window.gameTest = {
+    state: function () { return state; },
+    score: function () { return score; },
+    sector: function () { return sector; },
+    lives: function () { return P ? P.lives : 0; },
+    power: function () { return P ? P.power : 0; },
+    chain: function () { return { n: chain, type: chainType }; },
+    maxChain: function () { return maxChain; },
+    kills: function () { return kills; },
+    gates: function () { return gatesPassed; },
+    dodges: function () { return dodges; },
+    best: function () { return save.best; },
+    bestSector: function () { return save.bestSector; },
+    plane: function () { return plane.id; },
+    unlocked: function () { return PLANES.filter(unlocked).map(function (p) { return p.id; }); },
+    rolling: function () { return !!P && P.roll > 0; },
+    rollReady: function () { return !!P && P.rollCd <= 0; },
+    lastKill: function () { return { type: lastKill.type, chain: lastKill.chain, pts: lastKill.pts, ago: time - lastKill.at }; },
+    killLog: function () { return killLog.map(function (k) { return { id: k.id, type: k.type, chain: k.chain, pts: k.pts, hurt: k.hurt }; }); },
+    basePts: function () { return { cube: TYPES.cube.pts, pyra: TYPES.pyra.pts, octa: TYPES.octa.pts }; },
+    // 紙ひこうきを左右の位置 x に置きたいとき、マウスを画面のどこに置けばよいか(入力の変換をそのまま逆にしたもの)
+    mouseXFor: function (x) { return W / 2 + x * (1 - K) * F / PZ; },
+    snapshot: function () {
+      var g1 = P ? project(P.x, SY, PZ + 0.8) : null, g2 = P ? project(P.x, SY, FAR) : null;
+      return {
+        W: W, H: H, XR: XR, PZ: PZ,
+        px: P ? P.x : 0,
+        guide: P ? { x1: g1.x, y1: g1.y, x2: g2.x, y2: g2.y } : null,
+        boss: isBoss && bossSpawned,
+        enemies: enemies.map(function (e) {
+          var p = project(e.x, e.y, e.z);
+          return { id: e.id, type: e.type, x: e.x, z: e.z, vz: e.vz, hp: e.hp, r: e.r, leaving: e.leaving, sx: p.x, sy: p.y, sr: e.r * p.s };
+        }),
+        bullets: bullets.map(function (b) { return { x: b.x, z: b.z, vx: b.vx, vz: b.vz }; }),
+        gates: gates.map(function (g) { return { x: g.x, z: g.z }; }),
+        fences: fences.map(function (f) { return { gx: f.gx, gw: f.gw, z: f.z }; })
+      };
+    }
+  };
+
+  // ================================================================
+  //  はじめる
+  // ================================================================
+  if (save.best > 0) {
+    vBody.innerHTML += '<p>自己ベスト ' + save.best + '(最高 区間' + save.bestSector + ')</p>';
+  }
+  btnMute.textContent = save.muted ? '音: OFF' : '音: ON';
+  renderPlanes();
+  resize();
+  window.requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -14,6 +14,9 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Claude の出力(UTF-8)をログで文字化けさせないため
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
@@ -103,6 +106,9 @@ $prompt = @"
 今日は $today($weekday)、いまの時刻は $now です。
 CLAUDE.md の「2. 毎日のワークフロー」に従って、今日の作業を最後まで進めてください。
 投稿は GitHub Actions が行うので、自分では投稿しないでください。
+この作業は、あなたが返事を終えた時点で終了し、完了の通知などは届きません。
+コマンド(特にテスト)はバックグラウンドで実行せず、必ず終わるまで待ってください。
+最後の git push まで終えてから、作業を終了してください。
 "@
 
 Write-Log "今日の日付を渡します: $today($weekday) $now"

@@ -7,5 +7,14 @@
     "theme": "夜空・ほうき星",
     "controls": "マウス / 画面をなぞる / 矢印キー・WASD",
     "status": "success"
+  },
+  {
+    "post_date": "2026-09-30",
+    "title": "ゆうやけワイヤーフライト",
+    "dir": "games/2026-09-30-wire-flight/",
+    "genre": "シューティング",
+    "theme": "夕焼け・ワイヤーフレームの3D",
+    "controls": "マウス左右 / 指でなぞる / ←→・ADキー(回避: クリック / タップ / スペース)",
+    "status": "success"
   }
 ]
