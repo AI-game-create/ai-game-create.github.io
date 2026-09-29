@@ -2,10 +2,10 @@ name: X投稿
 
 on:
   schedule:
-    # 21:00 JST。release を投稿し、同じ実行の中で10分待って devlog を投稿する。
+    # 20:30 JST。release を投稿し、同じ実行の中で10分待って devlog を投稿する。
     # cron を2本に分けないのは、GitHub Actions の定時実行が数分〜30分ずれることがあり、
     # 「10分後」という間隔が守られない(順番が入れ替わる)ため。
-    - cron: '0 12 * * *'
+    - cron: '30 11 * * *'
   workflow_dispatch:
     inputs:
       slot:
