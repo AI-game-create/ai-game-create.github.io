@@ -31,6 +31,8 @@ $AllowedTools = @(
     'Bash(git log:*)'
     'Bash(npx playwright test:*)'
     'Bash(npm test:*)'
+    # Xのトレンドを確かめるための検索(CLAUDE.md 2章の手順3)
+    'WebSearch'
 )
 
 $logDir = Join-Path $repo 'logs'
