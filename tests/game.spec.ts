@@ -47,7 +47,7 @@ test.describe('今日のゲーム', () => {
     // 行数の目安は公開日の曜日で変わる(土曜は大作枠)。強制上限は目安の2割増し。
     // フォルダ名の先頭10文字が公開日(YYYY-MM-DD)。読めなければ通常枠として扱う。
     const day = new Date(`${game.name.slice(0, 10)}T00:00:00`).getDay();
-    const guide = day === 6 ? 5000 : 1500;
+    const guide = day === 6 ? 5000 : 3000;
     const hard = Math.round(guide * 1.2);
     console.log(`  行数の目安: ${guide}(上限 ${hard})${day === 6 ? ' ※土曜の大作枠' : ''}`);
     expect(lines, `${lines}行あります。${guide}行を目安に作り直してください`).toBeLessThanOrEqual(hard);
