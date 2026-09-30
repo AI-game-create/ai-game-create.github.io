@@ -2,6 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { latestGame } from './latest';
+import { recordPlayVideo } from './video';
 
 // ============================================================================
 //  プレイテスト: 今日のゲームの「核の遊び」が本当に機能するかを、実際に操作して確かめる。
@@ -321,5 +322,21 @@ test.describe('プレイテスト', () => {
     await page.click('#btnStart');
     await expect.poll(() => get<string>(page, 'state')).toBe('play');
     if (sector >= 4) expect(await get<string>(page, 'plane'), '選んだ機体で始まりません').toBe('swallow');
+  });
+  test('投稿用のプレイ動画を撮る', async ({ browser }, info) => {
+    test.skip(info.project.name !== 'desktop', '動画は desktop で1本だけ撮る');
+    test.setTimeout(3 * 60_000);
+    // 区間2まで進めて敵が増えてから、自動プレイヤーが連鎖を狙う10秒を撮る
+    await recordPlayVideo(browser, {
+      dir: target!.dir,
+      focus: '#cv',
+      setup: async (page) => {
+        await start(page);
+        await autoplay(page, async () => (await get<number>(page, 'sector')) >= 2, 90_000);
+      },
+      play: async (page, until) => {
+        await autoplay(page, async () => Date.now() >= until || (await get<string>(page, 'state')) === 'over', until - Date.now());
+      },
+    });
   });
 });

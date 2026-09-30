@@ -8,13 +8,16 @@
   2. 今日(日本時間)の data/queue/YYYY-MM-DD.json を読む。無ければスキップ
   3. 投稿文を検査する(140字以内 / 本文にURLなし / game_url が公開URLで始まる)
   4. DRY_RUN が "0" 以外なら、投稿せずに内容を表示して終わる
-  5. release 枠はスクリーンショット付きで投稿し、URLは自己リプライで付ける
-  6. 結果を data/posts.json に記録する
+  5. release 枠はプレイ動画付きで投稿し、URLは自己リプライで付ける
+     (動画が使えなければスクリーンショット、それも駄目なら文字だけで投稿する)
+  6. 結果を data/posts.json に記録する(動画のファイルは投稿後に消す)
 
 環境変数
   X_API_KEY / X_API_SECRET / X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET
   GAME_BASE_URL  公開URLのベース(例: https://user.github.io/ai-game-studio/)
   DRY_RUN        "0" のときだけ本当に投稿する(未設定なら試運転扱い)
+
+動画は games/…/play.webm を ffmpeg で mp4(H.264)に変換して載せる。ffmpeg が無ければ画像にする。
 """
 
 from __future__ import annotations
@@ -23,7 +26,11 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
+import time
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -117,6 +124,55 @@ def validate_game_url(url: str, base: str) -> None:
         sys.exit(1)
 
 
+def webm_to_mp4(src: Path) -> Path | None:
+    """X に載せられる mp4(H.264 + 無音の AAC)に変換する。できなければ None。"""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        log("::warning::ffmpeg が無いので、動画は使いません。")
+        return None
+    out = Path(tempfile.gettempdir()) / f"{src.parent.name}.mp4"
+    cmd = [
+        ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+        "-i", str(src),
+        # 音のない動画を受け付けない場合に備えて、無音の音声を付ける
+        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-map", "0:v:0", "-map", "1:a:0", "-shortest", "-t", "60",
+        "-vf", r"scale=trunc(min(1280\,iw)/2)*2:-2,fps=30,format=yuv420p",
+        "-c:v", "libx264", "-profile:v", "high", "-preset", "medium", "-crf", "20",
+        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+        str(out),
+    ]
+    try:
+        subprocess.run(cmd, check=True, timeout=300, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        log(f"::warning::動画を mp4 にできなかったので、動画は使いません: {e.stderr.strip()[-500:]}")
+        return None
+    except (subprocess.SubprocessError, OSError) as e:
+        log(f"::warning::動画を mp4 にできなかったので、動画は使いません: {e}")
+        return None
+    log(f"動画を mp4 にしました({out.stat().st_size / 1024 / 1024:.1f}MB)。")
+    return out
+
+
+def upload_video(api, mp4: Path) -> str:
+    """動画をアップロードし、X 側の変換が終わるまで待つ(最大3分。過ぎたら失敗扱い)。"""
+    media = api.media_upload(
+        filename=str(mp4), media_category="tweet_video", chunked=True, wait_for_async_finalize=False
+    )
+    deadline = time.monotonic() + 180
+    while True:
+        info = getattr(media, "processing_info", None) or {}
+        state = info.get("state")
+        if state in (None, "succeeded"):
+            return media.media_id_string
+        if state == "failed" or "error" in info:
+            raise RuntimeError(f"X 側で動画の処理に失敗しました: {info}")
+        if time.monotonic() > deadline:
+            raise RuntimeError("X 側の動画の処理が3分で終わりませんでした")
+        time.sleep(max(1, int(info.get("check_after_secs", 3))))
+        media = api.get_media_upload_status(media.media_id)
+
+
 def build_clients():
     keys = {
         "X_API_KEY": os.environ.get("X_API_KEY", ""),
@@ -193,10 +249,19 @@ def main() -> None:
         log(f"スクリーンショットが見つかりません({shot})。画像なしで投稿します。")
         shot_path = None
 
+    video = (queue.get("video") or "").strip()
+    mp4 = None
+    if slot == "release" and video:
+        if (ROOT / video).exists():
+            mp4 = webm_to_mp4(ROOT / video)  # 試運転でも変換までは行い、動くことを確かめる
+        else:
+            log(f"動画が見つかりません({video})。画像で投稿します。")
+
     log("--- 投稿する内容 ---")
     log(f"タイトル: {queue.get('title', '(なし)')}")
     log(f"本文({len(text)}字):\n{text}")
     if slot == "release":
+        log(f"動画: {video if mp4 else '(なし)'}")
         log(f"画像: {shot if shot_path else '(なし)'}")
         log(f"リプライで付けるURL: {game_url or '(なし)'}")
     log("--------------------")
@@ -208,17 +273,40 @@ def main() -> None:
 
     client, api = build_clients()
 
-    media_ids = None
-    if slot == "release" and shot_path:
+    def upload_image() -> list[str] | None:
+        if not shot_path:
+            return None
         # 画像のアップロード(v1.1)は X 側で廃止が進んでいる。失敗しても本文の投稿は止めない
         try:
             media = api.media_upload(filename=str(shot_path))
-            media_ids = [media.media_id_string]
             log("スクリーンショットをアップロードしました。")
+            return [media.media_id_string]
         except Exception as e:
             log(f"::warning::スクリーンショットのアップロードに失敗したので、画像なしで投稿します: {e}")
+            return None
 
-    res = client.create_tweet(text=text, media_ids=media_ids)
+    media_ids = None
+    used_video = False
+    if mp4:
+        try:
+            media_ids = [upload_video(api, mp4)]
+            used_video = True
+            log("プレイ動画をアップロードしました。")
+        except Exception as e:
+            log(f"::warning::動画のアップロードに失敗したので、画像で投稿します: {e}")
+    if media_ids is None and slot == "release":
+        media_ids = upload_image()
+
+    try:
+        res = client.create_tweet(text=text, media_ids=media_ids)
+    except Exception as e:
+        if not used_video:
+            raise
+        # 動画付きの投稿が断られたら、画像で出し直す(投稿はまだできていない)
+        log(f"::warning::動画付きで投稿できなかったので、画像で投稿します: {e}")
+        used_video = False
+        media_ids = upload_image()
+        res = client.create_tweet(text=text, media_ids=media_ids)
     tweet_id = str(res.data["id"])
     log(f"投稿しました: https://x.com/i/status/{tweet_id}")
 
@@ -231,6 +319,8 @@ def main() -> None:
         "posted_at": datetime.now(JST).isoformat(timespec="seconds"),
         "metrics": None,
     }
+    if slot == "release":
+        entry["media"] = "video" if used_video else ("image" if media_ids else "none")
 
     # release だけ、ゲームのURLを自己リプライで付ける
     if slot == "release" and game_url:
@@ -240,6 +330,11 @@ def main() -> None:
         log("URLの自己リプライを付けました。")
 
     record(entry)
+
+    # 動画は投稿のためだけに置いている。投稿が済んだら消して、リポジトリと公開サイトを軽く保つ
+    if video and (ROOT / video).exists():
+        (ROOT / video).unlink()
+        log(f"投稿が済んだので、動画を消しました({video})。")
 
 
 if __name__ == "__main__":
