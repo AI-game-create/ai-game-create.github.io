@@ -22,9 +22,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import unicodedata
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 # Windows のコンソールでも日本語が読めるようにする
@@ -40,6 +41,14 @@ JST = timezone(timedelta(hours=9))
 SLOTS = ("release", "devlog", "wrapup")
 MAX_CHARS = 140          # CLAUDE.md のルール
 MAX_WEIGHTED = 280       # X 側の上限(全角は2文字ぶん)
+DAY_ONE = date(2026, 9, 29)  # 初めて投稿した日。この日を「1日目」として数える
+
+
+def with_day_prefix(text: str, date_str: str) -> str:
+    """release の本文の先頭に「【N日目】」を付ける。本文側に書かれていたら付け直す。"""
+    n = (date.fromisoformat(date_str) - DAY_ONE).days + 1
+    body = re.sub(r"^\s*【\d+日目】\s*", "", text)
+    return f"【{n}日目】{body}"
 
 
 def log(msg: str) -> None:
@@ -170,6 +179,8 @@ def main() -> None:
         return
 
     text = (queue.get("posts") or {}).get(slot, "")
+    if slot == "release" and text.strip():
+        text = with_day_prefix(text, date_str)
     validate(text, slot)
 
     base = os.environ.get("GAME_BASE_URL", "").strip()
