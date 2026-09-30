@@ -6,10 +6,11 @@
 やること
   1. data/alert.md に中身があれば何もしない
   2. 今日(日本時間)の data/queue/YYYY-MM-DD.json を読む。無ければスキップ
-  3. 投稿文を検査する(140字以内 / 本文にURLなし / game_url が公開URLで始まる)
+  3. 投稿文を検査する(140字以内 / キューの本文にURLなし / game_url が公開URLで始まる)
   4. DRY_RUN が "0" 以外なら、投稿せずに内容を表示して終わる
-  5. release 枠はプレイ動画付きで投稿し、URLは自己リプライで付ける
+  5. release 枠は、本文の最後にゲームのURLを付け、プレイ動画付きで投稿する
      (動画が使えなければスクリーンショット、それも駄目なら文字だけで投稿する)
+     (URLを入れると X の文字数の上限を超える日だけ、URLは自己リプライで付ける)
   6. 結果を data/posts.json に記録する(動画のファイルは投稿後に消す)
 
 環境変数
@@ -31,7 +32,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -62,11 +62,17 @@ def log(msg: str) -> None:
     print(msg, flush=True)
 
 
+URL_RE = re.compile(r"https?://\S+")
+URL_WEIGHT = 23  # X は URL を長さに関係なく23文字ぶんと数える
+
+
 def weighted_len(text: str) -> int:
-    """X の数え方。全角(東アジアの文字)は2、それ以外は1。"""
-    total = 0
-    for ch in text:
-        total += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    """X の数え方。ラテン文字などは1、それ以外(日本語・記号・絵文字)は2、URL は23。"""
+    total = URL_WEIGHT * len(URL_RE.findall(text))
+    for ch in URL_RE.sub("", text):
+        cp = ord(ch)
+        light = cp <= 4351 or 8192 <= cp <= 8205 or 8208 <= cp <= 8223 or 8242 <= cp <= 8247
+        total += 1 if light else 2
     return total
 
 
@@ -263,6 +269,16 @@ def main() -> None:
     game_url = (queue.get("game_url") or "").strip()
     validate_game_url(game_url, base)
 
+    # ゲームのURLは本文の最後に付ける(見てすぐ遊べるように)。上限を超える日だけリプライに回す
+    link = "none"
+    if slot == "release" and game_url:
+        linked = f"{text}\n▶ あそぶ {game_url}"
+        if weighted_len(linked) <= MAX_WEIGHTED:
+            text, link = linked, "body"
+        else:
+            link = "reply"
+            log("::warning::本文にURLを入れると X の文字数の上限を超えるので、URLはリプライで付けます。")
+
     shot = (queue.get("screenshot") or "").strip()
     shot_path = ROOT / shot if shot else None
     if slot == "release" and shot_path and not shot_path.exists():
@@ -283,7 +299,8 @@ def main() -> None:
     if slot == "release":
         log(f"動画: {video if mp4 else '(なし)'}")
         log(f"画像: {shot if shot_path else '(なし)'}")
-        log(f"リプライで付けるURL: {game_url or '(なし)'}")
+        where = {"body": "本文に入れる", "reply": "リプライで付ける"}.get(link, "(なし)")
+        log(f"URL: {where}")
     log("--------------------")
 
     if dry_run:
@@ -342,8 +359,10 @@ def main() -> None:
     if slot == "release":
         entry["media"] = "video" if used_video else ("image" if media_ids else "none")
 
-    # release だけ、ゲームのURLを自己リプライで付ける
-    if slot == "release" and game_url:
+    if slot == "release":
+        entry["link"] = link
+    # 本文に入りきらなかった日だけ、ゲームのURLを自己リプライで付ける
+    if link == "reply":
         reply_text = f"あそべるのはこちらです → {game_url}"
         reply = client.create_tweet(text=reply_text, in_reply_to_tweet_id=tweet_id)
         entry["reply_tweet_id"] = str(reply.data["id"])
