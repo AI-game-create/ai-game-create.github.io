@@ -16,5 +16,14 @@
     "theme": "夕焼け・ワイヤーフレームの3D",
     "controls": "マウス左右 / 指でなぞる / ←→・ADキー(回避: クリック / タップ / スペース)",
     "status": "success"
+  },
+  {
+    "post_date": "2026-10-01",
+    "title": "たたんで、しまって。",
+    "dir": "games/2026-10-01-tatande-shimatte/",
+    "genre": "パズル",
+    "theme": "衣替え・たんすと夏服",
+    "controls": "ドラッグ / タップ / キーボード(Tab・矢印・Space・R・F・T)",
+    "status": "success"
   }
 ]

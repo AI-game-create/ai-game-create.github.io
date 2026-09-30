@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>たたんで、しまって。 — 衣替えパズル</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#e9e1c0}
+body{font-family:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP",serif;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#cv{display:block;width:100vw;height:100vh;height:100dvh;touch-action:none}
+.sr{position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden}
+</style>
+</head>
+<body>
+<canvas id="cv" aria-label="たたんで、しまって。 ゲーム画面"></canvas>
+<div class="sr" id="help">
+遊び方: 夏の服を、たんすの引き出しにすきまなくしまうパズルです。
+服はドラッグで引き出しへ。タップ(クリック)で服を「たたみ台」にのせ、点線の「折」をタップすると半分にたためます。
+台の上の服をタップすると回ります。↻回す(R)・⇋裏返す(F)・↶ひろげる(U)・💡ヒント(H)。
+キーボード: Tab で服を選ぶ、矢印キーで場所を決める、Space / Enter で置く、T で折り線を選んで Enter でたたむ、X でやりなおし、Esc でたんすに戻る。
+</div>
+<script>
+'use strict';
+// ============================================================================
+//  たたんで、しまって。 — 衣替えパズル
+//  夏の服を引き出しにすきまなくしまう。大きすぎる服は、折り線でたたむと形が変わる。
+//  面はすべて「引き出しを服で分けてから、服をひろげる」順で作るので、必ず解ける。
+// ============================================================================
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+const COARSE = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  bgCache = null;
+}
+let bgCache = null;
+window.addEventListener('resize', resize);
+
+const SERIF = '"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP",serif';
+const EMOJI = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+const font = (px, w = 700) => `${w} ${Math.round(px)}px ${SERIF}`;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+// ---------------------------------------------------------------------------
+//  形(マスの集まり)の操作
+// ---------------------------------------------------------------------------
+function norm(cells) {
+  let mx = Infinity, my = Infinity;
+  for (const [x, y] of cells) { if (x < mx) mx = x; if (y < my) my = y; }
+  const out = cells.map(([x, y]) => [x - mx, y - my]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const r = [];
+  for (const c of out) { const l = r[r.length - 1]; if (!l || l[0] !== c[0] || l[1] !== c[1]) r.push(c); }
+  return r;
+}
+function dims(cells) {
+  let w = 0, h = 0;
+  for (const [x, y] of cells) { if (x + 1 > w) w = x + 1; if (y + 1 > h) h = y + 1; }
+  return { w, h };
+}
+const shapeKey = (cells) => norm(cells).map((c) => c[0] + ',' + c[1]).join(';');
+// 時計回りに90度
+function rot(cells) { const { h } = dims(cells); return norm(cells.map(([x, y]) => [h - 1 - y, x])); }
+function flip(cells) { const { w } = dims(cells); return norm(cells.map(([x, y]) => [w - 1 - x, y])); }
+function chiral(cells) {
+  const k = shapeKey(flip(cells));
+  let c = norm(cells);
+  for (let r = 0; r < 4; r++) { if (shapeKey(c) === k) return false; c = rot(c); }
+  return true;
+}
+function connected(cells) {
+  if (!cells.length) return false;
+  const set = new Set(cells.map((c) => c[0] + ',' + c[1]));
+  const seen = new Set([cells[0][0] + ',' + cells[0][1]]);
+  const st = [cells[0]];
+  while (st.length) {
+    const [x, y] = st.pop();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const k = (x + dx) + ',' + (y + dy);
+      if (set.has(k) && !seen.has(k)) { seen.add(k); st.push([x + dx, y + dy]); }
+    }
+  }
+  return seen.size === set.size;
+}
+
+// 折り線でたたむ。axis='v' は縦の線(x=k の左右で分ける)、'h' は横の線。
+// 幅の狭いほうを、広いほうへ重ねる(はみ出さない)。幅が同じなら、マスの少ないほうを重ねる。
+// それも同じなら、左(上)を右(下)へ重ねる。
+function foldShape(cells, axis, k) {
+  const c = norm(cells), d = dims(c), i = axis === 'v' ? 0 : 1, span = axis === 'v' ? d.w : d.h;
+  const A = c.filter((p) => p[i] < k), B = c.filter((p) => p[i] >= k);
+  const wa = k, wb = span - k;
+  const keepA = wa > wb || (wa === wb && A.length > B.length);
+  const keep = keepA ? A : B, move = keepA ? B : A;
+  const moved = move.map((p) => { const q = [p[0], p[1]]; q[i] = 2 * k - 1 - p[i]; return q; });
+  return { cells: norm(keep.concat(moved)), keepA };
+}
+// たためる線の一覧(たたんだあとで服が2つに分かれてしまう線は除く)
+function foldLines(cells) {
+  const c = norm(cells), d = dims(c), out = [];
+  for (let k = 1; k < d.w; k++) if (connected(foldShape(c, 'v', k).cells)) out.push({ axis: 'v', k });
+  for (let k = 1; k < d.h; k++) if (connected(foldShape(c, 'h', k).cells)) out.push({ axis: 'h', k });
+  return out;
+}
+// 面を作るときに使う「ひろげる」: 服の外側の辺を軸に、鏡うつしを足す
+function unfoldOut(cells, dir) {
+  const c = norm(cells), d = dims(c);
+  let add;
+  if (dir === 'L') add = c.map(([x, y]) => [-1 - x, y]);
+  else if (dir === 'R') add = c.map(([x, y]) => [2 * d.w - 1 - x, y]);
+  else if (dir === 'U') add = c.map(([x, y]) => [x, -1 - y]);
+  else add = c.map(([x, y]) => [x, 2 * d.h - 1 - y]);
+  const v = dir === 'L' || dir === 'R';
+  return { cells: norm(c.concat(add)), axis: v ? 'v' : 'h', k: v ? d.w : d.h };
+}
+
+// ---------------------------------------------------------------------------
+//  面の生成(種から毎回同じ面ができる)
+// ---------------------------------------------------------------------------
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffle(a, R) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function partition(W, H, blocked, minS, maxS, R) {
+  const N = W * H;
+  const nb = (i) => {
+    const x = i % W, y = (i / W) | 0, r = [];
+    if (x > 0) r.push(i - 1); if (x < W - 1) r.push(i + 1);
+    if (y > 0) r.push(i - W); if (y < H - 1) r.push(i + W);
+    return r;
+  };
+  for (let att = 0; att < 40; att++) {
+    const own = new Array(N).fill(-1);
+    for (const i of blocked) own[i] = -2;
+    const pieces = [];
+    let ok = true;
+    const free = (i) => nb(i).filter((j) => own[j] === -1).length;
+    for (;;) {
+      // 空きマスのうち、まわりの空きが一番少ない所から服を広げる(小さな穴が残りにくい)
+      let best = [], bn = 9;
+      for (let i = 0; i < N; i++) {
+        if (own[i] !== -1) continue;
+        const n = free(i);
+        if (n < bn) { bn = n; best = [i]; } else if (n === bn) best.push(i);
+      }
+      if (!best.length) break;
+      const start = best[Math.floor(R() * best.length)];
+      const target = minS + Math.floor(R() * (maxS - minS + 1));
+      const id = pieces.length, cells = [start];
+      own[start] = id;
+      while (cells.length < target) {
+        const fr = [];
+        for (const c of cells) for (const j of nb(c)) if (own[j] === -1 && !fr.includes(j)) fr.push(j);
+        if (!fr.length) break;
+        fr.sort((a, b) => free(a) - free(b));
+        const pick = R() < 0.55 ? fr[0] : fr[Math.floor(R() * fr.length)];
+        own[pick] = id; cells.push(pick);
+      }
+      if (cells.length < minS) {
+        let merged = false;
+        const ids = new Set();
+        for (const c of cells) for (const j of nb(c)) if (own[j] >= 0 && own[j] !== id) ids.add(own[j]);
+        for (const pid of ids) {
+          if (pieces[pid].length + cells.length <= maxS) {
+            for (const c of cells) { own[c] = pid; pieces[pid].push(c); }
+            merged = true; break;
+          }
+        }
+        if (!merged) { ok = false; break; }
+      } else pieces.push(cells);
+    }
+    if (ok && pieces.length >= 2) return pieces.map((p) => p.map((i) => [i % W, (i / W) | 0]));
+  }
+  return null;
+}
+
+// [幅, 高さ, 服の最小マス, 最大マス, 1回たたむ服, 2回たたむ服, 防虫剤, 向きを変える, 裏返す]
+const DEFS = [
+  [3, 2, 3, 3, 0, 0, 0, 0, 0],
+  [4, 3, 3, 4, 0, 0, 0, 1, 0],
+  [4, 2, 2, 4, 1, 0, 0, 0, 0],
+  [4, 4, 3, 4, 1, 0, 0, 1, 0],
+  [5, 3, 3, 4, 1, 0, 0, 1, 1],
+  [5, 4, 3, 5, 1, 0, 0, 1, 1],
+  [4, 4, 2, 4, 0, 1, 0, 1, 1],
+  [5, 5, 3, 5, 1, 0, 1, 1, 1],
+  [6, 4, 3, 5, 2, 0, 0, 1, 1],
+  [6, 5, 3, 5, 2, 0, 1, 1, 1],
+  [5, 5, 3, 5, 1, 1, 0, 1, 1],
+  [6, 5, 3, 5, 2, 1, 1, 1, 1],
+  [6, 6, 4, 6, 2, 0, 2, 1, 1],
+  [7, 5, 3, 5, 3, 0, 1, 1, 1],
+  [6, 6, 3, 5, 2, 1, 2, 1, 1],
+  [7, 6, 4, 6, 3, 0, 2, 1, 1],
+  [7, 6, 3, 5, 2, 1, 2, 1, 1],
+  [8, 5, 3, 6, 3, 1, 2, 1, 1],
+  [7, 7, 3, 6, 3, 1, 3, 1, 1],
+  [8, 6, 3, 6, 3, 1, 2, 1, 1],
+  [8, 6, 3, 6, 4, 1, 3, 1, 1],
+  [8, 7, 3, 6, 4, 1, 3, 1, 1],
+  [8, 7, 3, 6, 4, 2, 4, 1, 1],
+  [8, 8, 3, 6, 4, 2, 4, 1, 1],
+];
+// 2回たたむ服は3マス以下から作るので、最小マスは3にしておく
+const ENDLESS = [[7, 6, 3, 6, 3, 1, 2, 1, 1], [8, 6, 3, 6, 3, 2, 3, 1, 1], [8, 7, 3, 6, 4, 1, 3, 1, 1], [7, 7, 3, 5, 3, 2, 3, 1, 1]];
+const seedFor = (n) => 1000 + n * 7919;
+
+function genLevel(def, seed) {
+  const [W, H, minS, maxS, u1, u2, nBlock, canRot, canFlip] = def;
+  const R = rng(seed);
+  for (let t = 0; t < 600; t++) {
+    const blocked = [];
+    while (blocked.length < nBlock) { const i = Math.floor(R() * W * H); if (!blocked.includes(i)) blocked.push(i); }
+    const parts = partition(W, H, blocked, minS, maxS, R);
+    if (!parts) continue;
+    const order = shuffle(parts.map((_, i) => i), R);
+    const dbl = [], sgl = [];
+    for (const i of order) {
+      const s = parts[i].length;
+      if (dbl.length < u2 && s <= 3) dbl.push(i);
+      else if (sgl.length < u1 && s <= 6) sgl.push(i);
+    }
+    if (dbl.length < u2 || sgl.length < u1) continue;
+    let bad = false;
+    const pieces = [];
+    for (let i = 0; i < parts.length && !bad; i++) {
+      const P = norm(parts[i]);
+      let shape = P, folds = 0;
+      if (dbl.includes(i) || sgl.includes(i)) {
+        // 裏返しをまだ教えていない面では、左右対称でない服はたたませない
+        if (!canFlip && chiral(P)) { bad = true; break; }
+        const dirs = canFlip ? ['L', 'R', 'U', 'D'] : ['L', 'U'];
+        const d1 = dirs[Math.floor(R() * dirs.length)];
+        const u = unfoldOut(shape, d1);
+        shape = u.cells; folds = 1;
+        if (!sameShape(foldShape(shape, u.axis, u.k).cells, P)) { bad = true; break; }
+        if (dbl.includes(i)) {
+          const v = d1 === 'L' || d1 === 'R';
+          const perp = v ? (canFlip ? ['U', 'D'] : ['U']) : (canFlip ? ['L', 'R'] : ['L']);
+          const u2d = unfoldOut(shape, perp[Math.floor(R() * perp.length)]);
+          const back = foldShape(u2d.cells, u2d.axis, u2d.k).cells;
+          if (!sameShape(back, shape)) { bad = true; break; }
+          shape = u2d.cells; folds = 2;
+        }
+        const d = dims(shape);
+        if (d.w > 7 || d.h > 7) { bad = true; break; }
+      }
+      let s = shape;
+      if (canRot) { const r = Math.floor(R() * 4); for (let j = 0; j < r; j++) s = rot(s); }
+      if (canFlip && R() < 0.5) s = flip(s);
+      pieces.push({ shape: s, sol: parts[i].map((c) => [c[0], c[1]]), folds });
+    }
+    if (bad) continue;
+    shuffle(pieces, R);
+    return { W, H, blocked: blocked.map((i) => [i % W, (i / W) | 0]), pieces, seed };
+  }
+  return null;
+}
+function sameShape(a, b) {
+  const kb = shapeKey(b);
+  let c = norm(a);
+  for (let f = 0; f < 2; f++) {
+    for (let r = 0; r < 4; r++) { if (shapeKey(c) === kb) return true; c = rot(c); }
+    c = flip(c);
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+//  服の見た目
+// ---------------------------------------------------------------------------
+const CLOTH = [
+  { c: '#8ecae6', p: 'stripe', c2: '#ffffff' },
+  { c: '#fdf6e3', p: 'dots', c2: '#e76f51' },
+  { c: '#f4d35e', p: 'plain' },
+  { c: '#f7a399', p: 'check', c2: '#fff4ee' },
+  { c: '#2b4c7e', p: 'stripe', c2: '#f1f1f1' },
+  { c: '#a8dadc', p: 'diag', c2: '#e9f5f5' },
+  { c: '#ffffff', p: 'marine', c2: '#3d6fb6' },
+  { c: '#95d5b2', p: 'dots', c2: '#ffffff' },
+  { c: '#e9c46a', p: 'check', c2: '#fff7dd' },
+  { c: '#cdb4db', p: 'plain' },
+  { c: '#ef8a7b', p: 'marine', c2: '#fff1e6' },
+  { c: '#6fb3b8', p: 'diag', c2: '#d9f0ee' },
+];
+const WEAR = { 2: ['🧦'], 3: ['🩳', '🧤'], 4: ['👕', '🩳'], 5: ['👕', '🎽'], 6: ['🎽', '🩱', '👚'], 7: ['👗'], 8: ['👖', '👗'], 9: ['👘'], 10: ['👘', '👗'], 11: ['👘'], 12: ['👘', '👖'] };
+function lookFor(i, p, seed) {
+  const R = rng(seed * 31 + i * 101 + 7);
+  const base = CLOTH[(Math.floor(R() * CLOTH.length) + i * 5) % CLOTH.length];
+  const icons = WEAR[Math.min(12, p.shape.length)] || ['👕'];
+  return { ...base, icon: icons[Math.floor(R() * icons.length)] };
+}
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (amt < 0) { r *= 1 + amt; g *= 1 + amt; b *= 1 + amt; }
+  else { r += (255 - r) * amt; g += (255 - g) * amt; b += (255 - b) * amt; }
+  return `rgb(${r | 0},${g | 0},${b | 0})`;
+}
+
+// ---------------------------------------------------------------------------
+//  保存
+// ---------------------------------------------------------------------------
+const SKEY = 'tatande-shimatte-v1';
+function loadSave() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SKEY));
+    if (s && Array.isArray(s.cleared)) return { cleared: s.cleared.filter((n) => Number.isInteger(n)), endless: s.endless | 0, sound: s.sound !== false };
+  } catch (e) { /* 読めなければ最初から */ }
+  return { cleared: [], endless: 0, sound: true };
+}
+const save = loadSave();
+function persist() { try { localStorage.setItem(SKEY, JSON.stringify(save)); } catch (e) { /* 保存できない環境 */ } }
+const isUnlocked = (n) => n === 25 ? save.cleared.includes(24) : (n === 1 || save.cleared.includes(n - 1) || save.cleared.includes(n));
+
+// ---------------------------------------------------------------------------
+//  音(波形から合成)
+// ---------------------------------------------------------------------------
+let AC = null, NB = null;
+function audio() {
+  if (!save.sound) return null;
+  try {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+  } catch (e) { return null; }
+  return AC;
+}
+function tone(f, d, type = 'sine', v = 0.15, when = 0, f2 = 0) {
+  const a = audio(); if (!a) return;
+  const t = a.currentTime + when;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g).connect(a.destination);
+  o.start(t); o.stop(t + d + 0.02);
+}
+function noise(d, v = 0.2, freq = 1200, q = 1, when = 0, f2 = 0) {
+  const a = audio(); if (!a) return;
+  if (!NB) {
+    NB = a.createBuffer(1, a.sampleRate, a.sampleRate);
+    const ch = NB.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+  }
+  const t = a.currentTime + when;
+  const s = a.createBufferSource(); s.buffer = NB;
+  const f = a.createBiquadFilter(); f.type = 'bandpass';
+  f.frequency.setValueAtTime(freq, t);
+  if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + d);
+  f.Q.value = q;
+  const g = a.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(v, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  s.connect(f).connect(g).connect(a.destination);
+  s.start(t); s.stop(t + d + 0.02);
+}
+const SFX = {
+  pick() { tone(520, 0.07, 'sine', 0.1, 0, 760); },
+  place() { tone(160, 0.12, 'triangle', 0.35, 0, 90); noise(0.05, 0.16, 1800, 0.8); },
+  fold() { noise(0.26, 0.22, 500, 1.2, 0, 3200); tone(392, 0.1, 'sine', 0.05, 0.14, 523); },
+  unfold() { noise(0.24, 0.18, 3200, 1.2, 0, 500); },
+  rot() { tone(880, 0.035, 'square', 0.035); tone(1320, 0.03, 'square', 0.02, 0.03); },
+  bad() { tone(150, 0.16, 'sawtooth', 0.06, 0, 100); },
+  open() { noise(0.3, 0.12, 380, 0.7, 0, 180); tone(98, 0.18, 'triangle', 0.18); },
+  shut() { noise(0.18, 0.2, 500, 0.8, 0, 200); tone(90, 0.22, 'triangle', 0.4, 0.12, 60); },
+  clear() {
+    [587, 659, 784, 880, 1175, 1319].forEach((f, i) => { tone(f, 0.55, 'triangle', 0.13, 0.45 + i * 0.08); tone(f * 2, 0.2, 'sine', 0.025, 0.45 + i * 0.08); });
+  },
+  hint() { tone(1320, 0.12, 'sine', 0.07); tone(1760, 0.18, 'sine', 0.05, 0.08); },
+  tick() { tone(700, 0.03, 'sine', 0.05); },
+};
+
+// ---------------------------------------------------------------------------
+//  ゲームの状態
+// ---------------------------------------------------------------------------
+const CAPS = [
+  '服をドラッグして、引き出しにしまってね。すきまなく埋まったら完了です',
+  '向きが合わない服は、たたみ台でタップするか ↻回す(R) で回そう',
+  '大きすぎる服は、点線の「折」をタップして たたもう(キーは T → Enter)',
+  '引き出しの前板に「空き」と「服」のマス数が出ます。そろえるのがコツ',
+  '⇋裏返す(F) も使えます。服の裏おもては気にしないことにします',
+  'たたみすぎたら ↶ひろげる(U)。何回でも元にもどせます',
+  '2回たたむ服もあります。まず半分、それからもう半分',
+  '白い袋は防虫剤。そこには置けません',
+  '「いつか着る」服ほど、奥にしまいがち',
+  'ボクはAIなので服を持っていません。これは全部オーナーのです',
+  '迷ったら 💡ヒント(H)。その服のしまい場所が光ります',
+  '半そでたちよ、来年の夏まで おやすみなさい',
+  '10月でも暑い日はある。でも、しまう',
+  'たたみ方に正解はない。でも引き出しには正解がある',
+  'こんなに持ってたっけ? と毎年思うやつ',
+  'ボクは衣替えしません。ずっと同じ服(ピクセル)です',
+  '入らないときは、たたむ服を変えてみよう',
+  '片づけは得意かもしれない。ボクの部屋はありませんが',
+  '奥から、去年しまい忘れたTシャツが出てきた',
+  'ぴったり収まる瞬間のために、引き出しはある',
+  'あと少し。ボクの計算では、ちゃんと全部入ります',
+  'この引き出し、去年より小さくなってない?',
+  'たんすの底まで、あとふた段',
+  '最後の引き出し。夏よ、ありがとう',
+];
+const G = {
+  state: 'menu', level: 1, endless: false, lv: null, def: null, pieces: [], board: [], sel: -1,
+  drag: null, press: null, kb: { x: 0, y: 0, on: false, line: -1 }, toast: null, hint: null,
+  anim: null, parts: [], clearAt: 0, levelStart: 0, menuSel: 0, final: false, lastClear: null, flash: {},
+};
+const now = () => performance.now();
+function toast(text, ms = 2400) { G.toast = { text, until: now() + ms }; }
+function kan(n) {
+  const d = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  if (n < 10) return d[n];
+  if (n === 10) return '十';
+  if (n < 20) return '十' + d[n - 10];
+  return d[Math.floor(n / 10)] + '十' + d[n % 10];
+}
+const levelName = () => (G.endless ? `おまかせ 其の${kan(Math.min(99, save.endless + 1))}` : `${kan(G.level)}の引き出し`);
+
+function startLevel(n) {
+  G.endless = n === 25;
+  let lv = null, def = null;
+  if (G.endless) {
+    for (let i = 0; i < 20 && !lv; i++) {
+      def = ENDLESS[Math.floor(Math.random() * ENDLESS.length)];
+      lv = genLevel(def, (Math.random() * 1e9) | 0);
+    }
+  } else { def = DEFS[n - 1]; lv = genLevel(def, seedFor(n)); }
+  G.level = n; G.lv = lv; G.def = def;
+  resetLevel();
+  G.levelStart = now();
+  SFX.open();
+}
+function resetLevel() {
+  const lv = G.lv;
+  G.board = new Array(lv.W * lv.H).fill(-1);
+  for (const [x, y] of lv.blocked) G.board[y * lv.W + x] = -2;
+  G.pieces = lv.pieces.map((p, i) => ({ id: i, shape: norm(p.shape), stack: [], placed: null, sol: p.sol, need: p.folds, look: lookFor(i, p, lv.seed), bump: 0 }));
+  G.drag = null; G.press = null; G.hint = null; G.anim = null; G.parts = []; G.final = false;
+  G.kb = { x: 0, y: 0, on: G.kb.on, line: -1 };
+  G.state = 'play'; G.clearAt = 0; G.toast = null;
+  const first = G.pieces.find((p) => p.need > 0) || G.pieces[0];
+  G.sel = first.id;
+}
+function toMenu() {
+  G.state = 'menu'; G.drag = null; G.press = null;
+  let n = 1;
+  while (n < 24 && save.cleared.includes(n)) n++;
+  G.menuSel = (save.cleared.includes(24) ? 24 : n - 1);
+  SFX.tick();
+}
+
+function canPlace(shape, x, y) {
+  const lv = G.lv;
+  for (const [cx, cy] of shape) {
+    const X = x + cx, Y = y + cy;
+    if (X < 0 || Y < 0 || X >= lv.W || Y >= lv.H) return false;
+    if (G.board[Y * lv.W + X] !== -1) return false;
+  }
+  return true;
+}
+function place(p, x, y) {
+  for (const [cx, cy] of p.shape) G.board[(y + cy) * G.lv.W + x + cx] = p.id;
+  p.placed = { x, y }; p.bump = now();
+  const d = L.dr;
+  if (d) {
+    for (const [cx, cy] of p.shape) {
+      if (Math.random() < 0.5) continue;
+      G.parts.push({ kind: 'puff', x: d.x + (x + cx + 0.5) * d.c, y: d.y + (y + cy + 0.5) * d.c, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60, t0: now(), life: 450, r: d.c * 0.2 });
+    }
+  }
+  SFX.place();
+  if (G.sel === p.id || G.sel < 0) {
+    const next = G.pieces.find((q) => !q.placed && q.id !== p.id);
+    G.sel = next ? next.id : -1;
+    G.kb.line = -1;
+  }
+  checkWin();
+}
+function unplace(p) {
+  if (!p.placed) return;
+  for (let i = 0; i < G.board.length; i++) if (G.board[i] === p.id) G.board[i] = -1;
+  p.placed = null;
+}
+function select(id) { G.sel = id; G.kb.line = -1; G.hint = G.hint && G.hint.id === id ? G.hint : null; SFX.pick(); }
+function freeCells() { return G.board.filter((v) => v === -1).length; }
+function clothCells() { return G.pieces.filter((p) => !p.placed).reduce((s, p) => s + p.shape.length, 0); }
+
+function checkWin() {
+  const left = G.pieces.filter((p) => !p.placed).length, free = freeCells();
+  if (left === 0 && free === 0) {
+    G.state = 'clear'; G.clearAt = now(); G.sel = -1;
+    const ms = Math.round(now() - G.levelStart);
+    G.lastClear = { level: G.level, ms };
+    if (G.endless) save.endless++;
+    else if (!save.cleared.includes(G.level)) save.cleared.push(G.level);
+    G.final = !G.endless && G.level === 24;
+    persist();
+    SFX.shut(); SFX.clear();
+    for (let i = 0; i < 26; i++) {
+      G.parts.push({ kind: 'leaf', x: Math.random() * W, y: -20 - Math.random() * H * 0.5, vx: 20 + Math.random() * 40, vy: 60 + Math.random() * 70, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 3, t0: now() + 300, life: 6000, e: Math.random() < 0.5 ? '🍁' : '🍂', s: 18 + Math.random() * 14 });
+    }
+  } else if (left === 0) toast(`すきまが ${free}マス残ってる… たたみすぎた服を ひろげてみよう`);
+  else if (free === 0) toast('引き出しがいっぱい。まだ服がある… たたみ方を変えてみよう');
+}
+
+function selPiece() { return G.sel >= 0 && !(G.drag && G.drag.id === G.sel) ? G.pieces[G.sel] : null; }
+function flashBtn(name) { G.flash[name] = now(); }
+function rotateSel() {
+  if (G.drag) {
+    const p = G.pieces[G.drag.id], h = dims(p.shape).h;
+    p.shape = rot(p.shape);
+    const gx = G.drag.gx; G.drag.gx = h - G.drag.gy; G.drag.gy = gx;
+    SFX.rot(); return;
+  }
+  const p = selPiece(); if (!p) { SFX.bad(); return; }
+  p.shape = rot(p.shape); G.kb.line = -1;
+  G.anim = { type: 'rot', id: p.id, t0: now() };
+  flashBtn('rotate'); SFX.rot();
+}
+function flipSel() {
+  if (G.drag) {
+    const p = G.pieces[G.drag.id], w = dims(p.shape).w;
+    p.shape = flip(p.shape); G.drag.gx = w - G.drag.gx;
+    SFX.rot(); return;
+  }
+  const p = selPiece(); if (!p) { SFX.bad(); return; }
+  p.shape = flip(p.shape); G.kb.line = -1;
+  G.anim = { type: 'flip', id: p.id, t0: now() };
+  flashBtn('flip'); SFX.rot();
+}
+function foldSel(line) {
+  const p = selPiece(); if (!p) return;
+  const before = p.shape;
+  const r = foldShape(before, line.axis, line.k);
+  p.stack.push(before);
+  p.shape = r.cells;
+  const tp = L.tp;
+  G.anim = { type: 'fold', id: p.id, t0: now(), before, axis: line.axis, k: line.k, keepA: r.keepA, ox: tp ? tp.x : 0, oy: tp ? tp.y : 0, c: tp ? tp.c : 20 };
+  G.kb.line = -1;
+  SFX.fold();
+  if (before.length === r.cells.length) toast('たたんでも大きさは同じ。形だけ変わったよ', 1800);
+}
+function unfoldSel() {
+  const p = selPiece(); if (!p) { SFX.bad(); return; }
+  if (!p.stack.length) { toast('これ以上ひろげられないよ', 1500); SFX.bad(); return; }
+  p.shape = p.stack.pop(); G.kb.line = -1;
+  G.anim = { type: 'unfold', id: p.id, t0: now() };
+  flashBtn('unfold'); SFX.unfold();
+}
+function hint() {
+  let p = selPiece() || G.pieces.find((q) => !q.placed);
+  if (!p) { toast('もう全部しまってあるよ'); return; }
+  if (G.sel !== p.id) { G.sel = p.id; G.kb.line = -1; }
+  G.hint = { id: p.id, t0: now() };
+  toast(p.need === 0 ? 'この服は、たたまずに入るよ。光っている所へ' : `この服は ${p.need}回たたむと、光っている所に入るよ`, 3200);
+  flashBtn('hint'); SFX.hint();
+}
+function cycleSel(dir) {
+  const list = G.pieces.filter((p) => !p.placed);
+  if (!list.length) return;
+  const i = list.findIndex((p) => p.id === G.sel);
+  const n = list[(i + dir + list.length) % list.length];
+  select(n.id);
+}
+function cycleLine() {
+  const p = selPiece(); if (!p) return;
+  const n = L.lines.length;
+  if (!n) { toast('この服には折り線がないよ', 1500); return; }
+  G.kb.line = (G.kb.line + 1) % n;
+  SFX.tick();
+}
+function kbPlace() {
+  const p = selPiece();
+  if (p && canPlace(p.shape, G.kb.x, G.kb.y)) { place(p, G.kb.x, G.kb.y); return; }
+  const id = G.board[G.kb.y * G.lv.W + G.kb.x];
+  if (id >= 0) { const q = G.pieces[id]; unplace(q); select(q.id); return; }
+  SFX.bad();
+}
+function toggleSound() { save.sound = !save.sound; persist(); if (save.sound) SFX.tick(); }
+function nextLevel() {
+  if (G.endless) startLevel(25);
+  else if (G.final) toMenu();
+  else startLevel(G.level + 1);
+}
+
+// ---------------------------------------------------------------------------
+//  レイアウト
+// ---------------------------------------------------------------------------
+let L = {};
+function layout() {
+  L = { btn: {}, lines: [], tray: [], lift: COARSE ? 0 : 0, state: G.state };
+  const top = Math.round(clamp(H * 0.07, 44, 56));
+  L.top = top;
+  const bh = top - 14;
+  L.btn.sound = { x: W - 8 - 44, y: 7, w: 44, h: bh };
+  if (G.state === 'menu') { layoutMenu(); return; }
+  const lv = G.lv;
+  const bw = Math.round(Math.min(104, W * 0.23));
+  L.btn.back = { x: 8, y: 7, w: bw, h: bh };
+  // 幅の狭い画面では「やりなおし」を記号だけにして、名札と重ならないようにする
+  const rw = W < 560 ? 44 : bw;
+  L.btn.restart = { x: W - 8 - 44 - 8 - rw, y: 7, w: rw, h: bh, label: W < 560 ? '↺' : 'やりなおし' };
+  const portrait = H > W * 1.1;
+  L.portrait = portrait;
+  let area, table, btns, tray, cap;
+  if (!portrait) {
+    const lw = Math.max(W * 0.55, W - 470);
+    area = { x: 14, y: top + 10, w: lw - 24, h: H - top - 10 - 74 };
+    cap = { x: 14, y: H - 62, w: lw - 24, h: 52 };
+    const rx = lw + 2, rw = W - rx - 14;
+    table = { x: rx, y: top + 12, w: rw, h: Math.round((H - top) * 0.45) };
+    btns = { x: rx, y: table.y + table.h + 8, w: rw, h: 48 };
+    tray = { x: rx, y: btns.y + btns.h + 10, w: rw, h: H - (btns.y + btns.h + 10) - 12 };
+  } else {
+    // 引き出しの縦横比に合わせて、必要なぶんだけ高さを取る(最大で画面の半分)
+    const want = ((W - 20) / (lv.W + 0.9)) * (lv.H + 1.75) + 16;
+    const ah = Math.round(clamp(want, (H - top) * 0.34, (H - top) * 0.47));
+    area = { x: 10, y: top + 8, w: W - 20, h: ah - 8 };
+    const ty = area.y + area.h + 6;
+    const th = Math.round(Math.max(150, (H - top) * 0.24));
+    table = { x: 10, y: ty, w: Math.round(W * 0.64) - 10, h: th };
+    btns = { x: table.x + table.w + 8, y: ty, w: W - (table.x + table.w + 8) - 10, h: th, col: true };
+    tray = { x: 10, y: ty + th + 8, w: W - 20, h: H - (ty + th + 8) - 66 };
+    cap = { x: 10, y: H - 58, w: W - 20, h: 50 };
+  }
+  L.area = area; L.table = table; L.btns = btns; L.trayBox = tray; L.cap = cap;
+
+  // 引き出し(前板の高さ ぶんも含めて収める)
+  const fh = 0.85;
+  const c = Math.floor(Math.min(area.w / (lv.W + 0.9), area.h / (lv.H + 0.9 + fh), 92));
+  const dw = c * lv.W, dh = c * lv.H;
+  L.dr = { x: Math.round(area.x + (area.w - dw) / 2), y: Math.round(area.y + (area.h - dh - c * fh) / 2 + c * 0.3), c, w: dw, h: dh, fh: Math.round(c * fh) };
+  L.lift = COARSE ? Math.round(Math.min(56, c * 1.1)) : 0;
+
+  // 操作ボタン
+  const names = [['rotate', '↻ 回す', 'R'], ['flip', '⇋ 裏返す', 'F'], ['unfold', '↶ ひろげる', 'U'], ['hint', '💡 ヒント', 'H']];
+  names.forEach(([n, label, key], i) => {
+    let r;
+    if (btns.col) {
+      const gh = (btns.h - 6 * 3) / 4;
+      r = { x: btns.x, y: btns.y + i * (gh + 6), w: btns.w, h: gh };
+    } else {
+      const gw = (btns.w - 8 * 3) / 4;
+      r = { x: btns.x + i * (gw + 8), y: btns.y, w: gw, h: btns.h };
+    }
+    L.btn[n] = { ...r, label, key };
+  });
+
+  // たたみ台にのっている服と、折り線
+  const p = selPiece();
+  if (p && G.state === 'play') {
+    const d = dims(p.shape);
+    // 「折」の印は、隣どうしが重ならないように、服の上下(左右)に交互に置く
+    const fit = (m) => Math.floor(Math.min(c, (table.w - 2 * m) / d.w, (table.h - 10 - 2 * m) / d.h));
+    const hr = Math.round(clamp(Math.min(14, fit(34) - 1), 10, 14));
+    const tc = Math.max(8, fit(2 * hr + 8));
+    const ox = Math.round(table.x + (table.w - d.w * tc) / 2), oy = Math.round(table.y + 10 + (table.h - 10 - d.h * tc) / 2);
+    L.tp = { id: p.id, x: ox, y: oy, c: tc, w: d.w, h: d.h };
+    // 一・二の引き出しでは、まだたたみ方を教えていないので折り線を出さない
+    const ls = G.endless || G.level >= 3 ? foldLines(p.shape) : [];
+    let nv = 0, nh = 0;
+    L.lines = ls.map((l, i) => {
+      if (l.axis === 'v') {
+        const far = nv++ % 2 === 1, X = ox + l.k * tc;
+        return { i, axis: 'v', k: l.k, x1: X, y1: oy, x2: X, y2: oy + d.h * tc, hx: X, hy: far ? oy + d.h * tc + hr + 4 : oy - hr - 4, r: hr };
+      }
+      const far = nh++ % 2 === 1, Y = oy + l.k * tc;
+      return { i, axis: 'h', k: l.k, x1: ox, y1: Y, x2: ox + d.w * tc, y2: Y, hx: far ? ox + d.w * tc + hr + 4 : ox - hr - 4, hy: Y, r: hr };
+    });
+  } else L.tp = null;
+
+  layoutTray(tray);
+
+  if (G.state === 'clear') {
+    // しまい終わると たたみ台が空くので、そこにボタンを出す
+    const w = Math.min(240, portrait ? W - 40 : table.w - 20), h = 48;
+    const x = portrait ? (W - w) / 2 : table.x + (table.w - w) / 2;
+    const y = table.y + (table.h - (h * 2 + 12)) / 2 + (G.final && !portrait ? 40 : 0);
+    L.btn.next = { x, y, w, h, label: G.final ? 'たんすへ戻る' : G.endless ? 'もう1段 おまかせ ▶' : 'つぎの引き出しへ ▶', key: 'Enter' };
+    if (!G.final) L.btn.menu = { x, y: y + h + 12, w, h: h - 6, label: 'たんすへ戻る', key: 'Esc' };
+  }
+}
+function layoutTray(tray) {
+  const items = G.pieces.filter((p) => !p.placed && p.id !== G.sel && !(G.drag && G.drag.id === p.id));
+  const pad = 12, head = 20;
+  for (let tc = Math.floor(Math.min(L.dr.c * 0.72, 40)); tc >= 5; tc--) {
+    let x = tray.x + pad, y = tray.y + head, rowH = 0, ok = true;
+    const pos = [], gap = Math.max(8, tc * 0.7);
+    for (const p of items) {
+      const d = dims(p.shape), w = d.w * tc, h = d.h * tc;
+      if (x + w > tray.x + tray.w - pad && x > tray.x + pad) { x = tray.x + pad; y += rowH + gap; rowH = 0; }
+      if (y + h > tray.y + tray.h - pad || w > tray.w - 2 * pad) { ok = false; break; }
+      pos.push({ id: p.id, x, y, c: tc, w: d.w, h: d.h });
+      x += w + gap; rowH = Math.max(rowH, h);
+    }
+    if (ok) { L.tray = pos; return; }
+  }
+  L.tray = items.map((p, i) => ({ id: p.id, x: tray.x + pad + (i % 6) * 30, y: tray.y + head + Math.floor(i / 6) * 30, c: 5, ...dims(p.shape) }));
+}
+function layoutMenu() {
+  const tw = Math.min(W * 0.94, 560);
+  const plaqueH = Math.round(clamp(H * 0.14, 72, 120));
+  const legend = 62;
+  const rows = 6, cols = 4;
+  // 上の梁と下の説明のあいだに収める
+  const avail = H - L.top - 10 - legend;
+  const dh = Math.min((tw - 28) / cols * 0.56, (avail - plaqueH - 30) / (rows + 1.25));
+  const th = plaqueH + 12 + dh * (rows + 1.25) + 18;
+  const tx = (W - tw) / 2, ty = L.top + 6 + Math.max(0, (avail - th) / 2);
+  L.tansu = { x: tx, y: ty, w: tw, h: th, plaqueH };
+  L.menu = [];
+  const gx = tx + 14, gy = ty + plaqueH + 12, gw = tw - 28, cw = gw / cols;
+  for (let i = 0; i < 24; i++) {
+    const r = Math.floor(i / cols), col = i % cols;
+    L.menu.push({ n: i + 1, x: gx + col * cw + 3, y: gy + r * dh + 3, w: cw - 6, h: dh - 6 });
+  }
+  L.menu.push({ n: 25, x: gx + 3, y: gy + rows * dh + 6, w: gw - 6, h: dh * 1.2 - 8 });
+  L.legendY = ty + th + 14;
+}
+
+// ---------------------------------------------------------------------------
+//  入力(マウス・タッチ)
+// ---------------------------------------------------------------------------
+const inRect = (r, x, y) => r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+function cellAt(shape, ox, oy, c, x, y) {
+  const fx = (x - ox) / c, fy = (y - oy) / c;
+  const cx = Math.floor(fx), cy = Math.floor(fy);
+  if (shape.some(([a, b]) => a === cx && b === cy)) return { gx: fx, gy: fy };
+  return null;
+}
+let activePointer = null;
+function pos(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+cv.addEventListener('pointerdown', (e) => {
+  if (activePointer !== null && activePointer !== e.pointerId) return;
+  activePointer = e.pointerId;
+  e.preventDefault();
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* 取れなくても動く */ }
+  audio();
+  G.kb.on = false;
+  const p = pos(e);
+  onDown(p.x, p.y, e.pointerType === 'touch');
+});
+cv.addEventListener('pointermove', (e) => {
+  if (activePointer !== null && activePointer !== e.pointerId) return;
+  const p = pos(e); onMove(p.x, p.y);
+});
+const endPointer = (e) => {
+  if (activePointer !== e.pointerId) return;
+  activePointer = null;
+  const p = pos(e); onUp(p.x, p.y);
+};
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function hitButton(x, y) {
+  for (const [n, r] of Object.entries(L.btn)) if (inRect(r, x, y)) return n;
+  return null;
+}
+function pressButton(n) {
+  flashBtn(n);
+  if (n === 'sound') toggleSound();
+  else if (n === 'back') toMenu();
+  else if (n === 'restart') { if (G.state === 'play') { resetLevel(); SFX.unfold(); toast('服を全部出して、やりなおし', 1500); } }
+  else if (n === 'rotate') rotateSel();
+  else if (n === 'flip') flipSel();
+  else if (n === 'unfold') unfoldSel();
+  else if (n === 'hint') hint();
+  else if (n === 'next') nextLevel();
+  else if (n === 'menu') toMenu();
+}
+function onDown(x, y, touch) {
+  G.press = null;
+  const b = hitButton(x, y);
+  if (b) {
+    if (G.state === 'play' || b === 'sound' || (G.state === 'clear' && (b === 'next' || b === 'menu' || b === 'back'))) pressButton(b);
+    return;
+  }
+  if (G.state === 'menu') {
+    const d = L.menu.find((r) => inRect(r, x, y));
+    if (!d) return;
+    G.menuSel = d.n - 1;
+    if (isUnlocked(d.n)) startLevel(d.n);
+    else { SFX.bad(); toast(d.n === 25 ? '二十四段ぜんぶしまうと、ひらきます' : 'ひとつ前の引き出しを先にしまおう'); }
+    return;
+  }
+  if (G.state !== 'play') return;
+  // 折り線(丸い「折」の印か、線そのもの)
+  const tp = L.tp;
+  if (tp && !(G.anim && G.anim.type === 'fold' && now() - G.anim.t0 < 300)) {
+    let best = null, bd = Infinity;
+    for (const l of L.lines) {
+      const dh = Math.hypot(x - l.hx, y - l.hy);
+      if (dh < l.r + 8 && dh < bd) { best = l; bd = dh; continue; }
+      const tol = Math.max(6, tp.c * 0.2);
+      const dl = l.axis === 'v'
+        ? (y >= l.y1 - 4 && y <= l.y2 + 4 ? Math.abs(x - l.x1) : Infinity)
+        : (x >= l.x1 - 4 && x <= l.x2 + 4 ? Math.abs(y - l.y1) : Infinity);
+      if (dl < tol && dl + 4 < bd) { best = l; bd = dl + 4; }
+    }
+    if (best) { foldSel(best); return; }
+    const p = G.pieces[tp.id];
+    const g = cellAt(p.shape, tp.x, tp.y, tp.c, x, y);
+    if (g) { G.press = { id: p.id, from: 'table', gx: g.gx, gy: g.gy, sx: x, sy: y, touch }; return; }
+  }
+  for (const t of L.tray) {
+    const p = G.pieces[t.id];
+    const g = cellAt(p.shape, t.x, t.y, t.c, x, y);
+    if (g) { G.press = { id: p.id, from: 'tray', gx: g.gx, gy: g.gy, sx: x, sy: y, touch }; return; }
+  }
+  const d = L.dr;
+  if (inRect({ x: d.x, y: d.y, w: d.w, h: d.h }, x, y)) {
+    const cx = Math.floor((x - d.x) / d.c), cy = Math.floor((y - d.y) / d.c);
+    const id = G.board[cy * G.lv.W + cx];
+    if (id >= 0) {
+      const p = G.pieces[id];
+      G.press = { id, from: 'board', gx: (x - d.x) / d.c - p.placed.x, gy: (y - d.y) / d.c - p.placed.y, sx: x, sy: y, touch };
+    }
+  }
+}
+function onMove(x, y) {
+  if (G.drag) { G.drag.x = x; G.drag.y = y; return; }
+  const pr = G.press;
+  if (!pr || G.state !== 'play') return;
+  if (Math.hypot(x - pr.sx, y - pr.sy) < 7) return;
+  const p = G.pieces[pr.id];
+  const origin = p.placed ? { ...p.placed } : null;
+  if (pr.from === 'board') unplace(p);
+  G.drag = { id: p.id, from: pr.from, gx: pr.gx, gy: pr.gy, x, y, touch: pr.touch, origin, wasSel: G.sel === p.id };
+  G.press = null;
+  G.hint = null;
+  SFX.pick();
+}
+function snapFor(dr) {
+  const d = L.dr, lift = dr.touch ? L.lift : 0;
+  const tx = Math.round((dr.x - d.x) / d.c - dr.gx), ty = Math.round((dr.y - lift - d.y) / d.c - dr.gy);
+  return { x: tx, y: ty };
+}
+function onUp(x, y) {
+  if (G.drag) {
+    const dr = G.drag;
+    dr.x = x; dr.y = y;
+    const p = G.pieces[dr.id];
+    const s = snapFor(dr);
+    G.drag = null;
+    const d = L.dr, lift = dr.touch ? L.lift : 0;
+    const overDrawer = inRect({ x: d.x - d.c * 0.5, y: d.y - d.c * 0.5, w: d.w + d.c, h: d.h + d.c }, x, y - lift);
+    if (canPlace(p.shape, s.x, s.y)) { place(p, s.x, s.y); return; }
+    if (overDrawer) {
+      SFX.bad();
+      if (dr.origin) place(p, dr.origin.x, dr.origin.y);
+      else toast('そこには入らないみたい', 1200);
+      return;
+    }
+    if (inRect(L.table, x, y)) { select(p.id); return; }
+    // それ以外の場所で離したら、かごに戻す
+    if (G.sel === p.id) G.sel = -1;
+    if (G.sel < 0) { const n = G.pieces.find((q) => !q.placed && q.id !== p.id); if (n) G.sel = n.id; }
+    SFX.tick();
+    return;
+  }
+  const pr = G.press;
+  G.press = null;
+  if (!pr || G.state !== 'play') return;
+  const p = G.pieces[pr.id];
+  if (pr.from === 'table') rotateSel();
+  else if (pr.from === 'tray') select(p.id);
+  else if (pr.from === 'board') { unplace(p); select(p.id); }
+}
+
+// ---------------------------------------------------------------------------
+//  入力(キーボード)
+// ---------------------------------------------------------------------------
+window.addEventListener('keydown', (e) => {
+  const k = e.key;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(k)) e.preventDefault();
+  audio();
+  if (k === 'm' || k === 'M') { toggleSound(); return; }
+  if (G.state === 'menu') {
+    const s = G.menuSel;
+    if (k === 'ArrowLeft') G.menuSel = s === 24 ? 23 : Math.max(0, s - 1);
+    else if (k === 'ArrowRight') G.menuSel = Math.min(24, s + 1);
+    else if (k === 'ArrowUp') G.menuSel = s === 24 ? 20 : Math.max(0, s - 4);
+    else if (k === 'ArrowDown') G.menuSel = s + 4 > 23 ? 24 : s + 4;
+    else if (k === 'Enter' || k === ' ') {
+      const n = G.menuSel + 1;
+      if (isUnlocked(n)) startLevel(n);
+      else { SFX.bad(); toast(n === 25 ? '二十四段ぜんぶしまうと、ひらきます' : 'ひとつ前の引き出しを先にしまおう'); }
+      return;
+    } else return;
+    SFX.tick();
+    return;
+  }
+  if (G.state === 'clear') {
+    if (now() - G.clearAt < 500) return;
+    if (k === 'Enter' || k === ' ') nextLevel();
+    else if (k === 'Escape') toMenu();
+    return;
+  }
+  if (G.state !== 'play') return;
+  G.kb.on = true;
+  const lv = G.lv;
+  if (k === 'Escape') { if (G.kb.line >= 0) G.kb.line = -1; else toMenu(); }
+  else if (k === 'Tab' || k === 'q' || k === 'Q' || k === 'e' || k === 'E') cycleSel(e.shiftKey || k === 'q' || k === 'Q' ? -1 : 1);
+  else if (k === 'r' || k === 'R') rotateSel();
+  else if (k === 'f' || k === 'F') flipSel();
+  else if (k === 'u' || k === 'U' || k === 'Backspace') unfoldSel();
+  else if (k === 't' || k === 'T') cycleLine();
+  else if (k === 'h' || k === 'H') hint();
+  else if (k === 'x' || k === 'X') { resetLevel(); SFX.unfold(); }
+  else if (k === 'ArrowLeft') G.kb.x = Math.max(0, G.kb.x - 1);
+  else if (k === 'ArrowRight') G.kb.x = Math.min(lv.W - 1, G.kb.x + 1);
+  else if (k === 'ArrowUp') G.kb.y = Math.max(0, G.kb.y - 1);
+  else if (k === 'ArrowDown') G.kb.y = Math.min(lv.H - 1, G.kb.y + 1);
+  else if (k === ' ' || k === 'Enter') {
+    if (G.kb.line >= 0 && L.lines[G.kb.line]) foldSel(L.lines[G.kb.line]);
+    else kbPlace();
+  }
+});
+
+// ---------------------------------------------------------------------------
+//  描画
+// ---------------------------------------------------------------------------
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function text(s, x, y, px, color, align = 'center', w = 700) {
+  ctx.font = font(px, w); ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.fillText(s, x, y);
+}
+function wrap(s, maxW) {
+  const out = []; let line = '';
+  for (const ch of s) {
+    if (ctx.measureText(line + ch).width > maxW && line) {
+      // 句読点を行頭に置かない
+      if ('、。!?)」'.includes(ch)) { line += ch; out.push(line); line = ''; continue; }
+      out.push(line); line = ch;
+    } else line += ch;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+function drawBackground() {
+  if (!bgCache || bgCache.width !== cv.width || bgCache.height !== cv.height) {
+    bgCache = document.createElement('canvas');
+    bgCache.width = cv.width; bgCache.height = cv.height;
+    const b = bgCache.getContext('2d');
+    b.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // たたみ
+    const g = b.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#ece4c3'); g.addColorStop(1, '#ddd2a6');
+    b.fillStyle = g; b.fillRect(0, 0, W, H);
+    b.globalAlpha = 0.07; b.fillStyle = '#5c5a2e';
+    for (let y = 0; y < H; y += 4) b.fillRect(0, y, W, 1.2);
+    b.globalAlpha = 0.05;
+    for (let x = 0; x < W; x += 90) b.fillRect(x, 0, 1, H);
+    b.globalAlpha = 1;
+    // たたみのへり
+    const tw = Math.max(W / 2, 360);
+    b.fillStyle = 'rgba(46,72,52,0.18)';
+    for (let x = tw; x < W; x += tw) b.fillRect(x - 3, 0, 6, H);
+    // 上の梁
+    const top = Math.round(clamp(H * 0.07, 44, 56));
+    const bg2 = b.createLinearGradient(0, 0, 0, top);
+    bg2.addColorStop(0, '#6b4528'); bg2.addColorStop(1, '#4d2f19');
+    b.fillStyle = bg2; b.fillRect(0, 0, W, top);
+    b.strokeStyle = 'rgba(255,220,170,0.08)'; b.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      b.beginPath();
+      for (let x = 0; x <= W; x += 20) b.lineTo(x, 6 + i * (top - 12) / 5 + Math.sin(x * 0.013 + i * 2) * 2);
+      b.stroke();
+    }
+    b.fillStyle = 'rgba(0,0,0,0.25)'; b.fillRect(0, top, W, 3);
+  }
+  ctx.drawImage(bgCache, 0, 0, W, H);
+}
+
+function drawPattern(look, ox, oy, c, shape) {
+  const d = dims(shape), PW = d.w * c, PH = d.h * c;
+  ctx.fillStyle = look.c2 || '#fff'; ctx.strokeStyle = look.c2 || '#fff';
+  switch (look.p) {
+    case 'stripe': for (let y = oy + c * 0.18; y < oy + PH; y += c * 0.38) ctx.fillRect(ox, y, PW, c * 0.15); break;
+    case 'marine': for (let y = oy + c * 0.1; y < oy + PH; y += c * 0.24) ctx.fillRect(ox, y, PW, c * 0.07); break;
+    case 'dots':
+      for (let y = oy + c * 0.25, r = 0; y < oy + PH; y += c * 0.5, r++)
+        for (let x = ox + c * 0.25 + (r % 2) * c * 0.25; x < ox + PW; x += c * 0.5) { ctx.beginPath(); ctx.arc(x, y, Math.max(1, c * 0.07), 0, 7); ctx.fill(); }
+      break;
+    case 'check':
+      ctx.globalAlpha *= 0.5;
+      for (let x = ox; x < ox + PW; x += c * 0.5) ctx.fillRect(x, oy, c * 0.22, PH);
+      for (let y = oy; y < oy + PH; y += c * 0.5) ctx.fillRect(ox, y, PW, c * 0.22);
+      break;
+    case 'diag':
+      ctx.lineWidth = Math.max(1, c * 0.09); ctx.beginPath();
+      for (let s = -PH; s < PW; s += c * 0.32) { ctx.moveTo(ox + s, oy + PH); ctx.lineTo(ox + s + PH, oy); }
+      ctx.stroke();
+      break;
+    default:
+      ctx.globalAlpha *= 0.1; ctx.fillStyle = '#000';
+      for (let y = oy; y < oy + PH; y += 3) ctx.fillRect(ox, y, PW, 1);
+  }
+}
+function iconCell(shape) {
+  let sx = 0, sy = 0;
+  for (const [x, y] of shape) { sx += x; sy += y; }
+  sx /= shape.length; sy /= shape.length;
+  let best = shape[0], bd = Infinity;
+  for (const c of shape) { const d = (c[0] - sx) ** 2 + (c[1] - sy) ** 2; if (d < bd) { bd = d; best = c; } }
+  return best;
+}
+// 服を1枚描く。shape はマスの配列、(ox,oy) が左上、c が1マスの大きさ
+function drawGarment(shape, ox, oy, c, look, o = {}) {
+  const set = new Set(shape.map((p) => p[0] + ',' + p[1]));
+  const has = (x, y) => set.has(x + ',' + y);
+  ctx.save();
+  if (o.alpha != null) ctx.globalAlpha = o.alpha;
+  if (!o.flat) {
+    const sh = Math.max(2, c * 0.08) * (o.lifted ? 3 : 1);
+    ctx.fillStyle = 'rgba(70,45,20,0.22)';
+    ctx.beginPath();
+    for (const [x, y] of shape) ctx.rect(ox + x * c + sh * 0.6, oy + y * c + sh, c, c);
+    ctx.fill();
+  }
+  // たたんだ回数ぶん、下に布が重なって見える
+  for (let f = Math.min(o.folds || 0, 3); f > 0; f--) {
+    const dd = f * Math.max(1.5, c * 0.06);
+    ctx.fillStyle = shade(look.c, -0.28 - f * 0.05);
+    ctx.beginPath();
+    for (const [x, y] of shape) ctx.rect(ox + x * c + dd, oy + y * c + dd, c, c);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  for (const [x, y] of shape) ctx.rect(ox + x * c - 0.5, oy + y * c - 0.5, c + 1, c + 1);
+  ctx.fillStyle = o.back ? shade(look.c, -0.2) : look.c;
+  ctx.fill();
+  ctx.save(); ctx.clip();
+  if (o.back) ctx.globalAlpha *= 0.45;
+  drawPattern(look, ox, oy, c, shape);
+  ctx.restore();
+  ctx.strokeStyle = shade(look.c, -0.4); ctx.lineWidth = Math.max(1, c * 0.05);
+  ctx.beginPath();
+  for (const [x, y] of shape) {
+    const X = ox + x * c, Y = oy + y * c;
+    if (!has(x, y - 1)) { ctx.moveTo(X, Y); ctx.lineTo(X + c, Y); }
+    if (!has(x, y + 1)) { ctx.moveTo(X, Y + c); ctx.lineTo(X + c, Y + c); }
+    if (!has(x - 1, y)) { ctx.moveTo(X, Y); ctx.lineTo(X, Y + c); }
+    if (!has(x + 1, y)) { ctx.moveTo(X + c, Y); ctx.lineTo(X + c, Y + c); }
+  }
+  ctx.stroke();
+  if (c >= 16) {
+    // ふちのステッチ
+    const s = c * 0.13;
+    ctx.setLineDash([c * 0.1, c * 0.08]);
+    ctx.strokeStyle = look.c === '#ffffff' || look.c === '#fdf6e3' ? 'rgba(120,100,80,0.45)' : 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = Math.max(1, c * 0.035);
+    ctx.beginPath();
+    for (const [x, y] of shape) {
+      const X = ox + x * c, Y = oy + y * c;
+      const l = has(x - 1, y) ? 0 : s, r = has(x + 1, y) ? 0 : s, t = has(x, y - 1) ? 0 : s, b = has(x, y + 1) ? 0 : s;
+      if (!has(x, y - 1)) { ctx.moveTo(X + l, Y + s); ctx.lineTo(X + c - r, Y + s); }
+      if (!has(x, y + 1)) { ctx.moveTo(X + l, Y + c - s); ctx.lineTo(X + c - r, Y + c - s); }
+      if (!has(x - 1, y)) { ctx.moveTo(X + s, Y + t); ctx.lineTo(X + s, Y + c - b); }
+      if (!has(x + 1, y)) { ctx.moveTo(X + c - s, Y + t); ctx.lineTo(X + c - s, Y + c - b); }
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (!o.noIcon && c >= 11) {
+    const [ix, iy] = iconCell(shape);
+    ctx.font = `${Math.round(c * 0.6)}px ${EMOJI}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(look.icon, ox + (ix + 0.5) * c, oy + (iy + 0.56) * c);
+  }
+  ctx.restore();
+}
+
+function drawTag(r, label, o = {}) {
+  const pressed = G.flash[o.name] && now() - G.flash[o.name] < 140;
+  ctx.save();
+  if (pressed) { ctx.translate(r.x + r.w / 2, r.y + r.h / 2); ctx.scale(0.94, 0.94); ctx.translate(-r.x - r.w / 2, -r.y - r.h / 2); }
+  if (o.disabled) ctx.globalAlpha = 0.45;
+  ctx.fillStyle = 'rgba(60,35,15,0.25)'; rr(r.x + 2, r.y + 3, r.w, r.h, 5); ctx.fill();
+  rr(r.x, r.y, r.w, r.h, 5);
+  ctx.fillStyle = o.dark ? '#3e2715' : o.accent ? '#b8432f' : '#fbf5e4'; ctx.fill();
+  ctx.setLineDash([4, 3]); ctx.lineWidth = 1.2;
+  ctx.strokeStyle = o.dark ? 'rgba(240,210,160,0.55)' : o.accent ? 'rgba(255,230,210,0.8)' : '#b39165';
+  rr(r.x + 3.5, r.y + 3.5, r.w - 7, r.h - 7, 3); ctx.stroke(); ctx.setLineDash([]);
+  const fg = o.dark || o.accent ? '#fbf1dc' : '#4a2d17';
+  const px = Math.min(o.px || 15, r.h * 0.42);
+  if (o.key && !COARSE && r.h >= 34) {
+    text(label, r.x + r.w / 2, r.y + r.h * 0.42, px, fg);
+    text(o.key, r.x + r.w / 2, r.y + r.h * 0.78, px * 0.62, o.dark || o.accent ? 'rgba(251,241,220,0.7)' : 'rgba(74,45,23,0.55)', 'center', 600);
+  } else text(label, r.x + r.w / 2, r.y + r.h / 2 + 1, px, fg);
+  ctx.restore();
+}
+
+function drawTopBar() {
+  const top = L.top;
+  if (L.btn.sound) drawTag(L.btn.sound, save.sound ? '♪' : '×', { name: 'sound', dark: true, px: 18 });
+  if (G.state === 'menu') return;
+  drawTag(L.btn.back, '← たんす', { name: 'back', dark: true, px: 14 });
+  drawTag(L.btn.restart, L.btn.restart.label, { name: 'restart', dark: true, px: L.btn.restart.label === '↺' ? 20 : 14 });
+  // 引き出しの名札
+  const cx = W / 2, name = levelName();
+  ctx.font = font(clamp(top * 0.36, 13, 19));
+  const tw = ctx.measureText(name).width + 28;
+  L.tag = { x: cx - tw / 2, y: 9, w: tw, h: top - 18 };
+  ctx.fillStyle = '#f5ecd3'; rr(cx - tw / 2, 9, tw, top - 18, 3); ctx.fill();
+  ctx.strokeStyle = '#9b7a4c'; ctx.lineWidth = 1; rr(cx - tw / 2 + 3, 12, tw - 6, top - 24, 2); ctx.stroke();
+  text(name, cx, top / 2 + 1, clamp(top * 0.36, 13, 19), '#3b2412');
+}
+
+function drawDrawer(t) {
+  const d = L.dr, lv = G.lv, c = d.c;
+  const m = Math.round(c * 0.3);
+  // 外枠と底板
+  ctx.fillStyle = 'rgba(50,30,10,0.3)'; rr(d.x - m + 4, d.y - m + 6, d.w + 2 * m, d.h + m + d.fh + 4, 8); ctx.fill();
+  ctx.fillStyle = '#6d4526'; rr(d.x - m, d.y - m, d.w + 2 * m, d.h + m + 4, 8); ctx.fill();
+  const g = ctx.createLinearGradient(d.x, d.y, d.x, d.y + d.h);
+  g.addColorStop(0, '#c8995f'); g.addColorStop(1, '#dcb582');
+  ctx.fillStyle = g; ctx.fillRect(d.x, d.y, d.w, d.h);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(d.x, d.y, d.w, d.h); ctx.clip();
+  ctx.strokeStyle = 'rgba(120,75,35,0.18)'; ctx.lineWidth = 1.2;
+  for (let i = 0; i < lv.H * 3; i++) {
+    ctx.beginPath();
+    const yy = d.y + (i + 0.5) * c / 3;
+    for (let x = d.x; x <= d.x + d.w; x += 12) ctx.lineTo(x, yy + Math.sin(x * 0.03 + i * 1.7) * 1.6);
+    ctx.stroke();
+  }
+  // 内側の影
+  const sh = ctx.createLinearGradient(0, d.y, 0, d.y + c * 0.5);
+  sh.addColorStop(0, 'rgba(60,30,10,0.35)'); sh.addColorStop(1, 'rgba(60,30,10,0)');
+  ctx.fillStyle = sh; ctx.fillRect(d.x, d.y, d.w, c * 0.5);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(110,65,25,0.28)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 1; x < lv.W; x++) { ctx.moveTo(d.x + x * c + 0.5, d.y); ctx.lineTo(d.x + x * c + 0.5, d.y + d.h); }
+  for (let y = 1; y < lv.H; y++) { ctx.moveTo(d.x, d.y + y * c + 0.5); ctx.lineTo(d.x + d.w, d.y + y * c + 0.5); }
+  ctx.stroke();
+  // 防虫剤
+  for (const [x, y] of lv.blocked) {
+    const X = d.x + x * c, Y = d.y + y * c;
+    ctx.fillStyle = 'rgba(60,40,20,0.2)'; rr(X + c * 0.16, Y + c * 0.2, c * 0.72, c * 0.68, c * 0.12); ctx.fill();
+    ctx.fillStyle = '#fbfbf6'; rr(X + c * 0.12, Y + c * 0.14, c * 0.72, c * 0.68, c * 0.12); ctx.fill();
+    ctx.strokeStyle = '#9fb7c9'; ctx.setLineDash([2, 2]); ctx.lineWidth = 1; rr(X + c * 0.17, Y + c * 0.19, c * 0.62, c * 0.58, c * 0.09); ctx.stroke(); ctx.setLineDash([]);
+    text('防', X + c * 0.48, Y + c * 0.49, c * 0.36, '#4f7894');
+  }
+  // しまった服
+  for (const p of G.pieces) {
+    if (!p.placed) continue;
+    const k = clamp((t - p.bump) / 220, 0, 1), s = 1 + 0.08 * Math.sin(k * Math.PI);
+    ctx.save();
+    const X = d.x + p.placed.x * c, Y = d.y + p.placed.y * c, pd = dims(p.shape);
+    ctx.translate(X + pd.w * c / 2, Y + pd.h * c / 2); ctx.scale(s, s); ctx.translate(-X - pd.w * c / 2, -Y - pd.h * c / 2);
+    drawGarment(p.shape, X, Y, c, p.look, { flat: true, folds: 0 });
+    ctx.restore();
+  }
+  // ヒント(しまう場所が光る)
+  if (G.hint && G.state === 'play') {
+    const k = (t - G.hint.t0) / 1000;
+    if (k > 3.4) G.hint = null;
+    else {
+      const p = G.pieces[G.hint.id];
+      ctx.save();
+      ctx.globalAlpha = 0.35 + 0.35 * Math.sin(k * 6);
+      ctx.fillStyle = p.look.c;
+      for (const [x, y] of p.sol) ctx.fillRect(d.x + x * c + 2, d.y + y * c + 2, c - 4, c - 4);
+      ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+      for (const [x, y] of p.sol) ctx.strokeRect(d.x + x * c + 3, d.y + y * c + 3, c - 6, c - 6);
+      ctx.restore();
+    }
+  }
+  // ドラッグ中の服の着地点
+  if (G.drag) {
+    const p = G.pieces[G.drag.id], s = snapFor(G.drag);
+    const ok = canPlace(p.shape, s.x, s.y);
+    const inside = p.shape.some(([x, y]) => s.x + x >= 0 && s.y + y >= 0 && s.x + x < lv.W && s.y + y < lv.H);
+    if (inside) ghost(p.shape, s.x, s.y, ok, p.look);
+  } else if (G.kb.on && G.state === 'play') {
+    const p = selPiece();
+    if (p) ghost(p.shape, G.kb.x, G.kb.y, canPlace(p.shape, G.kb.x, G.kb.y), p.look);
+    ctx.strokeStyle = '#3b2412'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    ctx.strokeRect(d.x + G.kb.x * c + 1.5, d.y + G.kb.y * c + 1.5, c - 3, c - 3);
+  }
+  // 前板
+  const fy = d.y + d.h + 4;
+  const fg = ctx.createLinearGradient(0, fy, 0, fy + d.fh);
+  fg.addColorStop(0, '#a26b3c'); fg.addColorStop(1, '#7c4e2a');
+  ctx.fillStyle = fg; rr(d.x - m, fy, d.w + 2 * m, d.fh, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(255,230,190,0.18)'; ctx.fillRect(d.x - m + 4, fy + 2, d.w + 2 * m - 8, 2);
+  // 取っ手
+  for (const hx of [d.x + d.w * 0.12, d.x + d.w * 0.88]) {
+    ctx.fillStyle = '#3a2413'; rr(hx - c * 0.28, fy + d.fh * 0.36, c * 0.56, d.fh * 0.28, 3); ctx.fill();
+    ctx.strokeStyle = '#c9a24e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, fy + d.fh * 0.5, Math.min(c * 0.16, d.fh * 0.26), 0.2, Math.PI - 0.2); ctx.stroke();
+  }
+  // 空きマスと服のマス
+  if (G.state === 'play') {
+    const free = freeCells(), cl = clothCells();
+    const s = cl === free ? `空き ${free} = 服 ${cl}` : cl > free ? `空き ${free} < 服 ${cl}` : `空き ${free} > 服 ${cl}`;
+    const col = cl === free ? '#fff3c4' : '#f6dfc2';
+    text(s, d.x + d.w / 2, fy + d.fh / 2 + 1, clamp(d.fh * 0.42, 11, 18), col);
+  }
+}
+function ghost(shape, x, y, ok, look) {
+  const d = L.dr, c = d.c, lv = G.lv;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(d.x, d.y, d.w, d.h); ctx.clip();
+  if (ok) drawGarment(shape, d.x + x * c, d.y + y * c, c, look, { alpha: 0.45, flat: true, noIcon: true });
+  ctx.strokeStyle = ok ? '#fffbe8' : '#c0392b'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+  for (const [cx, cy] of shape) {
+    const X = x + cx, Y = y + cy;
+    if (X < 0 || Y < 0 || X >= lv.W || Y >= lv.H) continue;
+    ctx.strokeRect(d.x + X * c + 2, d.y + Y * c + 2, c - 4, c - 4);
+  }
+  ctx.restore();
+}
+
+function drawTable(t) {
+  const tb = L.table;
+  // 白い布を敷いた、たたみ台
+  ctx.fillStyle = 'rgba(70,45,20,0.2)'; rr(tb.x + 3, tb.y + 4, tb.w, tb.h, 10); ctx.fill();
+  ctx.fillStyle = '#f7f3ea'; rr(tb.x, tb.y, tb.w, tb.h, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(160,130,90,0.5)'; ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.5;
+  for (let x = tb.x + 16; x < tb.x + tb.w - 8; x += 16) { ctx.beginPath(); ctx.moveTo(x, tb.y + 6); ctx.lineTo(x, tb.y + tb.h - 6); ctx.stroke(); }
+  ctx.globalAlpha = 1;
+  text('たたみ台', tb.x + 12, tb.y + 14, 12, 'rgba(90,60,30,0.7)', 'left');
+  const tp = L.tp;
+  if (!tp) {
+    text(G.pieces.some((p) => !p.placed) ? '服をタップすると、ここにのるよ' : '', tb.x + tb.w / 2, tb.y + tb.h / 2, 13, 'rgba(90,60,30,0.6)', 'center', 600);
+    return;
+  }
+  const p = G.pieces[tp.id];
+  const a = G.anim && G.anim.id === p.id ? G.anim : null;
+  const k = a ? clamp((t - a.t0) / (a.type === 'fold' ? 320 : 180), 0, 1) : 1;
+  if (a && k >= 1) G.anim = null;
+  if (a && a.type === 'fold' && k < 1) {
+    // 折り線を軸に、半分がぱたんと裏返って重なる
+    const e = easeInOut(k), i = a.axis === 'v' ? 0 : 1;
+    const A = a.before.filter((q) => q[i] < a.k), B = a.before.filter((q) => q[i] >= a.k);
+    const keep = a.keepA ? A : B, move = a.keepA ? B : A;
+    drawGarment(keep, a.ox, a.oy, a.c, p.look, { noIcon: true, folds: p.stack.length - 1 });
+    const s = Math.cos(Math.PI * e);
+    ctx.save();
+    if (a.axis === 'v') { const X = a.ox + a.k * a.c; ctx.translate(X, 0); ctx.scale(s, 1); ctx.translate(-X, 0); }
+    else { const Y = a.oy + a.k * a.c; ctx.translate(0, Y); ctx.scale(1, s); ctx.translate(0, -Y); }
+    drawGarment(move, a.ox, a.oy, a.c, p.look, { noIcon: true, back: s < 0, flat: true });
+    ctx.restore();
+    return;
+  }
+  ctx.save();
+  const cx = tp.x + tp.w * tp.c / 2, cy = tp.y + tp.h * tp.c / 2;
+  if (a && k < 1) {
+    const e = easeOut(k);
+    ctx.translate(cx, cy);
+    if (a.type === 'rot') ctx.rotate(-Math.PI / 2 * (1 - e));
+    else if (a.type === 'flip') ctx.scale(-1 + 2 * e, 1);
+    else if (a.type === 'unfold') ctx.scale(0.7 + 0.3 * e, 0.7 + 0.3 * e);
+    ctx.translate(-cx, -cy);
+  }
+  drawGarment(p.shape, tp.x, tp.y, tp.c, p.look, { folds: p.stack.length });
+  ctx.restore();
+  if (a) return;
+  // 折り線
+  for (const l of L.lines) {
+    const hi = G.kb.line === l.i;
+    ctx.strokeStyle = hi ? '#c0392b' : 'rgba(80,50,25,0.75)';
+    ctx.lineWidth = hi ? 3 : 1.6;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    if (l.axis === 'v') { ctx.moveTo(l.x1, Math.min(l.y1 - 6, l.hy)); ctx.lineTo(l.x2, Math.max(l.y2 + 6, l.hy)); }
+    else { ctx.moveTo(Math.min(l.x1 - 6, l.hx), l.y1); ctx.lineTo(Math.max(l.x2 + 6, l.hx), l.y2); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(l.hx, l.hy, l.r, 0, 7);
+    ctx.fillStyle = hi ? '#c0392b' : '#fffaf0'; ctx.fill();
+    ctx.strokeStyle = hi ? '#7a1f14' : 'rgba(120,80,40,0.8)'; ctx.lineWidth = 1.4; ctx.stroke();
+    text('折', l.hx, l.hy + 1, l.r * 1.15, hi ? '#fff' : '#6a3f1d');
+  }
+}
+
+function drawButtons() {
+  const p = selPiece();
+  for (const n of ['rotate', 'flip', 'unfold', 'hint']) {
+    const b = L.btn[n];
+    const dis = n === 'unfold' ? !(p && p.stack.length) : n === 'hint' ? false : !p;
+    drawTag(b, b.label, { name: n, key: b.key, disabled: dis, px: L.portrait ? 14 : 15, accent: n === 'hint' && false });
+  }
+}
+
+function drawTray(t) {
+  const tr = L.trayBox;
+  // かご(編み目)
+  ctx.fillStyle = 'rgba(70,45,20,0.22)'; rr(tr.x + 3, tr.y + 4, tr.w, tr.h, 14); ctx.fill();
+  ctx.fillStyle = '#d4b27a'; rr(tr.x, tr.y, tr.w, tr.h, 14); ctx.fill();
+  ctx.save(); rr(tr.x, tr.y, tr.w, tr.h, 14); ctx.clip();
+  ctx.strokeStyle = 'rgba(120,80,35,0.28)'; ctx.lineWidth = 3;
+  for (let s = -tr.h; s < tr.w; s += 12) {
+    ctx.beginPath(); ctx.moveTo(tr.x + s, tr.y); ctx.lineTo(tr.x + s + tr.h, tr.y + tr.h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tr.x + s + tr.h, tr.y); ctx.lineTo(tr.x + s, tr.y + tr.h); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.strokeStyle = '#8c6331'; ctx.lineWidth = 3; rr(tr.x + 1.5, tr.y + 1.5, tr.w - 3, tr.h - 3, 13); ctx.stroke();
+  const left = G.pieces.filter((p) => !p.placed).length;
+  text(`かご(しまう服 ${left}枚)`, tr.x + 12, tr.y + 11, 12, 'rgba(70,40,15,0.85)', 'left');
+  for (const it of L.tray) {
+    const p = G.pieces[it.id];
+    drawGarment(p.shape, it.x, it.y, it.c, p.look, { folds: p.stack.length });
+  }
+  if (!L.tray.length && left === 0 && G.state === 'play') text('からっぽ', tr.x + tr.w / 2, tr.y + tr.h / 2, 13, 'rgba(70,40,15,0.6)');
+}
+
+function drawCaption(t) {
+  const cp = L.cap;
+  const msg = G.toast && G.toast.until > t ? G.toast.text : G.endless ? 'おまかせ引き出し。毎回ちがう服が出てきます' : CAPS[G.level - 1];
+  // ボク(AI)のひとこと
+  const face = cp.h * 0.8;
+  ctx.fillStyle = '#39424e'; rr(cp.x, cp.y + (cp.h - face) / 2, face, face, face * 0.25); ctx.fill();
+  ctx.fillStyle = '#9ff0d8';
+  const blink = Math.sin(t / 700) > 0.97 ? 0.15 : 1;
+  ctx.fillRect(cp.x + face * 0.25, cp.y + cp.h / 2 - face * 0.12, face * 0.14, face * 0.2 * blink);
+  ctx.fillRect(cp.x + face * 0.61, cp.y + cp.h / 2 - face * 0.12, face * 0.14, face * 0.2 * blink);
+  ctx.fillRect(cp.x + face * 0.36, cp.y + cp.h / 2 + face * 0.18, face * 0.28, face * 0.05);
+  text('AI', cp.x + face / 2, cp.y + (cp.h - face) / 2 + face * 0.17, Math.max(8, face * 0.2), 'rgba(159,240,216,0.75)');
+  const bx = cp.x + face + 10, bw = cp.w - face - 10;
+  ctx.fillStyle = '#fffdf6'; rr(bx, cp.y, bw, cp.h, 8); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(bx, cp.y + cp.h / 2 - 6); ctx.lineTo(bx - 7, cp.y + cp.h / 2); ctx.lineTo(bx, cp.y + cp.h / 2 + 6); ctx.fill();
+  ctx.font = font(13, 600);
+  const lines = wrap(msg, bw - 20).slice(0, 2);
+  lines.forEach((ln, i) => text(ln, bx + 10, cp.y + cp.h / 2 + (i - (lines.length - 1) / 2) * 17, 13, '#3b2412', 'left', 600));
+}
+
+function drawDragged() {
+  if (!G.drag) return;
+  const dr = G.drag, p = G.pieces[dr.id], c = L.dr.c, lift = dr.touch ? L.lift : 0;
+  drawGarment(p.shape, dr.x - dr.gx * c, dr.y - lift - dr.gy * c, c, p.look, { lifted: true, alpha: 0.92, folds: p.stack.length });
+}
+
+function drawParticles(t) {
+  G.parts = G.parts.filter((q) => t - q.t0 < q.life);
+  for (const q of G.parts) {
+    const k = (t - q.t0) / 1000;
+    if (k < 0) continue;
+    if (q.kind === 'puff') {
+      const e = k * 1000 / q.life;
+      ctx.globalAlpha = 0.5 * (1 - e); ctx.fillStyle = '#fff6df';
+      ctx.beginPath(); ctx.arc(q.x + q.vx * k, q.y + q.vy * k, q.r * (0.6 + e), 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      const x = q.x + q.vx * k + Math.sin(k * 2 + q.rot) * 30, y = q.y + q.vy * k;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(q.rot + q.vr * k);
+      ctx.font = `${q.s}px ${EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(q.e, 0, 0); ctx.restore();
+    }
+  }
+}
+
+function drawClear(t) {
+  const d = L.dr, k = (t - G.clearAt) / 1000;
+  ctx.fillStyle = `rgba(45,28,12,${Math.min(0.4, k * 0.8)})`; ctx.fillRect(0, L.top, W, H - L.top);
+  // 引き出しを押しこむ: 上から天板がかぶさる
+  const m = Math.round(d.c * 0.3);
+  const e = easeOut(clamp(k / 0.55, 0, 1));
+  const lh = (d.h + m) * e;
+  ctx.save();
+  const g = ctx.createLinearGradient(0, d.y - m, 0, d.y - m + lh);
+  g.addColorStop(0, '#8b5a31'); g.addColorStop(1, '#a8743f');
+  ctx.fillStyle = g; rr(d.x - m, d.y - m, d.w + 2 * m, lh + 4, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(60,30,10,0.35)'; ctx.lineWidth = 1.2;
+  for (let i = 1; i < 7; i++) {
+    const yy = d.y - m + (lh * i) / 7;
+    ctx.beginPath();
+    for (let x = d.x - m; x <= d.x + d.w + m; x += 14) ctx.lineTo(x, yy + Math.sin(x * 0.02 + i) * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // 前板をもう一度(天板の上に)
+  const fy = d.y + d.h + 4;
+  ctx.fillStyle = '#7c4e2a'; rr(d.x - m, fy, d.w + 2 * m, d.fh, 5); ctx.fill();
+  text(G.final ? '衣替え、ぜんぶ完了' : 'しまえました', d.x + d.w / 2, fy + d.fh / 2 + 1, clamp(d.fh * 0.45, 12, 18), '#fff3c4');
+  // はんこ
+  if (k > 0.55) {
+    const s = 1 + 1.4 * Math.max(0, 1 - (k - 0.55) / 0.18);
+    const R = Math.min(d.w, d.h) * 0.32 + 18;
+    ctx.save();
+    ctx.translate(d.x + d.w / 2, d.y + d.h / 2); ctx.rotate(-0.2); ctx.scale(s, s);
+    ctx.globalAlpha = clamp((k - 0.55) / 0.12, 0, 1) * 0.92;
+    ctx.strokeStyle = '#c0392b'; ctx.lineWidth = Math.max(3, R * 0.08);
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.84, 0, 7); ctx.lineWidth = Math.max(1, R * 0.025); ctx.stroke();
+    text(G.final ? '完' : '済', 0, 2, R * 1.05, '#c0392b', 'center', 800);
+    ctx.restore();
+  }
+  if (k > 0.9) {
+    for (const n of ['next', 'menu']) if (L.btn[n]) drawTag(L.btn[n], L.btn[n].label, { name: n, accent: n === 'next', px: 16 });
+    if (G.final) {
+      ctx.font = font(15, 700);
+      const msg = '夏の服、ぜんぶしまえました。来年の夏まで おやすみなさい。 たんすの一番下の「おまかせ」がひらきました';
+      const nb = L.btn.next, bw = Math.max(nb.w + 20, Math.min(W - 30, 300));
+      const lines = wrap(msg, bw - 24);
+      const by = nb.y - 14 - lines.length * 20, mx = nb.x + nb.w / 2;
+      ctx.fillStyle = 'rgba(255,250,235,0.94)'; rr(mx - bw / 2, by - 8, bw, lines.length * 20 + 6, 8); ctx.fill();
+      lines.forEach((ln, i) => text(ln, mx, by + 6 + i * 20, 15, '#3b2412'));
+    }
+  }
+}
+
+function drawMenu(t) {
+  const T = L.tansu;
+  // たんす本体
+  ctx.fillStyle = 'rgba(50,30,10,0.3)'; rr(T.x + 6, T.y + 8, T.w, T.h, 10); ctx.fill();
+  const g = ctx.createLinearGradient(T.x, 0, T.x + T.w, 0);
+  g.addColorStop(0, '#5a361c'); g.addColorStop(0.5, '#6e4424'); g.addColorStop(1, '#55331a');
+  ctx.fillStyle = g; rr(T.x, T.y, T.w, T.h, 10); ctx.fill();
+  // 看板
+  const ph = T.plaqueH;
+  ctx.fillStyle = '#efe3c2'; rr(T.x + 14, T.y + 12, T.w - 28, ph - 12, 4); ctx.fill();
+  ctx.strokeStyle = '#8a6a3e'; ctx.lineWidth = 1.5; rr(T.x + 19, T.y + 17, T.w - 38, ph - 22, 2); ctx.stroke();
+  const tsz = clamp(T.w * 0.085, 22, 44);
+  text('たたんで、しまって。', T.x + T.w / 2, T.y + 12 + (ph - 12) * 0.42, tsz, '#2e1a0b', 'center', 800);
+  text('— 衣替えパズル —', T.x + T.w / 2, T.y + 12 + (ph - 12) * 0.78, clamp(tsz * 0.42, 11, 17), '#7a5431', 'center', 600);
+  // 引き出し
+  for (const r of L.menu) {
+    const open = isUnlocked(r.n), done = r.n === 25 ? save.endless > 0 : save.cleared.includes(r.n);
+    const sel = G.menuSel === r.n - 1;
+    const fg = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+    fg.addColorStop(0, open ? '#b27a45' : '#6b4527'); fg.addColorStop(1, open ? '#94602f' : '#5a391f');
+    ctx.fillStyle = fg; rr(r.x, r.y, r.w, r.h, 3); ctx.fill();
+    // しまった引き出しからは、服の端がのぞく
+    if (done) {
+      const cols = ['#8ecae6', '#f7a399', '#f4d35e', '#95d5b2'];
+      for (let i = 0; i < 3; i++) { ctx.fillStyle = cols[(r.n + i) % 4]; ctx.fillRect(r.x + r.w * (0.14 + i * 0.26), r.y - 2, r.w * 0.2, 5); }
+    }
+    ctx.strokeStyle = 'rgba(30,15,5,0.5)'; ctx.lineWidth = 1; rr(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 3); ctx.stroke();
+    if (sel) { ctx.strokeStyle = '#ffe7a3'; ctx.lineWidth = 3; rr(r.x - 2, r.y - 2, r.w + 4, r.h + 4, 5); ctx.stroke(); }
+    const fs = clamp(r.h * 0.34, 11, 18);
+    if (r.n === 25) text(open ? 'おまかせ(毎回ちがう服)' + (save.endless ? `  ${save.endless}段` : '') : '🔒 おまかせ — 二十四段ぜんぶで ひらく', r.x + r.w / 2, r.y + r.h * 0.42, fs, open ? '#fff3d6' : 'rgba(255,240,210,0.5)');
+    else text(open ? kan(r.n) : '🔒', r.x + r.w / 2, r.y + r.h * 0.38, fs, open ? '#fff3d6' : 'rgba(255,240,210,0.45)');
+    // 取っ手
+    ctx.fillStyle = done ? '#e4c15a' : open ? '#3a2413' : '#3e2716';
+    rr(r.x + r.w / 2 - r.w * 0.14, r.y + r.h * 0.66, r.w * 0.28, Math.max(3, r.h * 0.12), 2); ctx.fill();
+  }
+  // 説明
+  const ly = L.legendY;
+  ctx.font = font(13, 600);
+  const ls = wrap('夏の服を、引き出しに すきまなく しまうパズル。大きい服は たためます。 引き出しを えらんでね(クリック / タップ / 矢印キー + Enter)', Math.min(W - 30, 520));
+  ls.slice(0, 3).forEach((s, i) => text(s, W / 2, ly + i * 18, 13, '#4a2d17', 'center', 600));
+  text('つくったひと: ゲームつくるAI(ボクはAIです)', W / 2, Math.min(H - 10, ly + ls.length * 18 + 8), 11, 'rgba(74,45,23,0.6)', 'center', 600);
+  if (G.toast && G.toast.until > t) {
+    ctx.font = font(14);
+    const tw = ctx.measureText(G.toast.text).width + 30;
+    ctx.fillStyle = 'rgba(40,24,10,0.88)'; rr(W / 2 - tw / 2, H * 0.5 - 20, tw, 40, 8); ctx.fill();
+    text(G.toast.text, W / 2, H * 0.5, 14, '#fff3d6');
+  }
+}
+
+function frame() {
+  const t = now();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  layout();
+  drawBackground();
+  if (G.state === 'menu') { drawMenu(t); drawTopBar(); }
+  else {
+    drawDrawer(t);
+    drawTable(t);
+    drawButtons();
+    drawTray(t);
+    drawCaption(t);
+    drawTopBar();
+    if (G.state === 'clear') drawClear(t);
+    drawDragged();
+  }
+  drawParticles(t);
+  requestAnimationFrame(frame);
+}
+resize();
+toMenu();
+requestAnimationFrame(frame);
+
+// ---------------------------------------------------------------------------
+//  テスト用の窓口(読み取り専用。ゲームの結果は変えられない)
+// ---------------------------------------------------------------------------
+const copy = (v) => JSON.parse(JSON.stringify(v));
+window.gameTest = Object.freeze({
+  state: () => G.state,
+  level: () => G.level,
+  endless: () => G.endless,
+  progress: () => ({ cleared: [...save.cleared].sort((a, b) => a - b), endless: save.endless }),
+  pieces: () => G.pieces.map((p) => ({ id: p.id, cells: copy(p.shape), placed: p.placed ? { ...p.placed } : null, folds: p.stack.length, need: p.need, area: p.shape.length })),
+  selected: () => (selPiece() ? G.sel : -1),
+  dragging: () => (G.drag ? G.drag.id : -1),
+  board: () => (G.lv ? { W: G.lv.W, H: G.lv.H, cells: [...G.board] } : null),
+  solution: () => G.pieces.map((p) => ({ id: p.id, cells: copy(p.sol), folds: p.need })),
+  layout: () => copy(L),
+  cursor: () => ({ ...G.kb }),
+  counter: () => ({ free: G.lv ? freeCells() : 0, clothes: G.lv ? clothCells() : 0 }),
+  message: () => (G.toast && G.toast.until > now() ? G.toast.text : ''),
+  lastClear: () => (G.lastClear ? { ...G.lastClear } : null),
+  animating: () => !!G.anim,
+  levels: () => DEFS.length,
+  levelData: (n) => copy(genLevel(DEFS[n - 1], seedFor(n))),
+});
+</script>
+</body>
+</html>
