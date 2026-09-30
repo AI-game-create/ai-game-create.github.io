@@ -8,7 +8,11 @@ import path from 'node:path';
 // X には webm を載せられないので、投稿時に GitHub Actions が mp4 に変換する。
 //
 //   setup: ページを開いてゲームを始め、見せ場の手前まで進める(ここは動画に入らない)
-//   play : 見せ場を遊ぶ。until(Date.now() の値)を過ぎたら戻る。早く戻っても残りの秒数は撮り続ける
+//   play : 見せ場を遊ぶ。clip.until(Date.now() の値)を過ぎたら戻る。早く戻っても残りの秒数は撮り続ける
+//          一番派手な瞬間に clip.mark() を呼ぶと、動画はその0.5秒前から始まる
+//          (タイムラインでは最初の1秒で見るかどうかが決まるため)。mark のあとは clip.until が
+//          「そこから10秒後」に変わるので、そのまま遊び続ける。mark しなければ play の始まりから撮る
+//   maxSeconds: mark を待つ最長の秒数(既定30)
 //   focus: 動画に映す範囲の CSS セレクタ(例: 'canvas')。省略するとページ全体を映す
 //   sound: 音のないゲームだけ false にする。既定では、音が録れなければ失敗する
 //
@@ -18,13 +22,16 @@ import path from 'node:path';
 // 音: Playwright の録画には音が入らないので、ゲームが Web Audio でスピーカー(destination)に
 // つないだ音を、同じだけ録音用の出口にも流して MediaRecorder で録り、動画に重ねる。
 // ゲーム側は何もしなくてよい(Web Audio 以外で鳴らした音は入らない)。
+export type Clip = { readonly until: number; mark: () => void };
+
 export async function recordPlayVideo(
   browser: Browser,
   opts: {
     dir: string;
     setup: (page: Page) => Promise<void>;
-    play: (page: Page, until: number) => Promise<void>;
+    play: (page: Page, clip: Clip) => Promise<void>;
     seconds?: number;
+    maxSeconds?: number;
     focus?: string;
     sound?: boolean;
     width?: number;
@@ -62,12 +69,28 @@ export async function recordPlayVideo(
   }
 
   await page.evaluate(startAudio);
-  const start = (Date.now() - t0) / 1000;
-  const until = Date.now() + seconds * 1000;
-  await opts.play(page, until);
-  const rest = until - Date.now();
-  if (rest > 0) await page.waitForTimeout(rest);
+  const playAt = Date.now();
+  const start = (playAt - t0) / 1000;
+  const lead = 0.5;
+  let markAt = 0;
+  let restarting: Promise<unknown> = Promise.resolve();
+  const clip: Clip = {
+    get until() {
+      return markAt ? markAt + (seconds - lead) * 1000 : playAt + (opts.maxSeconds ?? 30) * 1000;
+    },
+    mark() {
+      if (markAt) return;
+      markAt = Date.now();
+      restarting = page.evaluate(restartAudio).catch(() => {});
+    },
+  };
+  await opts.play(page, clip);
+  const end = markAt ? clip.until : Math.max(Date.now(), playAt + seconds * 1000);
+  if (end > Date.now()) await page.waitForTimeout(end - Date.now());
+  await restarting;
   const audio = await page.evaluate(stopAudio);
+  // 切り出しの始まり(録画の頭からの秒数)。mark があればその少し前から
+  const from = markAt ? Math.max(start, (markAt - t0) / 1000 - lead) : start;
 
   const video = page.video();
   await context.close();
@@ -76,11 +99,14 @@ export async function recordPlayVideo(
   const out = path.join(opts.dir, 'play.webm');
   const rawPath = await video.path();
   const audioPath = path.join(tmp, 'audio.webm');
+  // 録音は play の始まり(mark したらその瞬間)から。切り出しの始まりとの差だけ、音を後ろにずらす
+  const shift = audio ? start + audio.offset - from : 0;
+  const audioIn = shift >= 0 ? ['-itsoffset', shift.toFixed(2)] : ['-ss', (-shift).toFixed(2)];
   const encode = (withAudio: boolean) =>
     execFileSync(ffmpeg, [
       '-hide_banner', '-loglevel', 'error', '-y',
-      '-ss', start.toFixed(2), '-i', rawPath,
-      ...(withAudio ? ['-itsoffset', audio!.offset.toFixed(2), '-i', audioPath] : []),
+      '-ss', from.toFixed(2), '-i', rawPath,
+      ...(withAudio ? [...audioIn, '-i', audioPath] : []),
       '-t', String(seconds),
       ...(crop ? ['-vf', crop] : []),
       '-map', '0:v:0', '-c:v', 'libvpx', '-b:v', '1200k', '-crf', '6', '-deadline', 'good', '-cpu-used', '2', '-auto-alt-ref', '0',
@@ -97,8 +123,9 @@ export async function recordPlayVideo(
   encode(!!audio);
   fs.rmSync(tmp, { recursive: true, force: true });
   const mb = fs.statSync(out).size / 1024 / 1024;
-  const sound = audio ? `音つき(${audio.offset.toFixed(1)}秒目から)` : '音なし';
-  console.log(`  動画: ${path.basename(opts.dir)}/play.webm(${start.toFixed(1)}秒目から${seconds}秒、${sound}、${mb.toFixed(1)}MB)`);
+  const sound = audio ? '音つき' : '音なし';
+  const how = markAt ? '見せ場の0.5秒前から' : '見せ場の印(mark)がないので play の始まりから';
+  console.log(`  動画: ${path.basename(opts.dir)}/play.webm(${how}${seconds}秒、${sound}、${mb.toFixed(1)}MB)`);
 }
 
 // ---- ここから下はブラウザの中で動く ----
@@ -139,7 +166,7 @@ function startAudio() {
   if (!a) return;
   a.t0 = performance.now();
   a.chunks = [];
-  const begin = () => {
+  a.begin = () => {
     const t = a.taps[a.taps.length - 1];
     if (!t) return false;
     a.rec = new MediaRecorder(t.node.stream, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 128000 });
@@ -148,7 +175,21 @@ function startAudio() {
     a.offset = (performance.now() - a.t0) / 1000;
     return true;
   };
-  if (!begin()) a.timer = setInterval(() => begin() && clearInterval(a.timer), 50);
+  if (!a.begin()) a.timer = setInterval(() => a.begin() && clearInterval(a.timer), 50);
+}
+
+// mark されたら録音をやり直す(録った音声の途中から切ると、頭に雑音が入るため)
+function restartAudio() {
+  const a = (window as any).__playAudio;
+  if (!a || !a.begin) return;
+  clearInterval(a.timer);
+  if (a.rec) {
+    a.rec.ondataavailable = null;
+    a.rec.stop();
+    a.rec = null;
+  }
+  a.chunks = [];
+  if (!a.begin()) a.timer = setInterval(() => a.begin() && clearInterval(a.timer), 50);
 }
 
 async function stopAudio(): Promise<{ b64: string; offset: number } | null> {

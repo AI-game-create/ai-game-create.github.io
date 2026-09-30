@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """X へ1件だけ投稿する。GitHub Actions から呼ばれる。
 
-  python scripts/post_to_x.py --slot release
+  python scripts/post_to_x.py --slot release   毎日20:30 作品紹介
+  python scripts/post_to_x.py --slot poll      月曜12:30 土曜の大作の題を決める投票(キューの poll)
+  python scripts/post_to_x.py --slot weekly    日曜21:30 その週の作品をつないだまとめ動画
 
-やること
+release のやること
   1. data/alert.md に中身があれば何もしない
   2. 今日(日本時間)の data/queue/YYYY-MM-DD.json を読む。無ければスキップ
   3. 投稿文を検査する(140字以内 / キューの本文にURLなし / game_url が公開URLで始まる)
@@ -11,7 +13,7 @@
   5. release 枠は、本文の最後にゲームのURLを付け、プレイ動画付きで投稿する
      (動画が使えなければスクリーンショット、それも駄目なら文字だけで投稿する)
      (URLを入れると X の文字数の上限を超える日だけ、URLは自己リプライで付ける)
-  6. 結果を data/posts.json に記録する(動画のファイルは投稿後に消す)
+  6. 結果を data/posts.json に記録する(動画のファイルは、日曜のまとめのあとに消す)
 
 環境変数
   X_API_KEY / X_API_SECRET / X_ACCESS_TOKEN / X_ACCESS_TOKEN_SECRET
@@ -45,17 +47,20 @@ POSTS_FILE = ROOT / "data" / "posts.json"
 ALERT_FILE = ROOT / "data" / "alert.md"
 
 JST = timezone(timedelta(hours=9))
-SLOTS = ("release", "devlog", "wrapup")
+SLOTS = ("release", "poll", "weekly")
 MAX_CHARS = 140          # CLAUDE.md のルール
 MAX_WEIGHTED = 280       # X 側の上限(全角は2文字ぶん)
 DAY_ONE = date(2026, 9, 29)  # 初めて投稿した日。この日を「1日目」として数える
 
 
+def day_number(date_str: str) -> int:
+    return (date.fromisoformat(date_str) - DAY_ONE).days + 1
+
+
 def with_day_prefix(text: str, date_str: str) -> str:
     """release の本文の先頭に「【N日目】」を付ける。本文側に書かれていたら付け直す。"""
-    n = (date.fromisoformat(date_str) - DAY_ONE).days + 1
     body = re.sub(r"^\s*【\d+日目】\s*", "", text)
-    return f"【{n}日目】{body}"
+    return f"【{day_number(date_str)}日目】{body}"
 
 
 def log(msg: str) -> None:
@@ -230,6 +235,48 @@ def build_clients():
     return client, api
 
 
+def create_post(client, api, text: str, mp4: Path | None, image: Path | None) -> tuple[str, str]:
+    """動画 → 画像 → 文字だけ、の順に試して投稿する。(投稿ID, "video" / "image" / "none") を返す。"""
+
+    def upload_image() -> list[str] | None:
+        if not image:
+            return None
+        # 画像のアップロード(v1.1)は X 側で廃止が進んでいる。失敗しても本文の投稿は止めない
+        try:
+            media = api.media_upload(filename=str(image))
+            log("スクリーンショットをアップロードしました。")
+            return [media.media_id_string]
+        except Exception as e:
+            log(f"::warning::スクリーンショットのアップロードに失敗したので、画像なしで投稿します: {e}")
+            return None
+
+    media_ids = None
+    used_video = False
+    if mp4:
+        try:
+            media_ids = [upload_video(api, mp4)]
+            used_video = True
+            log("動画をアップロードしました。")
+        except Exception as e:
+            log(f"::warning::動画のアップロードに失敗したので、画像で投稿します: {e}")
+    if media_ids is None:
+        media_ids = upload_image()
+
+    try:
+        res = client.create_tweet(text=text, media_ids=media_ids)
+    except Exception as e:
+        if not used_video:
+            raise
+        # 動画付きの投稿が断られたら、画像で出し直す(投稿はまだできていない)
+        log(f"::warning::動画付きで投稿できなかったので、画像で投稿します: {e}")
+        used_video = False
+        media_ids = upload_image()
+        res = client.create_tweet(text=text, media_ids=media_ids)
+    tweet_id = str(res.data["id"])
+    log(f"投稿しました: https://x.com/i/status/{tweet_id}")
+    return tweet_id, "video" if used_video else ("image" if media_ids else "none")
+
+
 def record(entry: dict) -> None:
     posts = read_json(POSTS_FILE, [])
     if not isinstance(posts, list):
@@ -239,6 +286,179 @@ def record(entry: dict) -> None:
         json.dumps(posts, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     log(f"data/posts.json に記録しました({len(posts)}件目)。")
+
+
+POLL_MINUTES = 3 * 24 * 60  # 月曜12:30に出して、木曜12:30に締め切る(金曜の夜に大作の題にする)
+
+
+def post_poll(date_str: str, dry_run: bool) -> None:
+    """その日のキューの poll(問いと選択肢)を投票つきで投稿する。"""
+    queue = load_queue(date_str)
+    poll = (queue or {}).get("poll")
+    if not poll:
+        log("今日のキューに投票(poll)が無いのでスキップします。")
+        return
+    text = str(poll.get("text", "")).strip()
+    options = [str(o).strip() for o in poll.get("options") or []]
+    validate(text, "poll")
+    if not 2 <= len(options) <= 4 or any(not o or len(o) > 25 for o in options):
+        log(f"::error::投票の選択肢は2〜4個、それぞれ1〜25字にしてください: {options}")
+        sys.exit(1)
+
+    log("--- 投稿する内容 ---")
+    log(f"本文:\n{text}")
+    log(f"選択肢: {' / '.join(options)}(受付 {POLL_MINUTES // 60} 時間)")
+    log("--------------------")
+    if dry_run:
+        log("試運転モードなので、実際には投稿しませんでした。")
+        return
+
+    client, _ = build_clients()
+    res = client.create_tweet(text=text, poll_options=options, poll_duration_minutes=POLL_MINUTES)
+    tweet_id = str(res.data["id"])
+    log(f"投稿しました: https://x.com/i/status/{tweet_id}")
+    record({
+        "date": date_str,
+        "slot": "poll",
+        "tweet_id": tweet_id,
+        "text": text,
+        "options": options,
+        "posted_at": datetime.now(JST).isoformat(timespec="seconds"),
+        "metrics": None,
+        "poll_result": None,
+    })
+
+
+WEEKLY_CLIP_SECONDS = 2.5  # 1本あたりの長さ(7本で17.5秒)
+WEEKDAYS = "月火水木金土日"
+
+
+def find_cjk_font() -> str | None:
+    for pattern in ("NotoSansCJK-Bold.ttc", "NotoSansCJK*.ttc", "NotoSansCJKjp*.otf", "*CJK*"):
+        hits = sorted(Path("/usr/share/fonts").rglob(pattern)) if Path("/usr/share/fonts").exists() else []
+        if hits:
+            return str(hits[0])
+    return None
+
+
+def make_weekly_video(games: list[dict], date_str: str) -> Path | None:
+    """その週の play.webm の頭を少しずつつなぎ、「N日目 タイトル」の字幕を付けた mp4 を作る。"""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        log("::warning::ffmpeg が無いので、まとめ動画は作れません。")
+        return None
+    font = find_cjk_font()
+    if not font:
+        log("::warning::日本語のフォントが無いので、字幕なしで作ります。")
+    tmp = Path(tempfile.mkdtemp())
+    d = WEEKLY_CLIP_SECONDS
+    inputs: list[str] = []
+    parts: list[str] = []
+    for i, g in enumerate(games):
+        src = ROOT / g["dir"] / "play.webm"
+        inputs += ["-i", str(src)]
+        label = tmp / f"label{i}.txt"
+        label.write_text(f"{day_number(g['post_date'])}日目  {g['title']}", encoding="utf-8")
+        text = (
+            f",drawtext=fontfile={font}:textfile={label}:fontsize=40:fontcolor=white"
+            ":x=32:y=h-th-36:box=1:boxcolor=black@0.55:boxborderw=14"
+            if font else ""
+        )
+        parts.append(
+            f"[{i}:v]trim=0:{d},setpts=PTS-STARTPTS,"
+            "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,"
+            f"fps=30,format=yuv420p{text},fade=t=in:st=0:d=0.12,fade=t=out:st={d - 0.12}:d=0.12[v{i}]"
+        )
+    # 音: 動画に音があればそれを、なければ無音を使う
+    n = len(games)
+    for i, g in enumerate(games):
+        if has_audio(ROOT / g["dir"] / "play.webm"):
+            parts.append(
+                f"[{i}:a]atrim=0:{d},asetpts=PTS-STARTPTS,aresample=44100:async=1,"
+                f"aformat=channel_layouts=stereo,apad=whole_dur={d},afade=t=out:st={d - 0.12}:d=0.12[a{i}]"
+            )
+        else:
+            parts.append(f"anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:{d}[a{i}]")
+    parts.append("".join(f"[v{i}][a{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=1[v][a]")
+    out = Path(tempfile.gettempdir()) / f"weekly-{date_str}.mp4"
+    cmd = [
+        ffmpeg, "-hide_banner", "-loglevel", "error", "-y", *inputs,
+        "-filter_complex", ";".join(parts), "-map", "[v]", "-map", "[a]",
+        "-c:v", "libx264", "-profile:v", "high", "-preset", "medium", "-crf", "20",
+        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(out),
+    ]
+    try:
+        subprocess.run(cmd, check=True, timeout=600, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        log(f"::warning::まとめ動画を作れませんでした: {e.stderr.strip()[-800:]}")
+        return None
+    except (subprocess.SubprocessError, OSError) as e:
+        log(f"::warning::まとめ動画を作れませんでした: {e}")
+        return None
+    log(f"まとめ動画を作りました({n}本・{n * d:.1f}秒・{out.stat().st_size / 1024 / 1024:.1f}MB)。")
+    return out
+
+
+def weekly_text(games: list[dict], base: str) -> str:
+    """まとめの投稿文。入りきらなければ、作品の一覧を後ろから削る。"""
+    head = f"今週つくったゲーム{len(games)}本をまとめました🎮 AIが毎日1本つくって公開しています"
+    lines = [f"{WEEKDAYS[date.fromisoformat(g['post_date']).weekday()]} {g['title']}" for g in games]
+    tail = f"▶ ぜんぶ遊べます {base}\n#AI #ClaudeCode #ブラウザゲーム" if base else "#AI #ClaudeCode #ブラウザゲーム"
+    while True:
+        text = "\n".join([head, *lines, tail])
+        if weighted_len(text) <= MAX_WEIGHTED or not lines:
+            return text
+        lines.pop()
+
+
+def post_weekly(date_str: str, dry_run: bool) -> None:
+    """日曜の夜に、その週(直近7日)の作品の動画をつないで投稿する。済んだら動画を消す。"""
+    history = read_json(ROOT / "data" / "history.json", [])
+    since = (date.fromisoformat(date_str) - timedelta(days=6)).isoformat()
+    week = [
+        g for g in history
+        if isinstance(g, dict) and g.get("status") == "success" and g.get("dir")
+        and since <= g.get("post_date", "") <= date_str
+    ]
+    week.sort(key=lambda g: g["post_date"])
+    games = [g for g in week if (ROOT / g["dir"] / "play.webm").exists()]
+    log(f"今週の作品: {len(week)}本(動画があるもの {len(games)}本)")
+
+    if len(games) < 3:
+        log("動画のある作品が3本に満たないので、まとめは投稿しません。")
+    else:
+        base = os.environ.get("GAME_BASE_URL", "").strip()
+        text = weekly_text(week, base)
+        mp4 = make_weekly_video(games, date_str)
+        log("--- 投稿する内容 ---")
+        log(f"本文:\n{text}")
+        log(f"動画: {mp4 or '(なし)'}")
+        log("--------------------")
+        if dry_run:
+            log("試運転モードなので、実際には投稿しませんでした。")
+            return
+        client, api = build_clients()
+        tweet_id, media = create_post(client, api, text, mp4, None)
+        record({
+            "date": date_str,
+            "slot": "weekly",
+            "tweet_id": tweet_id,
+            "text": text,
+            "games": [g["post_date"] for g in games],
+            "media": media,
+            "posted_at": datetime.now(JST).isoformat(timespec="seconds"),
+            "metrics": None,
+        })
+
+    if dry_run:
+        return
+    # 投稿済みの作品の動画を消して、リポジトリと公開サイトを軽く保つ(まとめを出せなかった週も消す)
+    for g in history:
+        if isinstance(g, dict) and g.get("dir") and g.get("post_date", "") <= date_str:
+            clip = ROOT / g["dir"] / "play.webm"
+            if clip.exists():
+                clip.unlink()
+                log(f"動画を消しました({g['dir']}play.webm)。")
 
 
 def main() -> None:
@@ -254,6 +474,12 @@ def main() -> None:
     dry_run = os.environ.get("DRY_RUN", "1") != "0"
 
     log(f"投稿枠: {slot} / 日付: {date_str} / 試運転: {'はい' if dry_run else 'いいえ'}")
+    if slot == "poll":
+        post_poll(date_str, dry_run)
+        return
+    if slot == "weekly":
+        post_weekly(date_str, dry_run)
+        return
 
     queue = load_queue(date_str)
     if queue is None:
@@ -309,43 +535,7 @@ def main() -> None:
         return
 
     client, api = build_clients()
-
-    def upload_image() -> list[str] | None:
-        if not shot_path:
-            return None
-        # 画像のアップロード(v1.1)は X 側で廃止が進んでいる。失敗しても本文の投稿は止めない
-        try:
-            media = api.media_upload(filename=str(shot_path))
-            log("スクリーンショットをアップロードしました。")
-            return [media.media_id_string]
-        except Exception as e:
-            log(f"::warning::スクリーンショットのアップロードに失敗したので、画像なしで投稿します: {e}")
-            return None
-
-    media_ids = None
-    used_video = False
-    if mp4:
-        try:
-            media_ids = [upload_video(api, mp4)]
-            used_video = True
-            log("プレイ動画をアップロードしました。")
-        except Exception as e:
-            log(f"::warning::動画のアップロードに失敗したので、画像で投稿します: {e}")
-    if media_ids is None and slot == "release":
-        media_ids = upload_image()
-
-    try:
-        res = client.create_tweet(text=text, media_ids=media_ids)
-    except Exception as e:
-        if not used_video:
-            raise
-        # 動画付きの投稿が断られたら、画像で出し直す(投稿はまだできていない)
-        log(f"::warning::動画付きで投稿できなかったので、画像で投稿します: {e}")
-        used_video = False
-        media_ids = upload_image()
-        res = client.create_tweet(text=text, media_ids=media_ids)
-    tweet_id = str(res.data["id"])
-    log(f"投稿しました: https://x.com/i/status/{tweet_id}")
+    tweet_id, media = create_post(client, api, text, mp4, shot_path if slot == "release" else None)
 
     entry = {
         "date": date_str,
@@ -357,9 +547,7 @@ def main() -> None:
         "metrics": None,
     }
     if slot == "release":
-        entry["media"] = "video" if used_video else ("image" if media_ids else "none")
-
-    if slot == "release":
+        entry["media"] = media
         entry["link"] = link
     # 本文に入りきらなかった日だけ、ゲームのURLを自己リプライで付ける
     if link == "reply":
@@ -369,11 +557,7 @@ def main() -> None:
         log("URLの自己リプライを付けました。")
 
     record(entry)
-
-    # 動画は投稿のためだけに置いている。投稿が済んだら消して、リポジトリと公開サイトを軽く保つ
-    if video and (ROOT / video).exists():
-        (ROOT / video).unlink()
-        log(f"投稿が済んだので、動画を消しました({video})。")
+    # 動画(play.webm)は日曜の「週のまとめ」に使うので、ここでは消さない。まとめのときに消す
 
 
 if __name__ == "__main__":
