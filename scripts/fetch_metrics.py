@@ -85,17 +85,26 @@ def main() -> None:
 
     for i in range(0, len(ids), BATCH):
         chunk = ids[i : i + BATCH]
-        fields = ["public_metrics", "non_public_metrics", "created_at"]
+        # user_auth=True: 投稿と同じ鍵(ユーザーとしての認証)で読む。
+        # 既定の False だと Bearer トークンを使おうとして、401 Unauthorized になる
+        # 投票の結果(選択肢ごとの票数)も一緒に取る
+        extra = {
+            "user_auth": True,
+            "expansions": ["attachments.poll_ids"],
+            "poll_fields": ["options", "voting_status", "end_datetime"],
+        }
+        fields = ["public_metrics", "non_public_metrics", "created_at", "attachments"]
         try:
-            res = client.get_tweets(ids=chunk, tweet_fields=fields)
+            res = client.get_tweets(ids=chunk, tweet_fields=fields, **extra)
         except Exception as e:  # 非公開指標が使えないプランなど
             log(f"非公開指標が取れなかったので、公開指標だけにします({e})。")
             try:
-                res = client.get_tweets(ids=chunk, tweet_fields=["public_metrics", "created_at"])
+                res = client.get_tweets(ids=chunk, tweet_fields=["public_metrics", "created_at", "attachments"], **extra)
             except Exception as e2:
                 log(f"::warning::反応の取得に失敗しました: {e2}")
                 return
 
+        polls = {str(p.id): p for p in (res.includes or {}).get("polls", [])}
         for tw in res.data or []:
             pub = getattr(tw, "public_metrics", None) or {}
             nonpub = getattr(tw, "non_public_metrics", None) or {}
@@ -110,6 +119,13 @@ def main() -> None:
                 "bookmarks": pub.get("bookmark_count", 0),
                 "fetched_at": datetime.now(JST).isoformat(timespec="seconds"),
             }
+            poll_ids = (getattr(tw, "attachments", None) or {}).get("poll_ids") or []
+            poll = polls.get(str(poll_ids[0])) if poll_ids else None
+            if poll is not None:
+                entry["poll_result"] = {
+                    "status": poll.voting_status,
+                    "options": [{"label": o["label"], "votes": o["votes"]} for o in poll.options],
+                }
             updated += 1
 
         for err in getattr(res, "errors", None) or []:
