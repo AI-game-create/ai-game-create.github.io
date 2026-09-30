@@ -340,6 +340,25 @@ function audio() {
   } catch (e) { return null; }
   return AC;
 }
+
+// スマホ(とくに iPhone)でも音が鳴るようにする下ごしらえ。
+// ・マナーモードでも動画と同じように鳴るよう、音の種類を「再生」にする(対応しているブラウザだけ)
+// ・iPhone は指を置いた瞬間(pointerdown)では音を始められないことがあるので、指を離した瞬間などにも音を起こす
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 未対応でも遊べる */ }
+const UNLOCK_EVENTS = ['touchend', 'pointerup', 'click', 'keydown'];
+function unlockAudio() {
+  const a = audio(); if (!a) return;
+  try {
+    if (a.state !== 'running') a.resume();
+    // 無音を一瞬だけ鳴らすと、iPhone でも音の出口が開く
+    const s = a.createBufferSource();
+    s.buffer = a.createBuffer(1, 1, 22050);
+    s.connect(a.destination);
+    s.start(0);
+  } catch (e) { /* 音が出せなくても遊べる */ }
+  if (a.state === 'running') UNLOCK_EVENTS.forEach((t) => window.removeEventListener(t, unlockAudio, true));
+}
+UNLOCK_EVENTS.forEach((t) => window.addEventListener(t, unlockAudio, true));
 function tone(f, d, type = 'sine', v = 0.15, when = 0, f2 = 0) {
   const a = audio(); if (!a) return;
   const t = a.currentTime + when;

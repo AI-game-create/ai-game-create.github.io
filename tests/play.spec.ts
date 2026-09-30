@@ -147,10 +147,10 @@ async function waitStill(page: Page) {
   await expect.poll(() => gt<boolean>(page, 'animating'), { timeout: 3000 }).toBe(false);
 }
 
-async function openMenu(page: Page, progress?: number[]) {
+async function openMenu(page: Page, progress?: number[], sound = false) {
   await page.goto(url());
   if (progress) {
-    await page.evaluate(([k, c]) => localStorage.setItem(k as string, JSON.stringify({ cleared: c, endless: 0, sound: false })), [SKEY, progress] as const);
+    await page.evaluate(([k, c, s]) => localStorage.setItem(k as string, JSON.stringify({ cleared: c, endless: 0, sound: s })), [SKEY, progress, sound] as const);
     await page.reload();
   }
   await expect.poll(() => gt<string>(page, 'state')).toBe('menu');
@@ -596,7 +596,7 @@ test.describe('プレイテスト', () => {
     await recordPlayVideo(browser, {
       dir: target!.dir,
       setup: async (page) => {
-        await openMenu(page, [1, 2, 3, 4, 5]);
+        await openMenu(page, [1, 2, 3, 4, 5], true); // 動画には音を入れるので、音はオンで始める
         await openLevel(page, mouseHand(page), 6);
         await page.waitForTimeout(400);
       },

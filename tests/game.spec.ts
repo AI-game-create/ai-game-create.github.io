@@ -39,6 +39,14 @@ test.describe('今日のゲーム', () => {
       /<input[^>]*type\s*=\s*["']?(?:email|tel|password)/i,
     );
 
+    // スマホでも音が鳴る(iPhone は指を離した瞬間でないと音を始められないことがあり、マナーモードだと Web Audio が消える)
+    if (/AudioContext/.test(src)) {
+      expect(src, 'スマホで音が鳴りません(touchend などで音を起こす処理がありません)').toMatch(/['"]touchend['"]/);
+      expect(src, 'iPhone のマナーモードで音が消えます(navigator.audioSession.type = \'playback\' がありません)').toMatch(
+        /audioSession\.type\s*=\s*['"]playback['"]/,
+      );
+    }
+
     // スマホ対応(viewport 指定)
     expect(src, 'viewport の meta タグがありません(スマホで崩れます)').toMatch(
       /<meta[^>]+name\s*=\s*["']?viewport/i,

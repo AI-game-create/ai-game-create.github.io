@@ -124,22 +124,42 @@ def validate_game_url(url: str, base: str) -> None:
         sys.exit(1)
 
 
+def has_audio(src: Path) -> bool:
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return False
+    try:
+        r = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(src)],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return bool(r.stdout.strip())
+
+
 def webm_to_mp4(src: Path) -> Path | None:
-    """X に載せられる mp4(H.264 + 無音の AAC)に変換する。できなければ None。"""
+    """X に載せられる mp4(H.264 + AAC)に変換する。できなければ None。"""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         log("::warning::ffmpeg が無いので、動画は使いません。")
         return None
     out = Path(tempfile.gettempdir()) / f"{src.parent.name}.mp4"
+    sound = has_audio(src)
+    if sound:
+        # ゲームの音を使う。音声のすき間は無音で埋めて、映像とずれないようにする
+        extra_input, audio = [], ["-map", "0:a:0", "-af", "aresample=async=1:first_pts=0"]
+    else:
+        # 音のない動画を受け付けない場合に備えて、無音の音声を付ける
+        extra_input = ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+        audio = ["-map", "1:a:0"]
     cmd = [
         ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-        "-i", str(src),
-        # 音のない動画を受け付けない場合に備えて、無音の音声を付ける
-        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-        "-map", "0:v:0", "-map", "1:a:0", "-shortest", "-t", "60",
+        "-i", str(src), *extra_input,
+        "-map", "0:v:0", *audio, "-shortest", "-t", "60",
         "-vf", r"scale=trunc(min(1280\,iw)/2)*2:-2,fps=30,format=yuv420p",
         "-c:v", "libx264", "-profile:v", "high", "-preset", "medium", "-crf", "20",
-        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-movflags", "+faststart",
         str(out),
     ]
     try:
@@ -150,7 +170,7 @@ def webm_to_mp4(src: Path) -> Path | None:
     except (subprocess.SubprocessError, OSError) as e:
         log(f"::warning::動画を mp4 にできなかったので、動画は使いません: {e}")
         return None
-    log(f"動画を mp4 にしました({out.stat().st_size / 1024 / 1024:.1f}MB)。")
+    log(f"動画を mp4 にしました({out.stat().st_size / 1024 / 1024:.1f}MB、{'ゲームの音つき' if sound else '音なし'})。")
     return out
 
 
