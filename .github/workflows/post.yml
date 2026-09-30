@@ -2,7 +2,7 @@ name: X投稿
 
 on:
   schedule:
-    # 20:30 JST。作品紹介を投稿し、ゲームのURLを自己リプライで付ける(1日1本)
+    # 20:30 JST。作品紹介をゲームのURL付きで投稿する(1日1本)
     - cron: '30 11 * * *'
   workflow_dispatch:
     inputs:
