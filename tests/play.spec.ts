@@ -3,6 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { latestGame } from './latest';
 import { recordPlayVideo } from './video';
+import { measureFps } from './perf';
 
 // ============================================================================
 //  プレイテスト: 今日のゲームの「核の遊び」が本当に機能するかを、実際に操作して確かめる。
@@ -587,6 +588,38 @@ test.describe('プレイテスト', () => {
     await hand.tap(...center((await layout(page)).btn.next));
     await expect.poll(() => gt<string>(page, 'state')).toBe('play');
     expect(JSON.stringify(await gt(page, 'solution')), 'おまかせが毎回同じ面です').not.toBe(first);
+  });
+
+  test('スマホで重くない(CPU 4倍遅くても、服をたたんでいる間 30fps 以上)', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'スマホの設定で測る');
+    await openMenu(page, [1, 2, 3, 4, 5]);
+    const hand = await touchOf(page);
+    await openLevel(page, hand, 6);
+    // 服を台にのせて、「折」と「ひろげる」の位置を先に読んでおく
+    const L = await layout(page);
+    const it = L.tray[0];
+    const [a, b] = (await pieces(page)).find((q) => q.id === it.id)!.cells[0];
+    await hand.tap(it.x + (a + 0.5) * it.c, it.y + (b + 0.5) * it.c);
+    await expect.poll(() => gt<number>(page, 'selected')).toBe(it.id);
+    await waitStill(page);
+    const L2 = await layout(page);
+    const fold = L2.lines[0];
+    const unfold = center(L2.btn.unfold);
+    // 一番にぎやかなのは、服がパタンとたたまれる動きの間。測っているあいだは gameTest を読まない
+    // (読むとその処理も遅いCPUを使い、ゲーム自体より重く測れてしまう)
+    const busy = (async () => {
+      const end = Date.now() + 3500;
+      while (Date.now() < end) {
+        await hand.tap(fold.hx, fold.hy);
+        await page.waitForTimeout(250);
+        await hand.tap(...unfold);
+        await page.waitForTimeout(250);
+      }
+    })();
+    const [perf] = await Promise.all([measureFps(page, 3000), busy]);
+    console.log(`  重さ: 平均${perf.fps}fps / p95 ${perf.p95}ms(mobile・CPU 4倍遅い)`);
+    expect(perf.fps, 'スマホで重すぎます').toBeGreaterThanOrEqual(30);
+    expect(perf.p95, 'スマホでカクつきます').toBeLessThanOrEqual(50);
   });
 
   test('投稿用のプレイ動画を撮る', async ({ browser }, info) => {
