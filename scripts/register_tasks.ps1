@@ -1,5 +1,7 @@
 ﻿<#
   毎晩20:00の自動制作を Windows のタスクスケジューラに登録する。
+  20:00にPCが切れていた日のために、ログオンの3分後にも起動する
+  (直近の20:00の回が終わっていれば、run_daily.ps1 が何もせずに終わる)。
     powershell -ExecutionPolicy Bypass -File scripts\register_tasks.ps1
 
   止めたいとき : Disable-ScheduledTask -TaskName AIGame_Daily
@@ -23,7 +25,9 @@ $action = New-ScheduledTaskAction `
     -Argument ('-NoProfile -ExecutionPolicy Bypass -File "' + $script + '"') `
     -WorkingDirectory $repo
 
-$trigger = New-ScheduledTaskTrigger -Daily -At '20:00'
+$daily = New-ScheduledTaskTrigger -Daily -At '20:00'
+$logon = New-ScheduledTaskTrigger -AtLogOn -User ($env:USERDOMAIN + '\' + $env:USERNAME)
+$logon.Delay = 'PT3M'
 
 # PCが消えていた日のぶんは、次に起動したときに追いかけて実行する
 $settings = New-ScheduledTaskSettingsSet `
@@ -47,12 +51,12 @@ if ($null -ne $existing) {
 Register-ScheduledTask `
     -TaskName $taskName `
     -Action $action `
-    -Trigger $trigger `
+    -Trigger @($daily, $logon) `
     -Settings $settings `
     -Principal $principal `
-    -Description '毎晩20:00に、次に投稿するブラウザゲームを1本つくる' | Out-Null
+    -Description '毎晩20:00(とログオンの3分後)に、次に投稿するブラウザゲームを1本つくる' | Out-Null
 
-Write-Output "登録しました: $taskName(毎日 20:00)"
+Write-Output "登録しました: $taskName(毎日 20:00 / ログオンの3分後)"
 Write-Output "対象: $script"
 Write-Output ''
 Write-Output '今すぐ試すなら: Start-ScheduledTask -TaskName AIGame_Daily'

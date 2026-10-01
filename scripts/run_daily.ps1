@@ -10,7 +10,13 @@
     コマンド実行は $AllowedTools に並べたものだけを許可する。
     ここに無いコマンドが必要になった場合、Claude は実行せずに
     data\alert.md に書いて終了する(CLAUDE.md の安全ルール)。
+
+  起動のきっかけは「毎日20:00」と「ログオンの3分後」の2つ(register_tasks.ps1)。
+  直近の20:00以降に制作が最後まで終わった記録があれば、何もせずに終わる(ログオンのたびに作らないため)。
+  途中で止まった回は記録が残らないので、次のログオンでやり直す。必ず動かしたいときは -Force を付ける。
 #>
+
+param([switch]$Force)
 
 $ErrorActionPreference = 'Stop'
 
@@ -37,6 +43,17 @@ $AllowedTools = @(
 
 $logDir = Join-Path $repo 'logs'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+
+# 直近の20:00の回が、もう最後まで終わっているなら何もしない(ログは書かない)
+if (-not $Force) {
+    $slot = (Get-Date).Date.AddHours(20)
+    if ((Get-Date) -lt $slot) { $slot = $slot.AddDays(-1) }
+    $done = Get-ChildItem $logDir -Filter 'run-*.log' |
+        Where-Object { $_.LastWriteTime -ge $slot } |
+        Select-String -Pattern '\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] === 制作が終わりました ===' |
+        Where-Object { [datetime]$_.Matches[0].Groups[1].Value -ge $slot }
+    if ($done) { exit 0 }
+}
 $logFile = Join-Path $logDir ("run-" + (Get-Date -Format 'yyyy-MM-dd') + ".log")
 
 function Write-Log {
