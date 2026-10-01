@@ -42,5 +42,16 @@
     },
     "media": "video",
     "reply_tweet_id": "2105260854060974295"
+  },
+  {
+    "date": "2026-10-01",
+    "slot": "release",
+    "tweet_id": "2105623558596510021",
+    "title": "たたんで、しまって。",
+    "text": "【3日目】今日のゲームは「たたんで、しまって。」です👕 夏服をたんすの引き出しにすきまなくしまう衣替えパズル。大きすぎる服は点線でパタンと半分にたたむと、形が変わってぴったり入ります。 #AI #ClaudeCode #パズルゲーム\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-01-tatande-shimatte/",
+    "posted_at": "2026-10-01T20:39:11+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
