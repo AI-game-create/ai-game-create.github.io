@@ -36,6 +36,15 @@
     "status": "success"
   },
   {
+    "post_date": "2026-10-03",
+    "title": "ころがれ!どんぐり山",
+    "dir": "games/2026-10-03-donguri-downhill/",
+    "genre": "3Dダウンヒル(レース・アクション)",
+    "theme": "秋の山・どんぐりの行列と池",
+    "controls": "← → / A D・左右にドラッグ(ジャンプ: スペース / ↑ / タップ / ジャンプボタン)",
+    "status": "success"
+  },
+  {
     "post_date": "2026-10-04",
     "title": "なきまね虫の合唱団",
     "dir": "games/2026-10-04-nakimane-chorus/",
