@@ -51,6 +51,15 @@ SLOTS = ("release", "poll", "weekly")
 MAX_CHARS = 140          # CLAUDE.md のルール
 MAX_WEIGHTED = 280       # X 側の上限(全角は2文字ぶん)
 DAY_ONE = date(2026, 9, 29)  # 初めて投稿した日。この日を「1日目」として数える
+MODEL_LABEL = "Opus5.5"  # 制作に使っているモデル(run_daily.ps1 の --model)。モデルを変えたらここも変える
+HASHTAGS = "#ゲーム制作"  # ハッシュタグはこれだけ(オーナーの指定)
+SIGNATURE = f"モデル：{MODEL_LABEL} {HASHTAGS}"
+
+
+def with_signature(text: str) -> str:
+    """本文に書かれたハッシュタグを外し、最後に「モデル：Opus5.5 #ゲーム制作」の行を付ける。"""
+    body = re.sub(r"[ \t　]*#\S+", "", text).rstrip()
+    return f"{body}\n{SIGNATURE}"
 
 
 def day_number(date_str: str) -> int:
@@ -298,7 +307,7 @@ def post_poll(date_str: str, dry_run: bool) -> None:
     if not poll:
         log("今日のキューに投票(poll)が無いのでスキップします。")
         return
-    text = str(poll.get("text", "")).strip()
+    text = re.sub(r"[ \t　]*#\S+", "", str(poll.get("text", ""))).strip() + f" {HASHTAGS}"
     options = [str(o).strip() for o in poll.get("options") or []]
     validate(text, "poll")
     if not 2 <= len(options) <= 4 or any(not o or len(o) > 25 for o in options):
@@ -403,7 +412,7 @@ def weekly_text(games: list[dict], base: str) -> str:
     """まとめの投稿文。入りきらなければ、作品の一覧を後ろから削る。"""
     head = f"今週つくったゲーム{len(games)}本をまとめました🎮 AIが毎日1本つくって公開しています"
     lines = [f"{WEEKDAYS[date.fromisoformat(g['post_date']).weekday()]} {g['title']}" for g in games]
-    tail = f"▶ ぜんぶ遊べます {base}\n#AI #ClaudeCode #ブラウザゲーム" if base else "#AI #ClaudeCode #ブラウザゲーム"
+    tail = f"{SIGNATURE}\n▶ ぜんぶ遊べます {base}" if base else SIGNATURE
     while True:
         text = "\n".join([head, *lines, tail])
         if weighted_len(text) <= MAX_WEIGHTED or not lines:
@@ -487,9 +496,12 @@ def main() -> None:
         return
 
     text = (queue.get("posts") or {}).get(slot, "")
-    if slot == "release" and text.strip():
-        text = with_day_prefix(text, date_str)
-    validate(text, slot)
+    validate(text, slot)  # キューに書かれた本文を検査する(140字以内・URLなし)
+    if slot == "release":
+        text = with_signature(with_day_prefix(text, date_str))
+        if weighted_len(text) > MAX_WEIGHTED:
+            log("::error::【N日目】とモデルの行を付けると X の上限を超えます。本文を短くしてください。")
+            sys.exit(1)
 
     base = os.environ.get("GAME_BASE_URL", "").strip()
     game_url = (queue.get("game_url") or "").strip()
