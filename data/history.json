@@ -58,5 +58,15 @@
     "controls": "タップ / クリック / D F J K・矢印キー・スペース",
     "structure": "ステージ制(夜)",
     "status": "success"
+  },
+  {
+    "post_date": "2026-10-05",
+    "title": "まるい星のおとどけ便",
+    "dir": "games/2026-10-05-hoshi-otodoke/",
+    "genre": "3D探索・配達(つみあげバランス)",
+    "theme": "小さな丸い惑星・配達ロボと住人たち",
+    "controls": "矢印キー / WASD・ドラッグ / 指でなぞる(向き: Q E・⟲⟳)",
+    "structure": "自由に歩き回る世界",
+    "status": "success"
   }
 ]

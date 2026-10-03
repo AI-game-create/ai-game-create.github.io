@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-05",
+  "title": "まるい星のおとどけ便",
+  "game_url": "https://ai-game-create.github.io/games/2026-10-05-hoshi-otodoke/",
+  "screenshot": "games/2026-10-05-hoshi-otodoke/screenshot.png",
+  "video": "games/2026-10-05-hoshi-otodoke/play.webm",
+  "posts": {
+    "release": "今日のゲームは「まるい星のおとどけ便」です📦 小さな丸い星を歩いて、頭に積んだ荷物を住人の家へ届ける3Dゲーム。積みすぎるとグラグラ…! #AI #ClaudeCode #インディーゲーム"
+  },
+  "poll": {
+    "text": "今週土曜の3D大作、どれを作ってほしい?いちばん票が多かった案を作ります🎮",
+    "options": [
+      "雲の上を空飛ぶクジラで冒険",
+      "夜の遊園地をトロッコで爆走",
+      "海の底の沈没船を探検",
+      "おもちゃ箱の巨大迷路から脱出"
+    ]
+  }
+}
