@@ -57,7 +57,7 @@ test.describe('今日のゲーム', () => {
       const design = path.join(game.dir, 'design.md');
       expect(fs.existsSync(design), '設計書 design.md がありません(CLAUDE.md 手順4)').toBeTruthy();
       const doc = fs.readFileSync(design, 'utf8');
-      for (const q of ['迷い', '腕の差', '変化', 'もう1回', '緊張']) {
+      for (const q of ['面白さの種類', '迷い', '腕の差', '変化', 'もう1回', '緊張']) {
         expect(doc, `設計書に「${q}」への答えがありません`).toContain(q);
       }
       const play = fs.readFileSync(path.join(__dirname, 'play.spec.ts'), 'utf8');

@@ -7,6 +7,7 @@
     "theme": "夜空・ほうき星",
     "controls": "マウス / 画面をなぞる / 矢印キー・WASD",
     "structure": "ステージ制(ウェーブ)",
+    "fun": "腕前",
     "status": "success"
   },
   {
@@ -17,6 +18,7 @@
     "theme": "夕焼け・ワイヤーフレームの3D",
     "controls": "マウス左右 / 指でなぞる / ←→・ADキー(回避: クリック / タップ / スペース)",
     "structure": "ステージ制(区間)",
+    "fun": "腕前・爽快感",
     "status": "success"
   },
   {
@@ -27,6 +29,7 @@
     "theme": "衣替え・たんすと夏服",
     "controls": "ドラッグ / タップ / キーボード(Tab・矢印・Space・R・F・T)",
     "structure": "ステージ制(面を選ぶ)",
+    "fun": "ひらめき",
     "status": "success"
   },
   {
@@ -37,6 +40,7 @@
     "theme": "秋の落ち葉・絵日記と焼きいも",
     "controls": "なぞる(ドラッグ / 指) / 矢印キー・WASD(スペースで ほうきを上げる)",
     "structure": "ステージ制(日記の日数)",
+    "fun": "腕前",
     "status": "success"
   },
   {
@@ -47,6 +51,7 @@
     "theme": "秋の山・どんぐりの行列と池",
     "controls": "← → / A D・左右にドラッグ(ジャンプ: スペース / ↑ / タップ / ジャンプボタン)",
     "structure": "ステージ制(坂)",
+    "fun": "爽快感・腕前",
     "status": "success"
   },
   {
@@ -57,6 +62,7 @@
     "theme": "秋の夜・鳴く虫の野外コンサート",
     "controls": "タップ / クリック / D F J K・矢印キー・スペース",
     "structure": "ステージ制(夜)",
+    "fun": "腕前",
     "status": "success"
   },
   {
@@ -67,6 +73,7 @@
     "theme": "小さな丸い惑星・配達ロボと住人たち",
     "controls": "矢印キー / WASD・ドラッグ / 指でなぞる(向き: Q E・⟲⟳)",
     "structure": "自由に歩き回る世界",
+    "fun": "判断・発見",
     "status": "success"
   },
   {
@@ -77,6 +84,7 @@
     "theme": "ハロウィンの夜の机・カッターマットとかぼちゃ",
     "controls": "なぞる(マウス / 指)・タップ / Space・R・Z・矢印キー・Q E",
     "structure": "育てる・作る",
+    "fun": "創作",
     "status": "success"
   }
 ]
