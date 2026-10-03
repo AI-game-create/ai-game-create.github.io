@@ -10,218 +10,175 @@ import { measureFps } from './perf';
 //  game.spec.ts は「エラーが出ないか」しか見ないので、遊べないゲームでも通ってしまう。
 //  このファイルはゲームごとに中身が違うので、毎回、今日のゲームに合わせて書き直す。
 //
-//  対象: まるい星のおとどけ便(2026-10-05)
-//  小さな丸い星を歩きまわり、ポストで荷物を頭に積んで、同じ色の家へ届ける。
-//  1回の配達で届けるほど ♥ が増える(+1, +2, +3…)が、積むほど ゆれて落としやすい。
-//  ゲーム側の window.gameTest(読み取り専用)から、ボクの位置や家の場所を読む。
-//  操作はすべて本物の入力で行う(キー / マウスのドラッグ / 指)。
+//  対象: ぱたぱたドミノ夜(2026-10-06)
+//  夜の机のマットを なぞって ドミノをならべ、タップで たおす。たおれた波が そばの しかけ
+//  (ベル・かぼちゃ・花火・ボール坂)を動かす。おだいをクリアすると ドミノとしかけが ふえる。
+//  ゲーム側の window.gameTest(読み取り専用)から、ドミノの位置や たおれた順を読む。
+//  操作はすべて本物の入力で行う(マウス / 指 / キー)。
 // ============================================================================
 
-const EXPECTED = '2026-10-05-hoshi-otodoke';
+const EXPECTED = '2026-10-06-patapata-domino';
 const target = latestGame();
-const SKEY = 'marui-hoshi-v1';
+const SKEY = 'patapata-domino-v1';
+const SP = 0.5;
 
-type V3 = [number, number, number];
-type Box = { to: number; express: boolean; left: number };
-type Player = { p: V3; v: V3; speed: number; face: V3; stack: Box[]; cap: number; sway: number; lim: number; combo: number; stun: number };
-type House = { id: number; name: string; em: string; active: boolean; ready: boolean; p: V3; door: V3 };
-type Obst = { p: V3; r: number; k: string };
-type Ev = { type: string; t: number; to?: number; k?: number; gain?: number; why?: string; d?: number; effect?: string; id?: number; cap?: number; onTime?: boolean; express?: boolean };
-type Stats = { hearts: number; delivered: number; best: number; drops: number; frags: number; time: number; playTime: number; finale: boolean };
+type Dom = { id: number; x: number; z: number; yaw: number; yaw0: number; st: number; th: number; stroke: number; fo: number };
+type Item = { id: number; k: string; x: number; z: number; yaw: number; on: boolean; lit: number; ball: { x: number; z: number; ph: string; sp: number } | null };
+type Run = { n: number; bells: number; pumps: number; fires: number; balls: number; ballHits: number; branches: number; t0: number; dur: number; rec: boolean };
+type Ev = { type: string; t: number; [k: string]: unknown };
+type XY = { x: number; y: number };
 
 const url = () => pathToFileURL(target!.html).href;
 const gt = <T>(page: Page, fn: string, ...args: unknown[]) =>
   page.evaluate(([f, a]) => (window as any).gameTest[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
-const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
 const isMobile = (page: Page) => page.viewportSize()!.width < 500;
-const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-const sc = (a: V3, s: number): V3 => [a[0] * s, a[1] * s, a[2] * s];
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
-const norm = (a: V3): V3 => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-const tang = (p: V3, v: V3) => sub(v, sc(p, dot(p, v)));
-const R = 13;
-const sdist = (a: V3, b: V3) => R * Math.acos(clamp(dot(a, b), -1, 1));
+const doms = (page: Page) => gt<Dom[]>(page, 'dominoes');
+const items = (page: Page) => gt<Item[]>(page, 'items');
+const events = (page: Page) => gt<Ev[]>(page, 'events');
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // ---------------------------------------------------------------------------
-//  ゲームの開き方(保存データを書いてから読み直す)
+//  コースを作る(保存データに書いて読みこませる)。点の列を 0.5 間かくで ならべる。ゲームと同じ並べ方
 // ---------------------------------------------------------------------------
-async function open(page: Page, hearts = 0, sound = false, extra: Record<string, unknown> = {}) {
+type Saved = [number, number, number, number, number];
+function hsl(h: number, s: number, l: number) {
+  const f = (n: number) => { const k = (n + h * 12) % 12; const a = s * Math.min(l, 1 - l); return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return (Math.round(f(0) * 255) << 16) | (Math.round(f(8) * 255) << 8) | Math.round(f(4) * 255);
+}
+function lay(pts: [number, number][], stroke: number, opt: { skipFirst?: boolean; hue?: number } = {}): Saved[] {
+  const out: Saved[] = [];
+  let last = pts[0];
+  const col = (k: number) => hsl(((opt.hue ?? 0) + k * 0.031) % 1, 0.78, 0.6);
+  let k = 0;
+  const first: Saved | null = opt.skipFirst ? null : [Math.round(last[0] * 1000), Math.round(last[1] * 1000), 0, col(0), stroke];
+  if (first) out.push(first);
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i];
+    let dx = p[0] - last[0], dz = p[1] - last[1], l = Math.hypot(dx, dz);
+    while (l >= SP) {
+      dx /= l; dz /= l;
+      const nx = last[0] + dx * SP, nz = last[1] + dz * SP, yaw = Math.atan2(dx, dz);
+      if (first && out.length === 1) first[2] = Math.round(yaw * 1000);
+      k++;
+      out.push([Math.round(nx * 1000), Math.round(nz * 1000), Math.round(yaw * 1000), col(k), stroke]);
+      last = [nx, nz];
+      dx = p[0] - last[0]; dz = p[1] - last[1]; l = Math.hypot(dx, dz);
+    }
+  }
+  return out;
+}
+const seg = (x0: number, z0: number, x1: number, z1: number): [number, number][] => [[x0, z0], [x1, z1]];
+// 行ったり来たりの列(はしは 半円で まがる)
+function serp(x0: number, x1: number, z0: number, rows: number, gap: number): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let r = 0; r < rows; r++) {
+    const z = z0 + r * gap, a = r % 2 ? x1 : x0, b = r % 2 ? x0 : x1;
+    pts.push([a, z], [b, z]);
+    if (r < rows - 1) for (let i = 1; i < 16; i++) { const t = (i / 16) * Math.PI; pts.push([b + Math.sin(t) * (gap / 2) * (r % 2 ? -1 : 1), z + gap / 2 - Math.cos(t) * (gap / 2)]); }
+  }
+  return pts;
+}
+const at = (s: Saved) => [s[0] / 1000, s[1] / 1000] as [number, number];
+const fwd = (s: Saved) => [Math.sin(s[2] / 1000), Math.cos(s[2] / 1000)] as [number, number];
+
+// ゲームを開く。course を渡すと、そのコースと記録で始める(渡さなければ はじめての人と同じ)
+async function open(page: Page, course?: Record<string, unknown> | null, sound = false) {
   await page.goto(url());
-  await page.evaluate(([k, v]) => localStorage.setItem(k as string, JSON.stringify(v)), [SKEY, { hearts, sound, played: hearts > 0, finale: hearts >= 300, ...extra }] as const);
+  // ゲームは ページを閉じるときに 今のコースを保存するので、そのあとで 書きなおす
+  await page.evaluate(([k, v]) => {
+    const put = () => { localStorage.clear(); if (v) localStorage.setItem(k as string, JSON.stringify(v)); };
+    put(); addEventListener('pagehide', put);
+  }, [SKEY, course ? { v: 1, seen: true, drew: true, sound, stock: 3000, mi: 11, ...course } : null] as const);
   await page.reload();
-  await expect.poll(() => gt<string>(page, 'state')).toBe('title');
+  await expect.poll(() => page.evaluate(() => !!(window as any).gameTest)).toBeTruthy();
+  await settle(page);
 }
-async function start(page: Page) {
-  await page.locator('#b-start').click();
-  await expect.poll(() => gt<string>(page, 'state')).toBe('play');
-  await page.waitForTimeout(1500); // カメラが ボクに寄るまで
+// カメラが止まるまで待つ
+async function settle(page: Page) {
+  let prev = '';
+  for (let i = 0; i < 40; i++) {
+    const c = await gt<{ tx: number; tz: number; dist: number; yaw: number }>(page, 'cam');
+    const k = [c.tx, c.tz, c.dist, c.yaw].map((v) => v.toFixed(2)).join();
+    if (k === prev) return;
+    prev = k;
+    await page.waitForTimeout(120);
+  }
+}
+async function runCount(page: Page) { return (await events(page)).filter((e) => e.type === 'runend').length; }
+async function waitRunEnd(page: Page, before: number, timeout = 60_000) {
+  await expect.poll(() => runCount(page), { timeout, intervals: [200], message: 'たおれ終わりません' }).toBeGreaterThan(before);
+  return (await gt<Run>(page, 'lastRun'))!;
 }
 
 // ---------------------------------------------------------------------------
-//  手: キー / マウス / 指。go(x, y) で「画面の右 x・上 y」(-1〜1)へ歩く
+//  手: マウス / 指。なぞる・タップ
 // ---------------------------------------------------------------------------
-type Hand = { name: string; analog: boolean; go: (x: number, y: number) => Promise<void>; release: () => Promise<void> };
-function keyHand(page: Page, wasd = false): Hand {
-  const K = wasd ? { u: 'w', d: 's', l: 'a', r: 'd' } : { u: 'ArrowUp', d: 'ArrowDown', l: 'ArrowLeft', r: 'ArrowRight' };
-  const held = new Set<string>();
-  const h: Hand = {
-    name: wasd ? 'WASD' : '矢印キー',
-    analog: false,
-    async go(x, y) {
-      const want = new Set<string>();
-      const l = Math.hypot(x, y);
-      if (l > 0.2) {
-        const a = Math.atan2(y, x); // 8方向に まるめる
-        const s = Math.round(a / (Math.PI / 4));
-        const ax = Math.round(Math.cos(s * Math.PI / 4)), ay = Math.round(Math.sin(s * Math.PI / 4));
-        if (ax > 0) want.add(K.r); if (ax < 0) want.add(K.l); if (ay > 0) want.add(K.u); if (ay < 0) want.add(K.d);
-      }
-      for (const k of [...held]) if (!want.has(k)) { await page.keyboard.up(k); held.delete(k); }
-      for (const k of want) if (!held.has(k)) { await page.keyboard.down(k); held.add(k); }
-    },
-    async release() { await h.go(0, 0); },
+type Hand = { name: string; tap: (p: XY) => Promise<void>; draw: (pts: XY[], speed?: number) => Promise<void> };
+// 線の上を 人の手の速さ(speed px/秒)で なぞる。本当の時間で進める(イベントを送るのが おそくても 速さは かわらない)
+async function trace(page: Page, pts: XY[], speed: number, move: (p: XY) => Promise<void>) {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  const total = cum[cum.length - 1];
+  const at = (s: number): XY => {
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < s) i++;
+    const k = cum[i] > cum[i - 1] ? (s - cum[i - 1]) / (cum[i] - cum[i - 1]) : 1;
+    return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * k, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * k };
   };
-  return h;
+  const t0 = Date.now();
+  while (true) {
+    const s = Math.min(total, ((Date.now() - t0) / 1000) * speed);
+    await move(at(s));
+    if (s >= total) break;
+    await page.waitForTimeout(12);
+  }
 }
-const JR = 56;
-async function mouseHand(page: Page, at = [0.5, 0.62]): Promise<Hand> {
-  const vp = page.viewportSize()!;
-  const cx = vp.width * at[0], cy = vp.height * at[1];
-  let down = false;
+function mouseHand(page: Page): Hand {
   return {
-    name: 'マウスのドラッグ',
-    analog: true,
-    async go(x, y) {
-      if (!down) { await page.mouse.move(cx, cy); await page.mouse.down(); down = true; }
-      await page.mouse.move(cx + clamp(x, -1, 1) * JR * 0.95, cy - clamp(y, -1, 1) * JR * 0.95);
+    name: 'マウス',
+    async tap(p) { await page.mouse.click(p.x, p.y); },
+    async draw(pts, speed = 500) {
+      await page.mouse.move(pts[0].x, pts[0].y);
+      await page.mouse.down();
+      await trace(page, pts, speed, (p) => page.mouse.move(p.x, p.y));
+      await page.mouse.up();
     },
-    async release() { if (down) { await page.mouse.move(cx, cy); await page.mouse.up(); down = false; } },
   };
 }
 async function touchHand(page: Page, cdp?: CDPSession): Promise<Hand> {
   const c = cdp ?? (await page.context().newCDPSession(page));
-  const vp = page.viewportSize()!;
-  const cx = vp.width * 0.5, cy = vp.height * 0.6;
-  let down = false, lx = cx, ly = cy;
+  const t = (type: string, p?: XY) => c.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p.x, y: p.y, id: 1 }] : [] } as any);
   return {
     name: '指',
-    analog: true,
-    async go(x, y) {
-      const nx = cx + clamp(x, -1, 1) * JR * 0.95, ny = cy - clamp(y, -1, 1) * JR * 0.95;
-      if (!down) { await c.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 1 }] } as any); down = true; }
-      if (Math.abs(nx - lx) < 0.5 && Math.abs(ny - ly) < 0.5) return;
-      lx = nx; ly = ny;
-      await c.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: nx, y: ny, id: 1 }] } as any);
+    async tap(p) { await t('touchStart', p); await page.waitForTimeout(60); await t('touchEnd'); },
+    async draw(pts, speed = 500) {
+      await t('touchStart', pts[0]);
+      await trace(page, pts, speed, (p) => t('touchMove', p));
+      await t('touchEnd');
     },
-    async release() { if (down) { await c.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] } as any); down = false; lx = cx; ly = cy; } },
   };
 }
-const deviceHand = (page: Page) => (isMobile(page) ? touchHand(page) : mouseHand(page));
-
-// ---------------------------------------------------------------------------
-//  自動プレイヤー: 目的地の方へ、木や家をよけながら歩く。
-//  smooth: 人がそっと親指を動かすように、入力を少しずつ変える(急に向きを変えない)
-// ---------------------------------------------------------------------------
-type Snap = { st: string; pl: Player; fr: { f: V3; r: V3 }; mets: { p: V3; t: number; T: number }[]; last: Ev | null };
-async function snap(page: Page): Promise<Snap> {
-  return page.evaluate(() => { const g = (window as any).gameTest; const ev = g.events(); return { st: g.state(), pl: g.player(), fr: g.frame(), mets: g.meteors(), last: ev[ev.length - 1] || null }; });
+const deviceHand = (page: Page) => (isMobile(page) ? touchHand(page) : Promise.resolve(mouseHand(page)));
+const scr = async (page: Page, x: number, z: number, y = 0) => (await gt<XY | null>(page, 'toScreen', x, y, z))!;
+const vp = (page: Page) => page.viewportSize()!;
+// 画面の割合 → px
+const S = (page: Page, fx: number, fy: number): XY => ({ x: vp(page).width * fx, y: vp(page).height * fy });
+async function tapDomino(page: Page, hand: Hand, d: Dom) { await hand.tap(await scr(page, d.x, d.z, 0.5)); }
+function circlePts(c: XY, r: number, a0: number, a1: number, n = 48): XY[] {
+  const out: XY[] = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * (i / n); out.push({ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r }); }
+  return out;
 }
-function steerTo(s: Snap, obst: Obst[], goal: V3, avoidMeteors = true) {
-  const p = s.pl.p;
-  let d = norm(tang(p, sub(goal, p)));
-  const dist = sdist(p, goal);
-  for (const o of obst) {
-    const od = sdist(p, o.p);
-    if (od > o.r + 2.6 || od < 1e-3) continue;
-    if (sdist(o.p, goal) < o.r + 0.1) continue; // 目的地そのもの(ポストなど)は よけない
-    if (dist < od - 0.5) continue; // 目的地のほうが近い
-    const to = norm(tang(p, sub(o.p, p)));
-    const ahead = dot(to, d);
-    if (ahead < 0.1) continue;
-    // よこへ よける(目的地に近い側へ)
-    let side = norm(sub(d, sc(to, ahead)));
-    if (len(sub(d, sc(to, ahead))) < 0.05) side = norm([to[1] * p[2] - to[2] * p[1], to[2] * p[0] - to[0] * p[2], to[0] * p[1] - to[1] * p[0]]);
-    const w = clamp((o.r + 2.6 - od) / 2.2, 0, 1.4) * ahead;
-    d = norm(add(d, sc(side, w * 1.8)));
-  }
-  if (avoidMeteors) for (const m of s.mets) {
-    const md = sdist(p, m.p);
-    if (md < 3.4 && m.t < m.T) d = norm(add(d, sc(norm(tang(p, sub(p, m.p))), (3.4 - md) * 1.2)));
-  }
-  return { x: dot(d, s.fr.r), y: dot(d, s.fr.f), dist };
-}
-type DriveOpt = { smooth?: boolean; arrive?: number; maxMs?: number; until?: (s: Snap) => boolean; lag?: number; slowNear?: boolean; keep?: { ix: number; iy: number } };
-async function walkTo(page: Page, hand: Hand, obst: Obst[], goal: V3 | (() => V3), opt: DriveOpt = {}) {
-  const t0 = Date.now();
-  let ix = opt.keep ? opt.keep.ix : 0, iy = opt.keep ? opt.keep.iy : 0;
-  let s = await snap(page);
-  while (true) {
-    s = await snap(page);
-    if (s.st !== 'play') break;
-    const g = typeof goal === 'function' ? goal() : goal;
-    const st = steerTo(s, obst, g);
-    if (st.dist < (opt.arrive ?? 1.0)) break;
-    if (opt.until && opt.until(s)) break;
-    if (Date.now() - t0 > (opt.maxMs ?? 30_000)) break;
-    let m = 1;
-    if (opt.slowNear !== false && hand.analog) m = clamp(st.dist / 3, 0.45, 1);
-    let tx = st.x * m, ty = st.y * m;
-    if (opt.smooth) {
-      // 親指を そっと動かす: 1回に 0.12 ずつ近づける。積んでいる数が多いほど ゆっくり
-      const n = s.pl.stack.length;
-      const lim = clamp(0.95 - n * 0.06, 0.55, 0.95);
-      const l = Math.hypot(tx, ty); if (l > lim) { tx *= lim / l; ty *= lim / l; }
-      const step = 0.06;
-      ix += clamp(tx - ix, -step, step); iy += clamp(ty - iy, -step, step);
-    } else { ix = tx; iy = ty; }
-    await hand.go(ix, iy);
-    await page.waitForTimeout(opt.lag ?? 40);
-  }
-  if (opt.keep) { opt.keep.ix = ix; opt.keep.iy = iy; return s; } // 止まらずに次へ
-  if (opt.smooth) {
-    // そっと止まる
-    for (let k = 0; k < 5 && (Math.abs(ix) > 0.05 || Math.abs(iy) > 0.05); k++) { ix *= 0.55; iy *= 0.55; await hand.go(ix, iy); await page.waitForTimeout(50); }
-  }
-  await hand.go(0, 0);
-  return s;
-}
-async function stopSoft(page: Page, hand: Hand) {
-  // そっと止まる(入力を少しずつ 0 に)
-  const s = await snap(page);
-  let ix = 0, iy = 0;
-  if (s.pl.speed > 0.1) { ix = dot(norm(s.pl.v), s.fr.r) * 0.6; iy = dot(norm(s.pl.v), s.fr.f) * 0.6; }
-  for (let k = 0; k < 6; k++) { ix *= 0.6; iy *= 0.6; await hand.go(ix, iy); await page.waitForTimeout(50); }
-  await hand.go(0, 0);
-}
-const events = (page: Page) => gt<Ev[]>(page, 'events');
-const houses = (page: Page) => gt<House[]>(page, 'houses');
-const player = (page: Page) => gt<Player>(page, 'player');
-const POST: V3 = [0, 1, 0];
-// 星の上の場所(北極からの角度 th・まわりの角度 ph)。ゲームの dirTP と同じ
-const dirOf = (th: number, ph: number): V3 => { const t = th * Math.PI / 180, p = ph * Math.PI / 180; return [Math.sin(t) * Math.sin(p), Math.cos(t), Math.sin(t) * Math.cos(p)]; };
-
-// ひと仕事: ポストで積めるだけ積んで、近い家から順に届けて、ポストへもどる
-async function oneTrip(page: Page, hand: Hand, opt: DriveOpt = {}) {
-  const obst = await gt<Obst[]>(page, 'obstacles');
-  await walkTo(page, hand, obst, POST, { ...opt, arrive: 2.2, maxMs: 40_000 });
-  // 積みおわるまで待つ
-  await expect.poll(async () => { const p = await player(page); const q = (await gt<{ queue: unknown[] }>(page, 'post')).queue.length; return p.stack.length >= p.cap || q === 0; }, { timeout: 8000 }).toBeTruthy();
-  for (let guard = 0; guard < 14; guard++) {
-    const pl = await player(page);
-    const lo = await gt<{ p: V3; h: number }[]>(page, 'loose');
-    if (!pl.stack.length && !lo.length) break;
-    const hs = (await houses(page)).filter((h) => h.ready);
-    // 落とした荷物が近ければ拾う
-    const near = lo.filter((b) => sdist(pl.p, b.p) < 9).sort((a, b) => sdist(pl.p, a.p) - sdist(pl.p, b.p))[0];
-    if (near && pl.stack.length < pl.cap) { await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), near.p, { ...opt, arrive: 0.6, maxMs: 15_000 }); continue; }
-    const want = hs.filter((h) => pl.stack.some((b) => b.to === h.id));
-    if (!want.length) break;
-    const next = want.sort((a, b) => sdist(pl.p, a.door) - sdist(pl.p, b.door))[0];
-    const before = pl.stack.length;
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), next.door, { ...opt, arrive: 0.8, maxMs: 30_000, until: (s) => s.pl.stack.length < before && !s.pl.stack.some((b) => b.to === next.id) });
-  }
+// 空いているマットの場所へ カメラを移す(キーで)
+async function panTo(page: Page, x: number, z: number) {
+  // キーでは細かく合わせにくいので、矢印キーで大まかに → 足りない分は ✋ のドラッグ
+  const c = await gt<{ tx: number; tz: number; dist: number; yaw: number }>(page, 'cam');
+  const dx = x - c.tx, dz = z - c.tz;
+  // カメラは yaw=0 で 画面の上 = -z、右 = +x
+  const sp = c.dist * 0.9;
+  if (Math.abs(dx) > 0.5) { const k = dx > 0 ? 'ArrowRight' : 'ArrowLeft'; await page.keyboard.down(k); await page.waitForTimeout((Math.abs(dx) / sp) * 1000); await page.keyboard.up(k); }
+  if (Math.abs(dz) > 0.5) { const k = dz < 0 ? 'ArrowUp' : 'ArrowDown'; await page.keyboard.down(k); await page.waitForTimeout((Math.abs(dz) / sp) * 1000); await page.keyboard.up(k); }
+  await settle(page);
 }
 
 test.describe('プレイテスト', () => {
@@ -235,618 +192,619 @@ test.describe('プレイテスト', () => {
     await page.goto(url());
     const ok = await page.evaluate(() => {
       const g = (window as any).gameTest;
-      return !!g && ['state', 'score', 'hearts', 'webgl', 'player', 'frame', 'houses', 'post', 'loose', 'meteors', 'frags', 'obstacles', 'events', 'stats', 'cap', 'miles',
-        'screen', 'playerScreen', 'quality', 'particles', 'sound'].every((k) => typeof g[k] === 'function');
+      return !!g && ['state', 'score', 'webgl', 'count', 'dominoes', 'falling', 'run', 'lastRun', 'items', 'rockets', 'cam', 'toScreen', 'toWorld',
+        'stock', 'left', 'unlocked', 'mission', 'stats', 'events', 'tool', 'start', 'particles', 'quality', 'sound', 'stop'].every((k) => typeof g[k] === 'function');
     });
     expect(ok, 'window.gameTest が無いか、関数が足りません').toBeTruthy();
     expect(await gt<boolean>(page, 'webgl'), 'WebGL が使えていません').toBeTruthy();
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1500);
     const png = await page.locator('#gl').screenshot();
-    expect(png.length, '3Dの画面に何も描かれていないようです').toBeGreaterThan(20_000);
+    expect(png.length, '3Dの画面に何も描かれていないようです').toBeGreaterThan(30_000);
   });
 
-  // 核の遊び(1): おした向きへ歩く。画面の上 = 前、右 = 右(キー・マウス・指 どれでも)
-  test('歩く: おした向きへ歩き、Q E(⟲⟳)で見る向きが回る', async ({ page }) => {
+  // 核の遊び(1): はじめて開くと おてほんの列があり、さわると 順番に たおれて ベルが鳴る
+  test('おてほん: 最初のドミノを タップすると 列が順番に たおれ、さいごに ベルが鳴る。たてなおすと ぜんぶ立つ', async ({ page }) => {
     test.setTimeout(90_000);
     await open(page);
-    await start(page);
-    const makers: (() => Promise<Hand>)[] = isMobile(page) ? [() => touchHand(page)] : [async () => keyHand(page), async () => keyHand(page, true), () => mouseHand(page)];
-    for (const make of makers) {
-      const hand = await make();
-      for (const [dx, dy, name] of [[0, -1, '下'], [-1, 0, '左'], [0, 1, '上'], [1, 0, '右']] as const) {
-        const a = await snap(page);
-        await hand.go(dx, dy);
-        await page.waitForTimeout(350); // 人が ちょっと おすくらい
-        const b = await snap(page);
-        await hand.go(0, 0);
-        const v = b.pl.v;
-        const along = dot(v, a.fr.r) * dx + dot(v, a.fr.f) * dy;
-        const across = Math.abs(dot(v, a.fr.r) * dy - dot(v, a.fr.f) * dx);
-        console.log(`  ${hand.name} ${name}: おした向きの速さ ${along.toFixed(2)}・よこ ${across.toFixed(2)}`);
-        expect(along, `${hand.name}で ${name}へ歩きません`).toBeGreaterThan(2.5);
-        expect(across, `${hand.name}で ${name}を おしたのに ななめに進みます`).toBeLessThan(0.8);
-        await page.waitForTimeout(700);
-      }
-      await hand.release();
-    }
-    // 見る向きを回す
-    const f0 = (await snap(page)).fr;
-    if (isMobile(page)) {
-      const b = (await page.locator('#b-rr').boundingBox())!;
-      const cdp = await page.context().newCDPSession(page);
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 3 }] } as any);
-      await page.waitForTimeout(500);
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] } as any);
-    } else {
-      await page.keyboard.down('e'); await page.waitForTimeout(500); await page.keyboard.up('e');
-    }
-    const f1 = (await snap(page)).fr;
-    const turned = Math.acos(clamp(dot(f0.f, f1.f), -1, 1));
-    console.log(`  見る向き: ${(turned * 180 / Math.PI).toFixed(0)}度 回った(右回り ${dot(f1.f, f0.r).toFixed(2)})`);
-    expect(turned, '見る向きが回りません').toBeGreaterThan(0.5);
-    expect(dot(f1.f, f0.r), '右回りのボタンで 左に回りました').toBeGreaterThan(0);
-  });
-
-  // 核の遊び(2): ポストで積み、同じ色の家に近づくと届く。1回で届けるほど ♥ が増える
-  test('配達: ポストで積み、同じ色の家に近づくと届く。はなれていると届かず、ちがう家にも届かない。2こ目+2・3こ目+3', async ({ page }) => {
-    test.setTimeout(150_000);
-    await open(page);
-    await start(page);
-    const hand = await deviceHand(page);
-    const obst = await gt<Obst[]>(page, 'obstacles');
-    const q0 = (await gt<{ queue: Box[] }>(page, 'post')).queue.map((q) => q.to);
-    await walkTo(page, hand, obst, POST, { arrive: 2.2 });
-    await expect.poll(async () => (await player(page)).stack.length, { message: 'ポストで荷物が積めません' }).toBe(3);
-    const pl = await player(page);
-    console.log(`  積んだ荷物: ${pl.stack.map((b) => b.to).join(',')}(ポストの列 ${q0.slice(0, 3).join(',')})`);
-    expect(pl.stack.map((b) => b.to), 'ポストに並んでいた順に積まれていません').toEqual(q0.slice(0, 3));
-    expect((await events(page)).filter((e) => e.type === 'pickup').length).toBe(3);
-    const hs = (await houses(page)).filter((h) => h.ready);
-    expect(hs.map((h) => h.id), 'はじめに住んでいるのは3けん').toEqual([0, 1, 2]);
-    let hearts = 0;
-    // ちがう家(積んでいない家)には届かない
-    const other = hs.find((h) => !pl.stack.some((b) => b.to === h.id));
-    if (other) {
-      await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), other.door, { arrive: 0.7 });
-      await page.waitForTimeout(700);
-      const p2 = await player(page);
-      console.log(`  ちがう家(${other.name})の前: 荷物 ${p2.stack.length}こ・♥${await gt<number>(page, 'hearts')}`);
-      expect(p2.stack.length, '積んでいない家に 荷物が届きました').toBe(3);
-      expect(await gt<number>(page, 'hearts')).toBe(0);
-    }
-    // 届け先の家: まず 5m 手前で止まる → 届かない。近づくと届く
-    let k = 0;
-    while ((await player(page)).stack.length) {
-      const cur = await player(page);
-      const h = hs.filter((x) => cur.stack.some((b) => b.to === x.id)).sort((a, b) => sdist(cur.p, a.door) - sdist(cur.p, b.door))[0];
-      const n = cur.stack.filter((b) => b.to === h.id).length;
-      await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), h.door, { arrive: 5.5 });
-      await stopSoft(page, hand);
-      await page.waitForTimeout(500);
-      const far = await player(page);
-      const dFar = sdist(far.p, h.door);
-      expect(far.stack.length, `${h.name}さんの家から ${dFar.toFixed(1)}m はなれているのに届きました`).toBe(cur.stack.length);
-      await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), h.door, { arrive: 0.8 });
-      await expect.poll(async () => (await player(page)).stack.filter((b) => b.to === h.id).length, { message: `${h.name}さんの家に近づいても届きません` }).toBe(0);
-      await page.waitForTimeout(700);
-      const ev = (await events(page)).filter((e) => e.type === 'deliver');
-      const mine = ev.slice(-n);
-      for (const e of mine) { k++; hearts += k; expect(e.to, '届いた家が ちがいます').toBe(h.id); expect(e.k, 'れんぞくの数が ちがいます').toBe(k); expect(e.gain).toBe(k); }
-      console.log(`  ${h.name}さん: ${n}こ届いた(${dFar.toFixed(1)}m はなれていた間は届かない)・♥${await gt<number>(page, 'hearts')}`);
-    }
-    expect(await gt<number>(page, 'hearts'), '♥が 1+2+3 になっていません').toBe(hearts);
-    expect(hearts).toBe(6);
-    await expect(page.locator('#m-h')).toHaveText('6');
-    await hand.release();
-  });
-
-  // 核の遊び(3): 積むほど ゆれる。急な切りかえしで落ち、そっと歩けば落とさない
-  test('グラグラ: 3こなら左右に切りかえしても平気。8こだと落ちる。そっと歩けば8こでも落とさず、落とした荷物は拾える', async ({ page }) => {
-    test.setTimeout(180_000);
-    const keys = isMobile(page) ? () => touchHand(page) : async () => keyHand(page);
-    const zigzag = async (_old: Hand, ms: number) => {
-      const hand = await keys(); // 指は いちど はなしているかもしれないので、新しく置きなおす
-      // ぶつからないよう、左右(または上下)の ひらけたほうの向きで切りかえす
-      const s = await snap(page);
-      const obst = await gt<Obst[]>(page, 'obstacles');
-      const clear = (d: V3) => { let m = 99; for (let t = 0; t <= 3.5; t += 0.25) { const q = norm(add(s.pl.p, sc(d, t / R))); for (const o of obst) m = Math.min(m, sdist(q, o.p) - o.r); } return m; };
-      const lr = Math.min(clear(s.fr.r), clear(sc(s.fr.r, -1))), ud = Math.min(clear(s.fr.f), clear(sc(s.fr.f, -1)));
-      const ax = lr >= ud ? [1, 0] : [0, 1];
-      const t0 = Date.now(); let dir = 1;
-      const before = (await events(page)).filter((e) => e.type === 'drop' && e.why === 'sway').length;
-      let vmax = 0;
-      while (Date.now() - t0 < ms) {
-        await hand.go(dir * ax[0], dir * ax[1]); dir = -dir;
-        await page.waitForTimeout(750);
-        vmax = Math.max(vmax, (await player(page)).speed);
-        if ((await events(page)).filter((e) => e.type === 'drop' && e.why === 'sway').length > before) break;
-      }
-      await hand.release();
-      // 本当に走って切りかえしたか(動いていなければ、このテストは何も確かめていない)
-      expect(vmax, '切りかえしの間に ボクが走っていません(テストの操作が効いていない)').toBeGreaterThan(3.5);
-      return (await events(page)).filter((e) => e.type === 'drop' && e.why === 'sway').length - before;
-    };
-    // 3こ(流れ星は まだ ふらない)
-    await open(page, 10);
-    await start(page);
-    let hand = await keys();
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2 });
-    await expect.poll(async () => (await player(page)).stack.length).toBe(3);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), [0, 0, 1], { maxMs: 1200 });
-    const d3 = await zigzag(hand, 6000);
-    console.log(`  3こで 左右に切りかえし 6秒: 落とした ${d3}`);
-    expect(d3, '3こしか積んでいないのに 落ちます').toBe(0);
-    await hand.release();
-    // 8こ: 左右の切りかえしで落ちる
-    await open(page, 262);
-    await start(page);
-    hand = await keys();
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-    await expect.poll(async () => (await player(page)).stack.length, { timeout: 15_000 }).toBe(8);
-    // キーでも、歩きだす・止まる・直角に曲がる だけなら落とさない(ひらけた方向を えらぶ)
+    await page.waitForTimeout(1500); // ドミノが ぽこぽこ 出てくるまで
+    const ds = await doms(page);
+    console.log(`  おてほん: ドミノ ${ds.length}こ・しかけ ${(await items(page)).map((i) => i.k).join(',')}`);
+    expect(ds.length).toBeGreaterThanOrEqual(25);
+    await expect(page.locator('#hint .bub'), '最初のドミノに「タップで たおす」が出ていません').toBeVisible();
     {
-      const s = await snap(page);
-      const obst = await gt<Obst[]>(page, 'obstacles');
-      const dirs = Array.from({ length: 8 }, (_, i) => [Math.round(Math.cos(i * Math.PI / 4)), Math.round(Math.sin(i * Math.PI / 4))] as const);
-      const world = (p: V3, x: number, y: number) => norm(tang(p, add(sc(s.fr.r, x), sc(s.fr.f, y))));
-      const clear = (p: V3, d: V3, L: number) => { let m = 99; for (let t = 0; t <= L; t += 0.25) { const q = norm(add(p, sc(d, t / R))); for (const o of obst) m = Math.min(m, sdist(q, o.p) - o.r); } return m; };
-      let best = { c: -1, a: dirs[0], b: dirs[2] };
-      for (let i = 0; i < 8; i++) for (const j of [i + 2, i + 6]) {
-        const a = dirs[i], b = dirs[j % 8];
-        const da = world(s.pl.p, a[0], a[1]);
-        const mid = norm(add(s.pl.p, sc(da, 2.6 / R)));
-        const c = Math.min(clear(s.pl.p, da, 2.8), clear(mid, world(mid, b[0], b[1]), 2.8));
-        if (c > best.c) best = { c, a, b };
-      }
-      const k0 = (await events(page)).length;
-      await hand.go(best.a[0], best.a[1]); await page.waitForTimeout(900);
-      await hand.go(0, 0); await page.waitForTimeout(1300);
-      await hand.go(best.b[0], best.b[1]); await page.waitForTimeout(600);
-      await hand.go(best.a[0], best.a[1]); await page.waitForTimeout(700);
-      await hand.go(0, 0); await page.waitForTimeout(1300);
-      const ev = (await events(page)).slice(k0);
-      const sw = ev.filter((e) => e.type === 'drop' && e.why === 'sway');
-      const imp = ev.filter((e) => e.type === 'impact' && (e.d ?? 99) < 5);
-      console.log(`  8こで キー: 歩きだす・止まる・直角に曲がる → ゆれで落とした ${sw.length}(ぶつかった ${ev.filter((e) => e.type === 'bump').length}・近くの流れ星 ${imp.length}・ひらけた幅 ${best.c.toFixed(1)}m)`);
-      if (!imp.length) expect(sw.length, 'キーで ふつうに歩くだけで 8この荷物を落とします').toBe(0);
+      const hb = (await page.locator('#hint .ring').boundingBox())!, s0 = await scr(page, ds[0].x, ds[0].z, 0.6);
+      expect(Math.hypot(hb.x + hb.width / 2 - s0.x, hb.y + hb.height / 2 - s0.y), '「タップで たおす」が 最初のドミノの所に ありません').toBeLessThan(30);
     }
-    // 8こに積みなおして、ポストから少しはなれた ひらけた所で 左右に切りかえす
-    // (流れ星に当たって 8こより減ったら、積みなおして やりなおす)
-    let d8 = 0;
-    for (let attempt = 0; attempt < 3 && d8 === 0; attempt++) {
-      await walkTo(page, await deviceHand(page), await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-      await expect.poll(async () => (await player(page)).stack.length, { timeout: 15_000 }).toBe(8);
-      const p = (await player(page)).p;
-      const away = norm(add(POST, sc(norm(tang(POST, sub(p, POST))), 4.6 / R)));
-      await walkTo(page, await deviceHand(page), await gt<Obst[]>(page, 'obstacles'), away, { arrive: 0.6, smooth: true, maxMs: 8000 });
-      await page.waitForTimeout(800);
-      if ((await player(page)).stack.length < 8) continue;
-      const k0 = (await events(page)).length;
-      d8 = await zigzag(hand, 8000);
-      const hitBefore = (await events(page)).slice(k0).some((e) => e.type === 'impact' && e.effect === 'hit');
-      if (hitBefore && d8 === 0) continue; // 流れ星で荷物が減った回は数えない
-      if (d8 === 0) break;
+    const hand = await deviceHand(page);
+    const r0 = await runCount(page);
+    const t0 = Date.now();
+    await tapDomino(page, hand, ds[0]);
+    await expect.poll(() => gt<string>(page, 'state'), { message: 'タップしても たおれません' }).toBe('falling');
+    const run = await waitRunEnd(page, r0);
+    const sec = (Date.now() - t0) / 1000;
+    const after = await doms(page);
+    expect(after.every((d) => d.st === 2), `たおれのこりが あります: ${after.filter((d) => d.st !== 2).length}こ`).toBeTruthy();
+    // 並んだ順に たおれた
+    const fo = after.map((d) => d.fo);
+    expect(fo, 'ならんだ順に たおれていません').toEqual([...fo].sort((a, b) => a - b));
+    expect(run.n).toBe(ds.length);
+    expect(run.bells, 'さいごの ベルが鳴りません').toBe(1);
+    console.log(`  ${run.n}こが ${run.dur.toFixed(2)}秒で たおれた(1秒に ${(run.n / run.dur).toFixed(1)}こ)・タップから終わりまで ${sec.toFixed(1)}秒`);
+    expect(run.n / run.dur, 'たおれるのが おそすぎます').toBeGreaterThan(8);
+    expect(run.n / run.dur, 'たおれるのが 速すぎて 目で追えません').toBeLessThan(30);
+    // おだい1 クリア → つぎは「なぞって30こ」
+    expect((await gt<{ i: number }>(page, 'mission')).i).toBe(1);
+    await expect(page.locator('#res'), 'けっかが出ません').toBeVisible({ timeout: 4000 });
+    await expect(page.locator('#res-n')).toHaveText(String(ds.length));
+    // たてなおす(ボタン)
+    await page.locator('#b-reset2').click();
+    await expect.poll(async () => (await doms(page)).every((d) => d.st === 0), { timeout: 5000, message: 'たてなおしても 立ちません' }).toBeTruthy();
+    const back = await doms(page);
+    for (let i = 0; i < back.length; i++) expect(Math.abs(wrap(back[i].yaw - ds[i].yaw)), 'たてなおしたら 向きが かわりました').toBeLessThan(0.01);
+    expect((await items(page))[0].on).toBeFalsy();
+    // もう一度 たおせる(Space キー / ▶ボタン)
+    const r1 = await runCount(page);
+    if (isMobile(page)) await page.locator('#b-go').tap(); else await page.keyboard.press('Space');
+    const run2 = await waitRunEnd(page, r1);
+    expect(run2.n, 'たてなおしたあと もう一度 たおせません').toBe(ds.length);
+  });
+
+  // 核の遊び(2): 人の速さ・大きさで なぞると、線にそって 0.5 間かくで ならぶ
+  test('なぞる: 人の速さで まっすぐ・円を なぞると、線にそって すきまなく ならび、ぜんぶ たおれる', async ({ page }) => {
+    test.setTimeout(120_000);
+    await open(page, { dom: [], items: [] });
+    const hand = await deviceHand(page);
+    const short = Math.min(vp(page).width, vp(page).height);
+    // まっすぐ(画面の右下 → 左上 に ななめ)
+    const a = S(page, 0.2, 0.62), b = S(page, 0.8, 0.42);
+    await hand.draw([a, b], 500);
+    await page.waitForTimeout(400);
+    let ds = await doms(page);
+    const wa = (await gt<{ x: number; z: number }>(page, 'toWorld', a.x, a.y))!, wb = (await gt<{ x: number; z: number }>(page, 'toWorld', b.x, b.y))!;
+    const L = Math.hypot(wb.x - wa.x, wb.z - wa.z);
+    const dir = Math.atan2(wb.x - wa.x, wb.z - wa.z);
+    console.log(`  ${hand.name}で まっすぐ ${Math.hypot(b.x - a.x, b.y - a.y).toFixed(0)}px(${L.toFixed(1)}m)→ ${ds.length}こ`);
+    expect(ds.length, 'なぞった長さに ドミノの数が あいません').toBeGreaterThanOrEqual(Math.floor(L / SP) - 2);
+    expect(ds.length).toBeLessThanOrEqual(Math.floor(L / SP) + 1);
+    for (let i = 1; i < ds.length; i++) {
+      const g = Math.hypot(ds[i].x - ds[i - 1].x, ds[i].z - ds[i - 1].z);
+      expect(g, `${i}こ目の間かくが ${g.toFixed(2)}m`).toBeGreaterThan(0.45);
+      expect(g).toBeLessThan(0.56);
     }
-    const pAfter = await player(page);
-    console.log(`  8こで 左右に切りかえし: 落とした ${d8}(のこり ${pAfter.stack.length}こ)`);
-    expect(d8, '8こ積んで 左右に切りかえしても 落ちません').toBeGreaterThanOrEqual(1);
-    // 落とした荷物を拾う
-    await page.waitForTimeout(900);
-    const lo = await gt<{ p: V3; h: number; to: number }[]>(page, 'loose');
-    expect(lo.length, '落とした荷物が 星の上に ありません').toBeGreaterThanOrEqual(1);
-    const reg0 = (await events(page)).filter((e) => e.type === 'regrab').length;
-    const regrabs = async () => (await events(page)).filter((e) => e.type === 'regrab').length;
-    for (let i = 0; i < 4 && (await regrabs()) === reg0; i++) {
-      // いちばん近い 落ちた荷物へ(すべって動くので、そのつど場所を読みなおす)
-      const me = (await player(page)).p;
-      const near = (await gt<{ p: V3 }[]>(page, 'loose')).sort((a, b) => sdist(me, a.p) - sdist(me, b.p))[0];
-      if (!near) break;
-      console.log(`  落とした荷物まで ${sdist(me, near.p).toFixed(1)}m`);
-      await walkTo(page, await deviceHand(page), await gt<Obst[]>(page, 'obstacles'), near.p, { arrive: 0.4, maxMs: 6000, smooth: true });
+    // 線の上に、線の向きで
+    for (const d of ds.slice(2)) {
+      const off = Math.abs((d.x - wa.x) * Math.cos(dir) - (d.z - wa.z) * Math.sin(dir));
+      expect(off, '線から はずれた所に 置かれました').toBeLessThan(0.35);
+      expect(Math.abs(wrap(d.yaw - dir)), 'ドミノが 線の向きを 向いていません').toBeLessThan(0.25);
+    }
+    let r0 = await runCount(page);
+    await tapDomino(page, hand, ds[0]);
+    let run = await waitRunEnd(page, r0);
+    expect(run.n, `まっすぐの列が とちゅうで止まりました(${run.n}/${ds.length})`).toBe(ds.length);
+    // 円(短辺の 15% と 25%)を 3/4 周 なぞる
+    for (const [rf, cy] of [[0.15, 0.3], [0.25, 0.6]] as const) {
+      await open(page, { dom: [], items: [] }); // まっさらな マットで
+      const h2 = await deviceHand(page);
+      const before = 0;
+      const c = S(page, isMobile(page) ? 0.5 : (rf < 0.2 ? 0.3 : 0.68), isMobile(page) ? cy : 0.5);
+      await h2.draw(circlePts(c, short * rf, 0.2, 0.2 + Math.PI * 1.5), 450);
       await page.waitForTimeout(300);
+      ds = (await doms(page)).slice(before);
+      const r = Math.round(short * rf);
+      expect(ds.length, `半径${r}pxの円で ドミノが ならびません`).toBeGreaterThan(8);
+      r0 = await runCount(page);
+      await tapDomino(page, h2, ds[0]);
+      run = await waitRunEnd(page, r0);
+      const fell = (await doms(page)).slice(before).filter((d) => d.st === 2).length;
+      console.log(`  半径${r}px の円を なぞる → ${ds.length}こ・たおれた ${fell}こ`);
+      expect(fell, `半径${r}pxの円が とちゅうで止まりました`).toBe(ds.length);
     }
-    await expect.poll(async () => (await events(page)).filter((e) => e.type === 'regrab').length, { message: '落とした荷物が拾えません' }).toBeGreaterThan(reg0);
-    await hand.release();
-    // そっと歩けば、8こでも落とさずに遠くの家まで行ける(流れ星で ゆれた分は数えない)
-    await open(page, 262);
-    await start(page);
-    hand = await deviceHand(page);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-    await expect.poll(async () => (await player(page)).stack.length, { timeout: 15_000 }).toBe(8);
-    const hs = (await houses(page)).filter((h) => h.ready).sort((a, b) => sdist(POST, b.door) - sdist(POST, a.door));
-    const t0 = Date.now();
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), hs[0].door, { smooth: true, arrive: 3.5, maxMs: 40_000 });
-    const ev = await events(page);
-    const sway = ev.filter((e) => e.type === 'drop' && e.why === 'sway');
-    const nearImpacts = ev.filter((e) => e.type === 'impact' && (e.d ?? 99) < 5);
-    const own = sway.filter((d) => !nearImpacts.some((m) => d.t - m.t >= 0 && d.t - m.t < 2.5));
-    console.log(`  8こで そっと ${hs[0].name}さんの家へ(${((Date.now() - t0) / 1000).toFixed(1)}秒): ゆれで落とした ${sway.length}(流れ星のせいでないもの ${own.length})・近くに落ちた流れ星 ${nearImpacts.length}`);
-    expect(own.length, 'そっと歩いても 8この荷物を落とします').toBe(0);
-    await hand.release();
   });
 
-  test('ふえる: ♥6で かえるさんが ひっこしてきて、♥15で荷台が4こになる。再読み込みしても残る', async ({ page }) => {
-    test.setTimeout(180_000);
-    await open(page, 4);
-    expect((await houses(page))[3].active, '♥4なのに かえるさんが もう住んでいます').toBeFalsy();
-    await start(page);
-    const hand = await deviceHand(page);
-    await oneTrip(page, hand);
-    await expect.poll(async () => (await events(page)).some((e) => e.type === 'movein' && e.id === 3), { message: 'かえるさんが ひっこしてきません' }).toBeTruthy();
-    await expect.poll(async () => (await houses(page))[3].ready, { timeout: 5000 }).toBeTruthy();
-    await expect(page.locator('#toast')).toContainText('かえる');
-    const obst = await gt<Obst[]>(page, 'obstacles');
-    expect(obst.filter((o) => o.k === 'house').length, '新しい家に ぶつかれません').toBe(4);
-    // 新しい家あての荷物も ポストに来る
-    let saw3 = false;
-    for (let i = 0; i < 4 && !saw3; i++) {
-      saw3 = (await gt<{ queue: Box[] }>(page, 'post')).queue.some((q) => q.to === 3) || (await player(page)).stack.some((b) => b.to === 3);
-      if (!saw3) await oneTrip(page, hand);
-    }
-    expect(saw3, 'かえるさんあての荷物が来ません').toBeTruthy();
-    // ♥15 まで
-    for (let i = 0; i < 6 && (await gt<number>(page, 'hearts')) < 15; i++) await oneTrip(page, hand);
-    expect(await gt<number>(page, 'hearts')).toBeGreaterThanOrEqual(15);
-    expect(await gt<number>(page, 'cap'), '♥15なのに 荷台が ひろがりません').toBe(4);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2 });
-    await expect.poll(async () => (await player(page)).stack.length, { message: '4こ積めません' }).toBe(4);
-    const st = await gt<Stats>(page, 'stats');
-    console.log(`  ♥${st.hearts}・届けた ${st.delivered}こ・いちばんの れんぞく ${st.best}`);
-    await hand.release();
-    // 再読み込み
-    await page.reload();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('title');
-    const st2 = await gt<Stats>(page, 'stats');
-    expect(st2.hearts, '♥が保存されていません').toBe(st.hearts);
-    expect(st2.delivered).toBe(st.delivered);
-    expect((await houses(page))[3].active, 'かえるさんの家が 保存されていません').toBeTruthy();
-    await expect(page.locator('#b-start')).toHaveText('つづきから配達');
-    await expect(page.locator('#t-prog')).toContainText(`♥${st.hearts}`);
-  });
-
-  test('流れ星: ♥28までは ふらない。赤い輪が1.5秒以上前に出て、にげれば当たらない。止まっていると当たって荷物を落とす。かけらで+3♥', async ({ page }) => {
-    test.setTimeout(240_000);
-    // ♥20: ふらない
-    await open(page, 20);
-    await start(page);
-    await page.waitForTimeout(12_000);
-    expect((await events(page)).filter((e) => e.type === 'meteor').length, '♥28より前に流れ星が ふりました').toBe(0);
-    // ♥120: 4こ積んで、止まって待つ → いつか当たる
-    await open(page, 120);
-    await start(page);
-    let hand = await deviceHand(page);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), dirOf(30, 300), { arrive: 1, smooth: true });
-    await hand.release();
-    const hitAt = Date.now();
-    await expect.poll(async () => (await events(page)).some((e) => e.type === 'impact' && e.effect === 'hit'), { timeout: 90_000, intervals: [500], message: '止まっていても 流れ星に当たりません' }).toBeTruthy();
-    const ev = await events(page);
-    const hit = ev.find((e) => e.type === 'impact' && e.effect === 'hit')!;
-    console.log(`  止まって待つと ${((Date.now() - hitAt) / 1000).toFixed(0)}秒で当たった`);
-    // 荷物がなくても当たる。荷物があれば落とす
-    void hit;
-    // かけら: 落ちた場所に出る。拾うと +3
-    await expect.poll(async () => (await gt<unknown[]>(page, 'frags')).length, { timeout: 30_000, message: '流れ星のかけらが ありません' }).toBeGreaterThanOrEqual(1);
-    const fr = await gt<{ p: V3; life: number }[]>(page, 'frags');
-    const impacts = (await events(page)).filter((e) => e.type === 'impact') as (Ev & { p: V3 })[];
-    for (const f of fr) expect(impacts.some((m) => sdist(m.p, f.p) < 0.01), 'かけらが 流れ星の落ちた所に ありません').toBeTruthy();
-    const hs = await houses(page);
-    for (const m of impacts) {
-      expect(sdist(m.p, POST), 'ポストに流れ星が落ちました').toBeGreaterThan(2.9);
-      for (const h of hs.filter((x) => x.active)) expect(sdist(m.p, h.p), `${h.name}さんの家に流れ星が落ちました`).toBeGreaterThan(2.3);
-    }
-    hand = await deviceHand(page);
-    const h0 = await gt<number>(page, 'hearts');
-    const near = fr.sort((a, b) => a.life - b.life).pop()!;
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), near.p, { arrive: 0.4, maxMs: 12_000 });
-    await expect.poll(async () => (await events(page)).filter((e) => e.type === 'frag').length, { message: 'かけらが拾えません' }).toBeGreaterThanOrEqual(1);
-    expect(await gt<number>(page, 'hearts')).toBeGreaterThanOrEqual(h0 + 3);
-    await hand.release();
-    // 荷物を積んで止まっている → 当たると落とす
-    await open(page, 120);
-    await start(page);
-    hand = await deviceHand(page);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-    await expect.poll(async () => (await player(page)).stack.length, { timeout: 10_000 }).toBe(6);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), dirOf(30, 300), { arrive: 1, smooth: true });
-    await hand.release();
-    await expect.poll(async () => (await events(page)).some((e) => e.type === 'impact' && e.effect === 'hit'), { timeout: 90_000, intervals: [500] }).toBeTruthy();
-    const ev2 = await events(page);
-    const h2 = ev2.find((e) => e.type === 'impact' && e.effect === 'hit')!;
-    const drops = ev2.filter((e) => e.type === 'drop' && e.why === 'meteor' && Math.abs(e.t - h2.t) < 0.05);
-    console.log(`  6こ積んで当たった: その場で落とした ${drops.length}こ・目が回る ${(await player(page)).stun.toFixed(2)}`);
-    expect(drops.length, '流れ星に当たっても 荷物を落としません').toBe(2);
-    // にげる: 赤い輪を見てから 走って にげれば当たらない
-    await open(page, 200);
-    await start(page);
-    hand = await deviceHand(page);
-    const t0 = Date.now();
-    let warned = 0, close = 0, threats = 0, minWarn = 9;
-    const seen = new Set<string>();
-    let ix = 0, iy = 0;
-    while (Date.now() - t0 < 60_000) {
-      const s = await snap(page);
-      const threat = s.mets.filter((m) => sdist(s.pl.p, m.p) < 3.2);
-      for (const m of s.mets) { const key = m.p.map((x) => x.toFixed(3)).join(); if (!seen.has(key)) { seen.add(key); warned++; minWarn = Math.min(minWarn, m.T - m.t); const d = sdist(s.pl.p, m.p); if (d < 1.6) close++; if (d < 3.2) threats++; } }
-      if (threat.length) {
-        let away: V3 = [0, 0, 0];
-        for (const m of threat) away = add(away, sc(norm(tang(s.pl.p, sub(s.pl.p, m.p))), 3.2 - sdist(s.pl.p, m.p)));
-        const d = norm(away); ix = dot(d, s.fr.r); iy = dot(d, s.fr.f);
-      } else { ix *= 0.8; iy *= 0.8; }
-      await hand.go(ix, iy);
-      await page.waitForTimeout(150); // 人の反応(見てから 0.15秒)
-    }
-    await hand.release();
-    const ev3 = await events(page);
-    const hits3 = ev3.filter((e) => e.type === 'impact' && e.effect === 'hit').length;
-    console.log(`  にげながら60秒: 流れ星 ${warned}こ(3m以内 ${threats}こ・足もと ${close}こ)・当たった ${hits3}・輪が出てから落ちるまで 最短 ${minWarn.toFixed(2)}秒`);
-    expect(threats, '近くに流れ星が来ません').toBeGreaterThanOrEqual(3);
-    expect(close, '足もとをねらう流れ星が来ません').toBeGreaterThanOrEqual(1);
-    expect(hits3, 'にげても 流れ星に当たります').toBe(0);
-    expect(minWarn, '赤い輪が出てから すぐ落ちます').toBeGreaterThan(1.4);
-  });
-
-  test('おいそぎ便: 金の荷物を時間内に届けると +5♥', async ({ page }) => {
-    test.setTimeout(6 * 60_000);
-    await open(page, 16);
-    await start(page);
-    const hand = await deviceHand(page);
-    let got: Ev | undefined;
-    for (let i = 0; i < 10 && !got; i++) {
-      const obst = await gt<Obst[]>(page, 'obstacles');
-      await walkTo(page, hand, obst, POST, { arrive: 2.2 });
-      await expect.poll(async () => (await player(page)).stack.length, { timeout: 8000 }).toBe(await gt<number>(page, 'cap'));
-      const pl = await player(page);
-      const ex = pl.stack.find((b) => b.express);
-      if (ex) {
-        console.log(`  おいそぎ便: ${ex.to}番の家へ・のこり ${ex.left.toFixed(1)}秒`);
-        expect(ex.left, '時間が短すぎます').toBeGreaterThan(10);
-        const h = (await houses(page))[ex.to];
-        await walkTo(page, hand, obst, h.door, { arrive: 0.8, maxMs: 40_000, until: (s) => !s.pl.stack.some((b) => b.express) });
-        await page.waitForTimeout(800);
-        got = (await events(page)).filter((e) => e.type === 'deliver' && e.express).pop();
-      }
-      await oneTrip(page, hand);
-    }
-    expect(got, 'おいそぎ便が来ません').toBeTruthy();
-    console.log(`  届いた: 間にあった ${got!.onTime}・♥+${got!.gain}(れんぞく ${got!.k})`);
-    expect(got!.onTime, 'まっすぐ向かったのに 間にあいません').toBeTruthy();
-    expect(got!.gain, 'おいそぎ便の +5 が つきません').toBe(got!.k! + 5);
-    await hand.release();
-  });
-
-  test('ほしまつり: ♥300で 花火と寄せ書き。そのあとも配達をつづけられ、記録に残る', async ({ page }) => {
-    test.setTimeout(150_000);
-    await open(page, 292);
-    expect((await houses(page)).every((h) => h.active), '♥292で 8けん そろっていません').toBeTruthy();
-    await start(page);
-    const hand = await deviceHand(page);
-    await oneTrip(page, hand);
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 10_000, message: 'ほしまつりに なりません' }).toBe('finale');
-    await hand.release();
-    await expect(page.locator('#fin')).toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(1500);
-    expect(await gt<number>(page, 'particles'), '花火が上がりません').toBeGreaterThan(100);
-    await expect(page.locator('#yose span')).toHaveCount(8);
-    await page.locator('#b-cont').click();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('play');
-    await expect(page.locator('#next-t')).toContainText('どこまでも');
-    await page.reload();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('title');
-    expect((await gt<Stats>(page, 'stats')).finale).toBeTruthy();
-    await expect(page.locator('#t-prog')).toContainText('ほしまつり済み');
-  });
-
-  test('ひとやすみ: 止めている間は ボクも流れ星も止まり、つづけると続きから', async ({ page }, info) => {
-    test.skip(info.project.name !== 'desktop', 'desktop で確かめる');
-    await open(page, 60);
-    await start(page);
-    const hand = keyHand(page);
-    await hand.go(0, 1); await page.waitForTimeout(600);
-    await page.keyboard.press('Escape');
-    await expect.poll(() => gt<string>(page, 'state')).toBe('pause');
-    const a = await player(page);
-    await page.waitForTimeout(1500);
-    const b = await player(page);
-    expect(sdist(a.p, b.p), '止めているのに 進んでいます').toBeLessThan(0.01);
-    await hand.go(0, 0);
-    await page.locator('#b-resume').click();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('play');
-    await hand.go(0, -1); await page.waitForTimeout(600); await hand.go(0, 0);
-    expect(sdist(b.p, (await player(page)).p), 'つづけても 歩けません').toBeGreaterThan(1);
-  });
-
-  // 長さと むずかしさ: 人くらいの手(そっと動かす・0.1秒おくれ)で、はじめから ほしまつりまで
-  for (const [from, to] of [[0, 90], [90, 300]] as const) {
-    test(`長さ: ♥${from} → ♥${to} を 音ありで遊ぶ`, async ({ page }, info) => {
-      test.skip(info.project.name !== 'desktop', 'desktop で測る');
-      test.setTimeout(10 * 60_000);
-      const errors: string[] = [];
-      page.on('pageerror', (e) => errors.push(e.message));
-      page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-      await open(page, from, true);
-      await start(page);
-      const hand = await mouseHand(page);
-      const t0 = Date.now();
-      const log: string[] = [];
-      let trips = 0;
-      while ((await gt<number>(page, 'hearts')) < to && Date.now() - t0 < 9 * 60_000) {
-        const h0 = await gt<number>(page, 'hearts'), d0 = (await gt<Stats>(page, 'stats')).drops;
-        const ts = Date.now();
-        await oneTrip(page, hand, { smooth: true, lag: 100 });
-        if ((await gt<string>(page, 'state')) === 'finale') break;
-        trips++;
-        const st = await gt<Stats>(page, 'stats');
-        log.push(`${trips}回目: 荷台${await gt<number>(page, 'cap')} ♥${h0}→${st.hearts} ${((Date.now() - ts) / 1000).toFixed(0)}秒 落とした${st.drops - d0}`);
-      }
-      const st = await gt<Stats>(page, 'stats');
-      console.log(`  ${log.join('\n  ')}`);
-      console.log(`  ♥${from}→${st.hearts}: ${((Date.now() - t0) / 60000).toFixed(1)}分・${trips}往復・落とした${st.drops}・かけら${st.frags}`);
-      expect(st.hearts, `${to} まで届きません`).toBeGreaterThanOrEqual(to);
-      expect(errors, '遊んでいる間に エラーが出ました').toEqual([]);
-      if (to === 300) expect(await gt<string>(page, 'state')).toBe('finale');
-      await hand.release();
-    });
-  }
-
-  test('スマホ: 画面に収まり、指で押せる大きさで、ボクが 指や表示に かくれない', async ({ page }, info) => {
-    test.skip(info.project.name !== 'mobile', 'スマホで確かめる');
+  // 「自分のミスだ」と分かる: すきまが広いと止まり、止まった所に ? が出る
+  test('すきま: 列の すきまが広いと そこで止まり、止まった所に「?」が出る。すきまを うめると 最後まで たおれる', async ({ page }) => {
     test.setTimeout(90_000);
-    await open(page, 262);
-    const vp = page.viewportSize()!;
-    const inside = (b: { x: number; y: number; width: number; height: number } | null) =>
-      !!b && b.x >= -0.5 && b.y >= -0.5 && b.x + b.width <= vp.width + 0.5 && b.y + b.height <= vp.height + 0.5;
-    for (const id of ['#b-start', '#b-how']) {
-      const b = await page.locator(id).boundingBox();
-      expect(inside(b), `${id} が画面からはみ出しています`).toBeTruthy();
-      expect(Math.min(b!.width, b!.height), `${id} が小さすぎます`).toBeGreaterThanOrEqual(44);
+    const A = lay(seg(-4.5, 2, -1, 2), 1), B = lay(seg(0.6, 2, 4.5, 2), 1); // 同じ線の とちゅうに 1.6m の すきま
+    await open(page, { dom: [...A, ...B], items: [] });
+    const hand = await deviceHand(page);
+    const ds = await doms(page);
+    let r0 = await runCount(page);
+    await tapDomino(page, hand, ds[0]);
+    const run = await waitRunEnd(page, r0);
+    console.log(`  すきま 1.6m: ${run.n}/${ds.length}こ たおれた`);
+    expect(run.n, 'すきまを こえて たおれました').toBe(A.length);
+    const stop = await gt<{ x: number; z: number } | null>(page, 'stop');
+    expect(stop, '止まった所が わかりません').not.toBeNull();
+    expect(Math.abs(stop!.x - (-0.2)), '止まった所の しるしが すきまに ありません').toBeLessThan(0.6);
+    await expect(page.locator('#stopm .q')).toBeVisible();
+    {
+      const q = (await page.locator('#stopm .q').boundingBox())!, s = await scr(page, -0.2, 2, 0.8);
+      expect(Math.hypot(q.x + q.width / 2 - s.x, q.y + q.height / 2 - s.y), '「?」が すきまの所に ありません').toBeLessThan(30);
     }
-    await page.locator('#b-start').tap();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('play');
-    await page.waitForTimeout(1500);
-    for (const id of ['#b-pause', '#snd', '#b-rl', '#b-rr']) {
-      const b = await page.locator(id).boundingBox();
-      expect(inside(b), `${id} が画面からはみ出しています`).toBeTruthy();
-      expect(Math.min(b!.width, b!.height), `${id} が小さすぎます`).toBeGreaterThanOrEqual(44);
-    }
-    const hand = await touchHand(page);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-    await expect.poll(async () => (await player(page)).stack.length, { timeout: 15_000 }).toBe(8);
-    await page.waitForTimeout(500);
-    const cargo = (await page.locator('#cargo').boundingBox())!;
-    const rot = (await page.locator('#rot').boundingBox())!;
-    expect(inside(cargo), '荷台の表示が はみ出しています').toBeTruthy();
-    const apart = (a: typeof cargo, b: typeof cargo) => a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
-    expect(apart(cargo, rot), '荷台の表示と ⟲⟳ が重なっています').toBeTruthy();
-    const ps = await gt<{ x: number; y: number }>(page, 'playerScreen');
-    const top = (await page.locator('#next').boundingBox())!;
-    console.log(`  ボクの位置: (${ps.x.toFixed(0)}, ${ps.y.toFixed(0)})・荷台の表示の上 ${cargo.y.toFixed(0)}・画面 ${vp.width}x${vp.height}`);
-    expect(ps.y, 'ボクが 荷台の表示に かくれます').toBeLessThan(cargo.y - 60);
-    expect(ps.y, 'ボクが 上の表示に かくれます').toBeGreaterThan(top.y + top.height + 60);
-    await hand.release();
+    // すきまを なぞって うめる(止まったドミノから 次の列へ)
+    await page.keyboard.press('r');
+    await page.waitForTimeout(1600);
+    await hand.draw([await scr(page, -1, 2), await scr(page, 0.7, 2)], 300);
+    await page.waitForTimeout(300);
+    const n2 = (await doms(page)).length;
+    console.log(`  すきまに ${n2 - ds.length}こ 足した`);
+    expect(n2 - ds.length).toBeGreaterThanOrEqual(2);
+    r0 = await runCount(page);
+    await tapDomino(page, hand, (await doms(page))[0]);
+    const run2 = await waitRunEnd(page, r0);
+    expect(run2.n, 'すきまを うめても 最後まで たおれません').toBe(n2);
   });
 
-  test('スマホで重くない(CPU 4倍遅くても、8こ積んで流れ星がふる中で 30fps 以上)', async ({ page }, info) => {
+  // わかれ道: 列のとちゅうの ドミノから なぞりはじめると、そこから 2本に わかれる
+  test('わかれ道: 列のとちゅうから 横へ なぞると、そこで 2本に わかれて 両方 たおれる', async ({ page }) => {
+    test.setTimeout(90_000);
+    await open(page, { dom: lay(seg(-4.5, 3, 4.5, 3), 1), items: [] });
+    const hand = await deviceHand(page);
+    const main = await doms(page);
+    const mid = main[Math.floor(main.length / 2)];
+    // とちゅうの ドミノから 真横(画面の上)へ なぞる。人は 直角に なぞる
+    const p0 = await scr(page, mid.x, mid.z), p1 = await scr(page, mid.x, mid.z - 4.5);
+    await hand.draw([p0, p1], 400);
+    await page.waitForTimeout(300);
+    const all = await doms(page);
+    const br = all.filter((d) => !main.some((m) => m.id === d.id));
+    console.log(`  わかれ道: ${br.length}こ(最初の1こは 本線から ${(Math.abs(wrap(br[0].yaw - mid.yaw0)) * 180 / Math.PI).toFixed(0)}度)`);
+    expect(br.length).toBeGreaterThanOrEqual(6);
+    const r0 = await runCount(page);
+    await tapDomino(page, hand, main[0]);
+    const run = await waitRunEnd(page, r0);
+    const after = await doms(page);
+    console.log(`  たおれた ${run.n}/${after.length}・わかれ ${run.branches}`);
+    expect(run.branches, '2本に わかれていません').toBeGreaterThanOrEqual(1);
+    expect(after.every((d) => d.st === 2), '本線か わかれ道が とちゅうで止まりました').toBeTruthy();
+  });
+
+  // しかけ: 列のそばに置くと、波が通ったときに動く
+  test('しかけ: 列のそばの ベル・かぼちゃ・花火が 波で動き、ボール坂の ボールが はなれた列を たおす', async ({ page }) => {
+    test.setTimeout(120_000);
+    const A = lay(seg(-4.5, 0, 4.5, 0), 1);
+    const B = lay(seg(3.4, 5, 3.4, 8), 2); // ボールの通り道に ならぶ 列
+    const its = [
+      ['bell', -3.6, -0.9, 0, 0], ['bell', -2.4, 0.9, 0, 1], ['pump', -1.2, -1.0, 0, 0], ['pump', 0.2, 1.0, 0, 0],
+      ['fire', 1.6, -0.9, 0, 0], ['ramp', 3.4, 1.0, 0, 0], ['pump', 12, 6, 0, 0],
+    ].map(([k, x, z, y, n]) => [k, (x as number) * 1000, (z as number) * 1000, (y as number) * 1000, n]);
+    // ボール坂は +z(手前)へ。B の列は x=3.4, z=5〜8 を 手前へ(+z)
+    await open(page, { dom: [...A, ...B], items: its, unl: { bell: true, pump: true, fire: true, ramp: true } });
+    const hand = await deviceHand(page);
+    const ds = await doms(page);
+    // 置いたしかけ(タップで): かぼちゃを えらんで、何もない所に置く
+    await page.locator('#t-item').click();
+    await page.locator('#tray [data-k="pump"]').click();
+    expect(await gt<string>(page, 'tool')).toBe('item');
+    const n0 = (await items(page)).length;
+    await hand.tap(await scr(page, -2.5, -4));
+    await expect.poll(async () => (await items(page)).length, { message: 'タップで しかけが 置けません' }).toBe(n0 + 1);
+    // ドミノの上には置けない
+    await hand.tap(await scr(page, ds[3].x, ds[3].z));
+    await page.waitForTimeout(200);
+    expect((await items(page)).length, 'ドミノの上に しかけが 置けました').toBe(n0 + 1);
+    await page.locator('#t-draw').click();
+    const r0 = await runCount(page);
+    await tapDomino(page, hand, ds[0]);
+    await expect.poll(async () => (await events(page)).some((e) => e.type === 'boom'), { timeout: 20_000, message: '花火が 上がりません' }).toBeTruthy();
+    const run = await waitRunEnd(page, r0);
+    const it = await items(page);
+    console.log(`  ベル ${run.bells}・かぼちゃ ${run.pumps}・花火 ${run.fires}・ボールで たおした ${run.ballHits}・ぜんぶで ${run.n}こ`);
+    expect(run.bells, 'そばの ベルが鳴りません').toBe(2);
+    expect(run.pumps, 'そばの かぼちゃが ともりません').toBe(2);
+    expect(it.filter((i) => i.k === 'pump' && i.on).length).toBe(2);
+    expect(it.find((i) => i.x === 12)!.on, 'はなれた かぼちゃまで ともりました').toBeFalsy();
+    expect(run.fires).toBe(1);
+    expect(run.ballHits, 'ボールが 列に当たりません').toBeGreaterThanOrEqual(1);
+    const after = await doms(page);
+    expect(after.slice(A.length).every((d) => d.st === 2), 'ボールで はなれた列が たおれません').toBeTruthy();
+    expect(run.n).toBe(ds.length);
+    // たてなおすと しかけも もどる
+    await page.keyboard.press('r');
+    await expect.poll(async () => (await items(page)).every((i) => !i.on && (!i.ball || i.ball.ph === 'rest')), { timeout: 5000, message: 'しかけが もとに もどりません' }).toBeTruthy();
+  });
+
+  test('けす・もどす・保存: 🧽でなぞると消え、↶で もどり、再読み込みしても コースと記録が残る', async ({ page }) => {
+    test.setTimeout(90_000);
+    await open(page, { dom: [], items: [], best: 0 });
+    const hand = await deviceHand(page);
+    await hand.draw([S(page, 0.2, 0.55), S(page, 0.8, 0.55)], 500);
+    await page.waitForTimeout(300);
+    const n1 = (await doms(page)).length;
+    await hand.draw([S(page, 0.2, 0.35), S(page, 0.7, 0.35)], 500);
+    await page.waitForTimeout(300);
+    const n2 = (await doms(page)).length;
+    expect(n2).toBeGreaterThan(n1);
+    // ↶ で 2本目が消える
+    await page.locator('#b-undo').click();
+    expect((await doms(page)).length, '↶ で ひとつ前に もどりません').toBe(n1);
+    // 🧽 で 線の まんなかを なぞる
+    await page.locator('#t-erase').click();
+    const ds = await doms(page);
+    const m = ds[Math.floor(ds.length / 2)];
+    const c = await scr(page, m.x, m.z);
+    await hand.draw([{ x: c.x, y: c.y - 60 }, { x: c.x, y: c.y + 60 }], 300);
+    await page.waitForTimeout(200);
+    const n3 = (await doms(page)).length;
+    console.log(`  ならべた ${n1}こ → 🧽で ${n1 - n3}こ けした`);
+    expect(n1 - n3, '🧽で なぞっても 消えません').toBeGreaterThanOrEqual(1);
+    expect(n1 - n3, '🧽で 消えすぎます').toBeLessThanOrEqual(4);
+    await page.locator('#b-undo').click();
+    expect((await doms(page)).length, '消したのが ↶ で もどりません').toBe(n1);
+    // たおして 記録を作る
+    await page.locator('#t-draw').click();
+    const r0 = await runCount(page);
+    await tapDomino(page, hand, (await doms(page))[0]);
+    const run = await waitRunEnd(page, r0);
+    expect(run.n).toBe(n1);
+    await page.waitForTimeout(600);
+    const before = await doms(page);
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => !!(window as any).gameTest)).toBeTruthy();
+    const after = await doms(page);
+    expect(after.length, 'ならべたドミノが 保存されていません').toBe(before.length);
+    for (let i = 0; i < after.length; i++) expect(Math.hypot(after[i].x - before[i].x, after[i].z - before[i].z)).toBeLessThan(0.01);
+    expect(after.every((d) => d.st === 0), '読みなおしたら 立っている').toBeTruthy();
+    expect((await gt<{ best: number }>(page, 'stats')).best, '記録が 保存されていません').toBe(n1);
+    await expect(page.locator('#cnt-b')).toContainText(String(n1));
+  });
+
+  test('ドミノの数: 持っている数より多くは ならばず、知らせが出る', async ({ page }) => {
+    await open(page, { dom: lay(seg(-3, 4, 3, 4), 1), items: [], stock: 20 });
+    expect(await gt<number>(page, 'left')).toBe(20 - 13);
+    const hand = await deviceHand(page);
+    await hand.draw([S(page, 0.15, 0.3), S(page, 0.85, 0.3)], 500);
+    await page.waitForTimeout(300);
+    expect((await doms(page)).length, '持っている数より 多く ならびました').toBe(20);
+    await expect(page.locator('#toasts')).toContainText('たりない');
+    await expect(page.locator('#stock')).toHaveText('あと0');
+  });
+
+  test('おだい: いっきに60こ たおすと ベルが つかえるようになり、ドミノが ふえる', async ({ page }) => {
+    test.setTimeout(90_000);
+    const A = lay(serp(-4, 4, -8, 6, 3), 1);
+    await open(page, { dom: A, items: [], mi: 2, stock: 250 });
+    expect(A.length).toBeGreaterThan(60);
+    expect((await gt<{ text: string }>(page, 'mission')).text).toContain('60');
+    await expect(page.locator('#t-item-lk')).toBeVisible();
+    const hand = await deviceHand(page);
+    const r0 = await runCount(page);
+    await tapDomino(page, hand, (await doms(page))[0]);
+    // とちゅう(60こ目)で クリアになる
+    await expect.poll(async () => (await gt<{ bell: boolean }>(page, 'unlocked')).bell, { timeout: 20_000, message: 'ベルが つかえるように なりません' }).toBeTruthy();
+    const mid = await gt<Run | null>(page, 'run');
+    console.log(`  クリアした瞬間: ${mid ? mid.n : '終わったあと'}こ目`);
+    await expect(page.locator('#toasts')).toContainText('ベル');
+    await waitRunEnd(page, r0);
+    expect(await gt<number>(page, 'stock')).toBe(350);
+    expect((await gt<{ i: number }>(page, 'mission')).i).toBe(3);
+    await expect(page.locator('#t-item-lk')).toBeHidden();
+    await page.locator('#t-item').click();
+    await expect(page.locator('#tray [data-k="bell"]')).not.toHaveClass(/lock/);
+    await expect(page.locator('#tray [data-k="pump"]')).toHaveClass(/lock/);
+  });
+
+  // はじめから おだいを 順に、画面の操作だけで クリアしていく(音あり)。長さも はかる
+  test('おだいを 順に: はじめから 画面の操作だけで ボール坂のおだいまで クリアできる(音あり)', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop で遊ぶ');
+    test.setTimeout(9 * 60_000);
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    await open(page); // はじめての人と同じ(音は オン)
+    expect(await gt<boolean>(page, 'sound')).toBeTruthy();
+    const hand = mouseHand(page);
+    const t0 = Date.now();
+    const log: string[] = [];
+    const mi = async () => (await gt<{ i: number; text: string }>(page, 'mission'));
+    const lap = async (what: string) => { log.push(`${((Date.now() - t0) / 1000).toFixed(0)}秒: ${what} → つぎ「${(await mi()).text}」`); console.log(`  ${log[log.length - 1]}`); };
+    const fall = async (d: Dom) => { const r0 = await runCount(page); await tapDomino(page, hand, d); return waitRunEnd(page, r0, 90_000); };
+    const reset = async () => { await page.keyboard.press('r'); await expect.poll(async () => gt<string>(page, 'state'), { timeout: 8000 }).toBe('idle'); };
+    const pick = async (k: string) => { await page.locator('#t-item').click(); await page.locator(`#tray [data-k="${k}"]`).click(); };
+    // 1) おてほんを たおす
+    await page.waitForTimeout(1500);
+    await fall((await doms(page))[0]);
+    await lap('おてほんを たおした');
+    expect((await mi()).i).toBe(1);
+    // 2) なぞって 30こ(空いている 右の ほうへ 行って、大きな四角を なぞる)
+    await reset();
+    await panTo(page, 14, -2);
+    const box = [S(page, 0.18, 0.25), S(page, 0.82, 0.25), S(page, 0.82, 0.78), S(page, 0.18, 0.78), S(page, 0.18, 0.4)];
+    const nb = (await doms(page)).length;
+    await hand.draw(box, 600);
+    await page.waitForTimeout(400);
+    const loop = (await doms(page)).slice(nb);
+    await lap(`四角を なぞった(${loop.length}こ)`);
+    expect((await mi()).i).toBe(2);
+    // 3) いっきに 60こ
+    let r = await fall(loop[0]);
+    await lap(`四角を たおした(${r.n}こ)`);
+    expect(r.n).toBeGreaterThanOrEqual(60);
+    expect((await mi()).i).toBe(3);
+    // 4) ベルを 3つ、四角の 外がわに 置く
+    await reset();
+    await pick('bell');
+    const sideOf = (i: number, out = 1.0) => {
+      const d = loop[i], cx = loop.reduce((s, q) => s + q.x, 0) / loop.length, cz = loop.reduce((s, q) => s + q.z, 0) / loop.length;
+      const nx = -Math.cos(d.yaw0), nz = Math.sin(d.yaw0); // 進む向きの 横
+      const sgn = (d.x + nx - cx) ** 2 + (d.z + nz - cz) ** 2 > (d.x - cx) ** 2 + (d.z - cz) ** 2 ? 1 : -1;
+      return [d.x + nx * out * sgn, d.z + nz * out * sgn] as const;
+    };
+    for (const i of [8, 20, 32]) { const p = sideOf(i); await hand.tap(await scr(page, p[0], p[1])); await page.waitForTimeout(150); }
+    expect((await items(page)).filter((x) => x.k === 'bell').length, 'ベルが 置けません').toBe(4);
+    await page.locator('#t-draw').click();
+    r = await fall(loop[0]);
+    await lap(`ベル ${r.bells}こ 鳴った`);
+    expect(r.bells).toBeGreaterThanOrEqual(3);
+    expect((await mi()).i).toBe(4);
+    // 5) わかれ道: 四角の とちゅうから 内がわへ なぞる
+    await reset();
+    {
+      const d = loop[Math.floor(loop.length * 0.6)];
+      const cx = loop.reduce((s, q) => s + q.x, 0) / loop.length, cz = loop.reduce((s, q) => s + q.z, 0) / loop.length;
+      const p0 = await scr(page, d.x, d.z), p1 = await scr(page, d.x + (cx - d.x) * 0.6, d.z + (cz - d.z) * 0.6);
+      const n0 = (await doms(page)).length;
+      await hand.draw([p0, p1], 450);
+      const nb = (await doms(page)).slice(n0);
+      console.log(`  わかれ道を なぞった: ${nb.length}こ・元 (${d.x.toFixed(2)},${d.z.toFixed(2)}) 向き${(d.yaw0 * 57.3).toFixed(0)}・最初 ${nb[0] ? `(${nb[0].x.toFixed(2)},${nb[0].z.toFixed(2)}) 向き${(nb[0].yaw0 * 57.3).toFixed(0)}` : 'なし'}`);
+    }
+    r = await fall(loop[0]);
+    await lap(`わかれ道 ${r.branches}`);
+    expect((await mi()).i).toBe(5);
+    // 6) かぼちゃ 5つ
+    await reset();
+    await pick('pump');
+    for (const i of [4, 14, 24, 36, 44, 50]) { const p = sideOf(i, 1.05); await hand.tap(await scr(page, p[0], p[1])); await page.waitForTimeout(150); }
+    await page.locator('#t-draw').click();
+    r = await fall(loop[0]);
+    await lap(`かぼちゃ ${r.pumps}こ`);
+    expect(r.pumps).toBeGreaterThanOrEqual(5);
+    expect((await mi()).i).toBe(6);
+    // 7) 花火 3つ
+    await reset();
+    await pick('fire');
+    for (const i of [11, 27, 40]) { const p = sideOf(i, 0.9); await hand.tap(await scr(page, p[0], p[1])); await page.waitForTimeout(150); }
+    await page.locator('#t-draw').click();
+    r = await fall(loop[0]);
+    await lap(`花火 ${r.fires}こ`);
+    expect(r.fires).toBeGreaterThanOrEqual(3);
+    expect((await mi()).i).toBe(7);
+    // 8) ボール坂: 四角の 内がわに 内向きに置き、その先に 列を なぞる
+    await reset();
+    await pick('ramp');
+    {
+      const p = sideOf(14, -1.3), q = sideOf(14, -4);
+      const a = await scr(page, p[0], p[1]), b = await scr(page, q[0], q[1]);
+      await hand.draw([a, { x: a.x + (b.x - a.x) * 0.3, y: a.y + (b.y - a.y) * 0.3 }], 200); // ドラッグした向きへ ボールが ころがる
+      await page.locator('#t-draw').click();
+      // ボールの行き先に 横切る列
+      const dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz);
+      const ux = dx / l, uz = dz / l;
+      const c0 = [p[0] + ux * 5.5 - uz * 2, p[1] + uz * 5.5 + ux * 2], c1 = [p[0] + ux * 5.5 + uz * 2, p[1] + uz * 5.5 - ux * 2];
+      await hand.draw([await scr(page, c0[0], c0[1]), await scr(page, c1[0], c1[1])], 400);
+    }
+    expect((await items(page)).filter((x) => x.k === 'ramp').length, 'ボール坂が 置けません').toBe(1);
+    r = await fall(loop[0]);
+    await lap(`ボールで ${r.ballHits}こ`);
+    expect(r.ballHits).toBeGreaterThanOrEqual(1);
+    expect((await mi()).i).toBe(8);
+    console.log(`  はじめから ボール坂の おだいまで: ${((Date.now() - t0) / 60000).toFixed(1)}分・ドミノ ${await gt<number>(page, 'count')}/${await gt<number>(page, 'stock')}`);
+    expect(errors, '遊んでいる間に エラーが出ました').toEqual([]);
+  });
+
+  test('夜祭り: 1000こ いっきに たおすと 花火が上がり、そのあとも あそべる', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop で確かめる');
+    test.setTimeout(3 * 60_000);
+    // 1本の長い 行ったり来たり(1000こ以上)
+    const A = lay(serp(-24, 24, -26, 12, 4.6), 1);
+    expect(A.length).toBeGreaterThan(1000);
+    await open(page, { dom: A, items: [['pump', 0, -25000, 0, 0], ['pump', 5000, 16400, 0, 0]], mi: 10, stock: 1550, unl: { bell: true, pump: true, fire: true, ramp: true } });
+    const r0 = await runCount(page);
+    await page.keyboard.press('Space');
+    const run = await waitRunEnd(page, r0, 150_000);
+    console.log(`  ${run.n}こ を ${run.dur.toFixed(1)}秒で(1秒に ${(run.n / run.dur).toFixed(1)}こ)`);
+    expect(run.n).toBe(A.length);
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 8000, message: '夜祭りに なりません' }).toBe('finale');
+    await expect.poll(async () => (await events(page)).filter((e) => e.type === 'boom').length, { timeout: 8000 }).toBeGreaterThanOrEqual(3);
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 20_000 }).toBe('idle');
+    expect((await gt<{ fin: boolean }>(page, 'stats')).fin).toBeTruthy();
+    expect(await gt<number>(page, 'stock')).toBe(2000);
+    await expect(page.locator('#mis-t')).toContainText('じゆうに');
+    await page.keyboard.press('r');
+    await expect.poll(async () => (await doms(page)).every((d) => d.st === 0), { timeout: 8000 }).toBeTruthy();
+  });
+
+  test('カメラ: ✋ドラッグ・ホイール・キー・2本指で 見る場所を動かせ、たおれる所を おいかける', async ({ page }) => {
+    test.setTimeout(60_000);
+    await open(page, { dom: lay(seg(-2, 0, 28, 0), 1), items: [] });
+    const c0 = await gt<{ tx: number; tz: number; dist: number; yaw: number }>(page, 'cam');
+    if (isMobile(page)) {
+      // 2本指: ひろげると 近づき、ひねると まわる
+      const cdp = await page.context().newCDPSession(page);
+      const c = S(page, 0.5, 0.5);
+      const tp = (r: number, a: number) => [{ x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r, id: 1 }, { x: c.x - Math.cos(a) * r, y: c.y - Math.sin(a) * r, id: 2 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp(60, 0) } as any);
+      for (let i = 1; i <= 15; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp(60 + i * 5, i * 0.03) } as any); await page.waitForTimeout(16); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] } as any);
+      const c1 = await gt<{ dist: number; yaw: number }>(page, 'cam');
+      console.log(`  2本指: きょり ${c0.dist.toFixed(1)}→${c1.dist.toFixed(1)}・向き ${wrap(c1.yaw - c0.yaw).toFixed(2)}`);
+      expect(c1.dist, 'ピンチで 近づきません').toBeLessThan(c0.dist * 0.8);
+      expect(Math.abs(wrap(c1.yaw - c0.yaw)), 'ひねっても まわりません').toBeGreaterThan(0.3);
+      expect(Math.abs(wrap(c1.yaw - c0.yaw)), 'ひねった以上に まわります').toBeLessThan(0.6);
+      expect((await doms(page)).length, '2本指で ドミノが ならびました').toBe(lay(seg(-2, 0, 28, 0), 1).length);
+    } else {
+      await page.locator('#t-pan').click();
+      await mouseHand(page).draw([S(page, 0.6, 0.5), S(page, 0.4, 0.5)], 600);
+      const c1 = await gt<{ tx: number }>(page, 'cam');
+      expect(c1.tx - c0.tx, '✋で ドラッグしても 動きません').toBeGreaterThan(2);
+      await page.mouse.move(640, 360); await page.mouse.wheel(0, 400); await page.waitForTimeout(600);
+      expect((await gt<{ dist: number }>(page, 'cam')).dist, 'ホイールで 遠ざかりません').toBeGreaterThan(c0.dist * 1.2);
+      await page.keyboard.down('q'); await page.waitForTimeout(400); await page.keyboard.up('q'); await page.waitForTimeout(500);
+      expect(Math.abs((await gt<{ yaw: number }>(page, 'cam')).yaw - c0.yaw), 'Q で まわりません').toBeGreaterThan(0.4);
+      await page.locator('#t-draw').click();
+    }
+    // おいかける: 長い列を たおすと、カメラが 先頭について行く
+    if (isMobile(page)) await page.locator('#b-go').tap(); else await page.keyboard.press('Space');
+    await page.waitForTimeout(2600);
+    const f = await doms(page);
+    const front = f.filter((d) => d.st === 1);
+    const c2 = await gt<{ tx: number; tz: number }>(page, 'cam');
+    const fx = front.length ? front.reduce((s, d) => s + d.x, 0) / front.length : 99;
+    console.log(`  2.6秒後: たおれている先頭 x=${fx.toFixed(1)}・カメラ x=${c2.tx.toFixed(1)}`);
+    expect(Math.abs(c2.tx - fx), 'カメラが たおれている所を おいかけていません').toBeLessThan(3);
+  });
+
+  test('スマホ: 画面に収まり、ボタンは指で押せる大きさで、表示どうしが重ならない', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile', 'スマホで確かめる');
+    test.setTimeout(60_000);
+    await open(page);
+    const v = vp(page);
+    const inside = (b: { x: number; y: number; width: number; height: number } | null) => !!b && b.x >= -0.5 && b.y >= -0.5 && b.x + b.width <= v.width + 0.5 && b.y + b.height <= v.height + 0.5;
+    const apart = (a: any, b: any) => a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+    const ids = ['#t-draw', '#t-pan', '#t-item', '#t-erase', '#b-undo', '#b-go', '#b-cam', '#snd', '#b-help'];
+    const boxes: Record<string, any> = {};
+    for (const id of ids) {
+      const b = await page.locator(id).boundingBox();
+      boxes[id] = b;
+      expect(inside(b), `${id} が画面からはみ出しています`).toBeTruthy();
+      expect(Math.min(b!.width, b!.height), `${id} が小さすぎます`).toBeGreaterThanOrEqual(44);
+    }
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) expect(apart(boxes[ids[i]], boxes[ids[j]]), `${ids[i]} と ${ids[j]} が重なっています`).toBeTruthy();
+    const cnt = await page.locator('#cnt').boundingBox(), mis = await page.locator('#mis').boundingBox();
+    expect(apart(cnt, mis), '数取器と おだいが 重なっています').toBeTruthy();
+    expect(apart(mis, boxes['#b-help']), 'おだいと ？ が 重なっています').toBeTruthy();
+    expect(inside(mis), 'おだいが はみ出しています').toBeTruthy();
+    // おてほんの列が 上の表示にも 下のボタンにも かくれない
+    const ds = await doms(page);
+    for (const d of [ds[0], ds[ds.length - 1]]) {
+      const s = await scr(page, d.x, d.z, 0.5);
+      expect(s.y, 'おてほんの列が 上の表示に かくれます').toBeGreaterThan(mis!.y + mis!.height);
+      expect(s.y, 'おてほんの列が 下のボタンに かくれます').toBeLessThan(boxes['#t-draw'].y);
+    }
+    // しかけの トレイも はみ出さない
+    await page.locator('#t-item').tap();
+    const tr = await page.locator('#tray').boundingBox();
+    expect(inside(tr), 'しかけの トレイが はみ出しています').toBeTruthy();
+    for (const b of await page.locator('#tray .tb').all()) expect(Math.min((await b.boundingBox())!.width, (await b.boundingBox())!.height)).toBeGreaterThanOrEqual(44);
+    await page.locator('#t-item').tap();
+    // あそびかた
+    await page.locator('#b-help').tap();
+    await expect(page.locator('#help')).toBeVisible();
+    const hc = await page.locator('#help .card').boundingBox();
+    expect(hc!.width, 'あそびかたが はみ出しています').toBeLessThanOrEqual(v.width);
+    await page.locator('#b-hclose').tap();
+    await expect(page.locator('#help')).toBeHidden();
+  });
+
+  test('スマホで重くない(CPU 4倍遅くても、たくさんの列が いっせいに たおれ、花火が上がる中で 30fps 以上)', async ({ page }, info) => {
     test.skip(info.project.name !== 'mobile', 'スマホの設定で測る');
     test.setTimeout(2 * 60_000);
-    await open(page, 262);
-    await start(page);
-    const cdp = await page.context().newCDPSession(page);
-    const hand = await touchHand(page, cdp);
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-    await expect.poll(async () => (await player(page)).stack.length, { timeout: 15_000 }).toBe(8);
-    const hs = (await houses(page)).filter((h) => h.ready).sort((a, b) => sdist(POST, b.door) - sdist(POST, a.door));
-    await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), hs[1].door, { smooth: true, maxMs: 2500 });
-    const parts = await gt<number>(page, 'particles');
-    // 測っているあいだは gameTest を読まない。指を ゆっくり動かしつづける
-    const busy = (async () => {
-      const end = Date.now() + 3300;
-      let k = 0;
-      while (Date.now() < end) { await hand.go(Math.sin(k * 0.3) * 0.5, 0.6); k++; await page.waitForTimeout(90); }
-    })();
-    const [perf] = await Promise.all([measureFps(page, 3000), busy]);
-    console.log(`  重さ: 平均${perf.fps}fps / p95 ${perf.p95}ms(mobile・CPU 4倍遅い)・つぶ ${parts}・画質の段階 ${await gt<number>(page, 'quality')}`);
+    const { dom, items: its } = comb();
+    await open(page, { dom, items: its, unl: { bell: true, pump: true, fire: true, ramp: true } });
+    console.log(`  ドミノ ${dom.length}こ・しかけ ${its.length}こ`);
+    await page.locator('#b-go').tap();
+    await expect.poll(() => gt<number>(page, 'falling'), { timeout: 15_000 }).toBeGreaterThan(30);
+    await expect.poll(() => gt<number>(page, 'rockets'), { timeout: 15_000 }).toBeGreaterThan(0);
+    const fall0 = await gt<number>(page, 'falling');
+    // 測っているあいだは gameTest を読まない
+    const perf = await measureFps(page, 3000);
+    console.log(`  重さ: 平均${perf.fps}fps / p95 ${perf.p95}ms(mobile・CPU 4倍遅い)・たおれている ${fall0}こ・つぶ ${await gt<number>(page, 'particles')}・画質の段階 ${await gt<number>(page, 'quality')}`);
     expect(perf.fps, 'スマホで重すぎます').toBeGreaterThanOrEqual(30);
     expect(perf.p95, 'スマホでカクつきます').toBeLessThanOrEqual(50);
-    await hand.release();
   });
 
   test('投稿用のプレイ動画を撮る', async ({ browser }, info) => {
     test.skip(info.project.name !== 'desktop', '動画は desktop で1本だけ撮る');
     test.setTimeout(3 * 60_000);
-    // 8こ積んで夜がわへ。高い荷物のすぐ近くに流れ星が落ちた瞬間から始め、そのまま家々へ届ける
+    const { dom, items: its } = comb();
     await recordPlayVideo(browser, {
       dir: target!.dir,
       focus: '#gl',
       setup: async (page) => {
-        await open(page, 262, true); // 動画には音を入れるので、音はオンで始める
-        await start(page);
-        const hand = await mouseHand(page);
-        await walkTo(page, hand, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-        await expect.poll(async () => (await player(page)).stack.length, { timeout: 15_000 }).toBe(8);
-        await hand.release();
+        await open(page, { dom, items: its, unl: { bell: true, pump: true, fire: true, ramp: true } }, true); // 動画には音を入れる
+        await page.waitForTimeout(500);
       },
       play: async (page, clip: Clip) => {
-        const hand = await mouseHand(page, [0.8, 0.78]); // ボクに重ならない右下で操作する
-        let marked = false, markAt = 0, shot = false;
-        const start = Date.now();
-        const keep = { ix: 0, iy: 0 };
-        const obst = await gt<Obst[]>(page, 'obstacles');
+        await page.keyboard.press('Space');
+        let marked = false, shot = false, markAt = 0;
         while (Date.now() < clip.until) {
-          const pl = await player(page);
-          const lo = await gt<{ p: V3 }[]>(page, 'loose');
-          const hs = (await houses(page)).filter((h) => h.ready);
-          let goal: V3;
-          if (lo.length && pl.stack.length < pl.cap) goal = lo[0].p;
-          else if (!pl.stack.length) goal = POST;
-          else goal = hs.filter((h) => pl.stack.some((b) => b.to === h.id)).sort((a, b) => sdist(pl.p, a.door) - sdist(pl.p, b.door))[0].door;
-          await walkTo(page, hand, obst, goal, {
-            smooth: true, arrive: 0.8, maxMs: 500, keep,
-            until: (s) => {
-              const e = s.last;
-              // 見せ場: 5こ以上 積んで歩いているすぐ近くに 流れ星が落ちた瞬間(なければ 22秒後の配達)
-              const big = !!e && ((e.type === 'impact' && (e.d ?? 99) < 6 && s.pl.stack.length >= 5) || (Date.now() - start > 22_000 && e.type === 'deliver'));
-              if (!marked && big) { marked = true; markAt = Date.now(); clip.mark(); console.log(`  見せ場: ${e!.type}(${e!.d ?? e!.k})・荷物 ${s.pl.stack.length}こ`); }
-              return Date.now() > clip.until;
-            },
-          });
-          // 投稿画像(動画が使えないとき用)
-          if (marked && !shot && Date.now() - markAt > 300) {
-            shot = true;
-            await page.screenshot({ path: path.join(target!.dir, 'screenshot.png') });
-          }
+          const r = await gt<Run | null>(page, 'run');
+          // 見せ場: 何本もの列が いっせいに たおれ、かぼちゃが ともりはじめた瞬間
+          if (!marked && r && r.pumps >= 1 && r.branches >= 4) { marked = true; markAt = Date.now(); clip.mark(); console.log(`  見せ場: ${r.n}こ目・わかれ ${r.branches}・かぼちゃ ${r.pumps}`); }
+          if (marked && !shot && Date.now() - markAt > 2500) { shot = true; await page.screenshot({ path: path.join(target!.dir, 'screenshot.png') }); }
+          await page.waitForTimeout(100);
         }
-        console.log(`  動画: ♥${await gt<number>(page, 'hearts')}・mark ${marked}`);
-        await hand.release();
+        const r = await gt<Run | null>(page, 'lastRun');
+        console.log(`  動画: mark ${marked}・${r ? r.n : '-'}こ`);
       },
     });
   });
 
   test('見直し用のスクショ', async ({ page }, info) => {
-    test.setTimeout(4 * 60_000);
+    test.setTimeout(3 * 60_000);
     const dir = path.join(__dirname, '..', 'test-results', 'review');
     const shot = (name: string) => page.screenshot({ path: path.join(dir, `${info.project.name}-${name}.png`) });
     await open(page);
-    await page.waitForTimeout(1200);
-    await shot('1-title');
-    await start(page);
-    await shot('2-start');
+    await page.waitForTimeout(1600);
+    await shot('1-first');
     const hand = await deviceHand(page);
-    const obst = await gt<Obst[]>(page, 'obstacles');
-    await walkTo(page, hand, obst, POST, { arrive: 2.2 });
-    await page.waitForTimeout(900);
-    await shot('3-pickup');
-    await oneTrip(page, hand);
-    await shot('4-delivered');
-    await hand.release();
-    // にぎやかな場面: 荷台8こ・流れ星
-    await open(page, 262);
-    await start(page);
-    const h2 = await deviceHand(page);
-    await walkTo(page, h2, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-    await page.waitForTimeout(2200);
-    const hs = (await houses(page)).filter((h) => h.ready);
-    const far = hs.sort((a, b) => sdist(POST, b.door) - sdist(POST, a.door))[0];
-    await walkTo(page, h2, await gt<Obst[]>(page, 'obstacles'), far.door, { smooth: true, maxMs: 6000 });
+    await tapDomino(page, hand, (await doms(page))[0]);
+    await page.waitForTimeout(1200);
+    await shot('2-falling');
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 15_000 }).toBe('idle');
+    await page.waitForTimeout(1500);
+    await shot('3-result');
+    // にぎやかな場面
+    const { dom, items: its } = comb();
+    await open(page, { dom, items: its, unl: { bell: true, pump: true, fire: true, ramp: true } });
+    await shot('4-course');
+    if (isMobile(page)) await page.locator('#b-go').tap(); else await page.keyboard.press('Space');
+    await page.waitForTimeout(3500);
     await shot('5-busy');
-    await walkTo(page, h2, await gt<Obst[]>(page, 'obstacles'), far.door, { smooth: true, maxMs: 20000, arrive: 1.5 });
-    await page.waitForTimeout(300);
-    await shot('6-night');
-    await h2.release();
+    await page.waitForTimeout(3000);
+    await shot('6-busy2');
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 60_000 }).toBe('idle');
+    await page.waitForTimeout(1500);
+    await shot('7-end');
+    await page.locator('#t-item').click();
+    await shot('8-tray');
+    await page.locator('#t-item').click();
+    await page.locator('#b-help').click();
+    await shot('9-help');
+    await page.locator('#b-hclose').click();
     if (info.project.name !== 'mobile') return;
-    // 横持ち・小さいスマホ
     for (const [w, h, name] of [[844, 390, 'a-landscape'], [360, 640, 'b-small']] as const) {
       await page.setViewportSize({ width: w, height: h });
-      await open(page, 150);
-      await page.waitForTimeout(900);
-      await shot(`${name}-title`);
-      const sb = (await page.locator('#b-start').boundingBox())!;
-      expect(sb.y + sb.height, `${name}: 「はいたつ開始」が画面の外です`).toBeLessThanOrEqual(h);
-      await start(page);
-      const h3 = await touchHand(page);
-      await walkTo(page, h3, await gt<Obst[]>(page, 'obstacles'), POST, { arrive: 2.2, smooth: true });
-      await page.waitForTimeout(2500);
-      await h3.release();
-      await shot(`${name}-play`);
+      await open(page);
+      await page.waitForTimeout(1500);
+      await shot(`${name}-first`);
     }
   });
 });
+
+// にぎやかなコース: 横の本線から 45度で わかれる 10本の列。列のそばに かぼちゃ・花火・ベル
+function comb() {
+  const dom: Saved[] = [];
+  const its: (string | number)[][] = [];
+  const head = lay(seg(-18, -14, 18, -14), 1);
+  dom.push(...head);
+  let st = 2, note = 0;
+  for (let k = 0; k < 10; k++) {
+    const h = head[4 + k * 7];
+    const [x, z] = at(h);
+    void fwd;
+    // 本線(+x)から 45度 → 手前(+z)へ、すこし うねる
+    const pts: [number, number][] = [[x, z], [x + 0.354, z + 0.354]];
+    for (let i = 1; i <= 26; i++) pts.push([x + 0.354 + Math.sin(i * 0.35 + k) * 0.9 * Math.min(1, i / 4), z + 0.354 + i * 1.0]);
+    const br = lay(pts, st++, { skipFirst: true, hue: k * 0.1 });
+    dom.push(...br);
+    for (const j of [10, 26, 40]) {
+      if (j >= br.length) continue;
+      const [bx, bz] = at(br[j]);
+      const side = (j / 2) % 2 ? 1 : -1;
+      const kind = j === 10 ? 'pump' : j === 26 ? (k % 2 ? 'fire' : 'pump') : (k % 3 === 0 ? 'bell' : 'pump');
+      its.push([kind, Math.round((bx + side * 0.95) * 1000), Math.round(bz * 1000), 0, kind === 'bell' ? note++ : 0]);
+    }
+  }
+  return { dom, items: its };
+}

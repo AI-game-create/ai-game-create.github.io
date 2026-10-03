@@ -68,5 +68,15 @@
     "controls": "矢印キー / WASD・ドラッグ / 指でなぞる(向き: Q E・⟲⟳)",
     "structure": "自由に歩き回る世界",
     "status": "success"
+  },
+  {
+    "post_date": "2026-10-06",
+    "title": "ぱたぱたドミノ夜",
+    "dir": "games/2026-10-06-patapata-domino/",
+    "genre": "3Dおもちゃ(ドミノ倒し・しかけ作り)",
+    "theme": "ハロウィンの夜の机・カッターマットとかぼちゃ",
+    "controls": "なぞる(マウス / 指)・タップ / Space・R・Z・矢印キー・Q E",
+    "structure": "育てる・作る",
+    "status": "success"
   }
 ]
