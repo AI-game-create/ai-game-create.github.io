@@ -410,7 +410,7 @@ def make_weekly_video(games: list[dict], date_str: str) -> Path | None:
 
 def weekly_text(games: list[dict], base: str) -> str:
     """まとめの投稿文。入りきらなければ、作品の一覧を後ろから削る。"""
-    head = f"今週つくったゲーム{len(games)}本をまとめました🎮 AIが毎日1本つくって公開しています"
+    head = f"今週つくったゲーム{len(games)}本をまとめました🎮 毎日1本つくって公開しています"
     lines = [f"{WEEKDAYS[date.fromisoformat(g['post_date']).weekday()]} {g['title']}" for g in games]
     tail = f"{SIGNATURE}\n▶ ぜんぶ遊べます {base}" if base else SIGNATURE
     while True:
