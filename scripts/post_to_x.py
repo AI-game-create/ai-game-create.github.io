@@ -483,6 +483,11 @@ def main() -> None:
     dry_run = os.environ.get("DRY_RUN", "1") != "0"
 
     log(f"投稿枠: {slot} / 日付: {date_str} / 試運転: {'はい' if dry_run else 'いいえ'}")
+    # 同じ日の同じ枠がすでに投稿済みなら出さない(定時実行が遅れて、手動の実行と重なったときの二重投稿を防ぐ)
+    posted = read_json(POSTS_FILE, [])
+    if any(isinstance(p, dict) and p.get("date") == date_str and p.get("slot") == slot for p in posted):
+        log(f"{date_str} の {slot} はもう投稿済みなので、何もしません。")
+        return
     if slot == "poll":
         post_poll(date_str, dry_run)
         return
