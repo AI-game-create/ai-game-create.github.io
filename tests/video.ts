@@ -47,18 +47,40 @@ export async function recordPlayVideo(
   },
 ): Promise<void> {
   const seconds = SHORT ? 20 : opts.seconds ?? 10;
-  const width = SHORT ? 1080 : opts.width ?? 1280;
-  const height = SHORT ? 1920 : opts.height ?? 720;
   const ffmpeg = findFfmpeg();
   if (!ffmpeg) throw new Error('Playwright の ffmpeg が見つかりません(npx playwright install ffmpeg で入ります)');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'play-video-'));
 
+  // 動画は GPU を使うブラウザで撮る。テスト用のブラウザは3Dを CPU で描くので、重い作品だとコマが落ちる
+  // (10/6 のドミノの 1080x1920 で 11fps → GPU で 60fps)。起動できない環境では、渡されたブラウザで撮る
+  let own: Browser | null = null;
+  try {
+    const { chromium } = await import('@playwright/test');
+    own = await chromium.launch({
+      channel: 'chromium',
+      args: ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11', '--enable-gpu-rasterization'],
+    });
+    browser = own;
+  } catch (e) {
+    console.log(`  動画: GPU のブラウザを起動できなかったので、ふつうのブラウザで撮ります(${String(e).slice(0, 80)})`);
+  }
+  // ショートは 1080x1920。GPU が使えないときは 540x960 で描いて撮り、最後に拡大する(描く量を4分の1にしてコマ落ちを防ぐ)
+  const shortW = own ? 1080 : 540;
+  const width = SHORT ? shortW : opts.width ?? 1280;
+  const height = SHORT ? (shortW * 16) / 9 : opts.height ?? 720;
   const context = await browser.newContext({
     viewport: { width, height },
     recordVideo: { dir: tmp, size: { width, height } },
     ...(SHORT ? { isMobile: true, hasTouch: true, deviceScaleFactor: 1 } : {}),
   });
   await context.addInitScript(tapAudio);
+  // 撮影中にゲームが実際に描けたコマ数を数える(カクつきの確認用)
+  await context.addInitScript(() => {
+    const w = window as any;
+    w.__frames = [];
+    const tick = (t: number) => { w.__frames.push(t); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  });
   const page = await context.newPage();
   const t0 = Date.now();
 
@@ -104,11 +126,17 @@ export async function recordPlayVideo(
   if (end > Date.now()) await page.waitForTimeout(end - Date.now());
   await restarting;
   const audio = await page.evaluate(stopAudio);
+  const fps = await page.evaluate((ms) => {
+    const f = ((window as any).__frames as number[]).filter((t) => t >= performance.now() - ms);
+    const gaps = f.slice(1).map((x, i) => x - f[i]).sort((a, b) => a - b);
+    return gaps.length ? { avg: Math.round(1000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length)), p95: Math.round(gaps[Math.floor(gaps.length * 0.95)]) } : null;
+  }, seconds * 1000);
   // 切り出しの始まり(録画の頭からの秒数)。mark があればその少し前から
   const from = markAt ? Math.max(start, (markAt - t0) / 1000 - lead) : start;
 
   const video = page.video();
   await context.close();
+  if (own) await own.close();
   if (!video) throw new Error('動画が録画されていません');
 
   if (short) fs.mkdirSync(path.dirname(short.out), { recursive: true });
@@ -124,7 +152,7 @@ export async function recordPlayVideo(
       '-ss', from.toFixed(2), '-i', rawPath,
       ...(withAudio ? [...audioIn, '-i', audioPath] : []),
       '-t', String(seconds),
-      ...(crop ? ['-vf', crop] : []),
+      ...(short && width !== 1080 ? ['-vf', 'scale=1080:1920:flags=lanczos'] : crop && !short ? ['-vf', crop] : []),
       '-map', '0:v:0', '-c:v', 'libvpx', '-b:v', short ? '5M' : '1200k', '-crf', '6', '-deadline', 'good', '-cpu-used', '2', '-auto-alt-ref', '0',
       ...(withAudio ? ['-map', '1:a:0', '-c:a', 'copy'] : ['-an']),
       out,
@@ -142,7 +170,8 @@ export async function recordPlayVideo(
   const sound = audio ? '音つき' : '音なし';
   const how = markAt ? '見せ場の0.5秒前から' : '見せ場の印(mark)がないので play の始まりから';
   const name = short ? `shorts/${path.basename(out)}` : `${path.basename(opts.dir)}/play.webm`;
-  console.log(`  動画: ${name}(${how}${seconds}秒、${sound}、${mb.toFixed(1)}MB)`);
+  const smooth = fps ? `、描画 ${fps.avg}fps・p95 ${fps.p95}ms` : '';
+  console.log(`  動画: ${name}(${how}${seconds}秒、${sound}、${mb.toFixed(1)}MB${smooth})`);
 }
 
 // ショートのテロップの文字と保存先。タイトルは投稿キュー(なければ作品一覧)から読む
@@ -177,12 +206,12 @@ function addTelop([top1, top2, bottom]: string[]) {
   css.textContent = `
     .tp{position:fixed;left:0;right:0;z-index:2147483647;text-align:center;pointer-events:none;
       font-family:"Yu Gothic UI","Yu Gothic","Hiragino Sans","Meiryo",sans-serif;font-weight:900;letter-spacing:.02em;white-space:nowrap}
-    #tp-top{top:6%;background:rgba(0,0,0,.55);padding:30px 0 34px}
-    #tp-top div{display:table;margin:0 auto;paint-order:stroke fill;-webkit-text-stroke:20px #000;filter:drop-shadow(0 9px 0 rgba(0,0,0,.6))}
-    #tp-top .l1{color:#fff;font-size:124px;line-height:1.2}
-    #tp-top .l2{color:#ffe14a;font-size:116px;line-height:1.3;margin-top:12px}
+    #tp-top{top:6%;background:rgba(0,0,0,.55);padding:2.8vw 0 3.1vw}
+    #tp-top div{display:table;margin:0 auto;paint-order:stroke fill;-webkit-text-stroke:1.85vw #000;filter:drop-shadow(0 .83vw 0 rgba(0,0,0,.6))}
+    #tp-top .l1{color:#fff;font-size:11.5vw;line-height:1.2}
+    #tp-top .l2{color:#ffe14a;font-size:10.7vw;line-height:1.3;margin-top:1.1vw}
     #tp-bot{bottom:24%}
-    #tp-bot span{display:inline-block;color:#fff;font-size:86px;padding:26px 50px;background:rgba(0,0,0,.55);border-radius:30px}`;
+    #tp-bot span{display:inline-block;color:#fff;font-size:8vw;padding:2.4vw 4.6vw;background:rgba(0,0,0,.55);border-radius:2.8vw}`;
   document.head.appendChild(css);
   const top = document.createElement('div');
   top.id = 'tp-top';
@@ -204,8 +233,8 @@ function addTelop([top1, top2, bottom]: string[]) {
   // 画面の幅(94%)に収まるまで小さくする。タイトルの長さは日によって違うため
   for (const el of [l1, l2, span]) {
     let size = parseFloat(getComputedStyle(el).fontSize);
-    while (el.getBoundingClientRect().width > innerWidth * 0.94 && size > 40) {
-      size -= 2;
+    while (el.getBoundingClientRect().width > innerWidth * 0.94 && size > 16) {
+      size -= 1;
       el.style.fontSize = `${size}px`;
     }
   }
