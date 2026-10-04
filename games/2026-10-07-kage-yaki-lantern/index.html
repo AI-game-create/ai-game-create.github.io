@@ -1,0 +1,1958 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>影焼きランタン</title>
+<style>
+:root{--ink:#eadfc6;--dim:#a99c82;--brass:#c9a253;--brass2:#7a5c26;--ember:#ff8a2a;--blood:#c0392b;--bg:#06060a;
+  --serif:"Hiragino Mincho ProN","Yu Mincho","YuMincho","BIZ UDPMincho","Noto Serif JP","MS PMincho",serif}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--serif);
+  user-select:none;-webkit-user-select:none;touch-action:none;-webkit-touch-callout:none}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+/* 画面のふちの闇(油が減ると濃くなる)と、やられたときの赤 */
+#vign{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 52%,transparent 38%,rgba(0,0,0,.92) 100%);opacity:.35;transition:opacity .4s}
+#hurt{position:fixed;inset:0;pointer-events:none;box-shadow:inset 0 0 120px 30px rgba(170,20,10,.9);opacity:0}
+#hurt.on{animation:hurt .7s ease-out}
+@keyframes hurt{0%{opacity:1}100%{opacity:0}}
+
+#hud{position:fixed;inset:0;pointer-events:none}
+#hud .hit{pointer-events:auto}
+
+/* ---- 左上: 油の小瓶と灯芯(命) ---- */
+#vit{position:absolute;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));display:flex;gap:10px;align-items:flex-end}
+#vial{position:relative;width:26px;height:74px;border:2px solid var(--brass);border-radius:6px 6px 12px 12px;background:rgba(10,8,6,.6);overflow:hidden;box-shadow:0 0 0 1px #000,inset 0 0 6px #000}
+#vial::before{content:"";position:absolute;left:5px;right:5px;top:-8px;height:12px;border:2px solid var(--brass);border-radius:3px;background:#1a140c;z-index:2}
+#oil{position:absolute;left:0;right:0;bottom:0;height:100%;background:linear-gradient(#ffcf6a,#e07a18 60%,#8a3a08);transition:height .15s;box-shadow:0 -2px 8px rgba(255,170,60,.6)}
+#vial.low #oil{animation:low .5s infinite alternate}
+@keyframes low{to{filter:brightness(.45)}}
+#vial b{position:absolute;left:0;right:0;bottom:3px;text-align:center;font-size:12px;color:#1b0f04;font-weight:700;z-index:3;text-shadow:0 0 2px #ffd890}
+#hearts{display:flex;gap:5px;padding-bottom:2px}
+.wick{position:relative;width:16px;height:30px}
+.wick::before{content:"";position:absolute;left:3px;top:0;width:10px;height:14px;border-radius:50% 50% 50% 50%/62% 62% 38% 38%;background:radial-gradient(circle at 50% 70%,#fff6c8,#ffb030 45%,#e0420c 80%);box-shadow:0 0 10px 2px rgba(255,140,40,.7);animation:fl .18s infinite alternate}
+.wick::after{content:"";position:absolute;left:4px;bottom:0;width:8px;height:15px;border-radius:2px;background:linear-gradient(90deg,#d8cdb4,#f6eedc 50%,#bfb299)}
+.wick.out::before{background:#2a2622;box-shadow:none;animation:none;height:6px;top:8px;width:4px;left:6px;border-radius:2px}
+@keyframes fl{to{transform:scale(.9,1.08) translateY(-1px)}}
+#lvl{font-size:13px;color:var(--dim);letter-spacing:1px;padding-bottom:4px;white-space:nowrap}
+#lvl b{color:var(--ink);font-size:16px}
+
+/* ---- 上の中央: 時計 ---- */
+#clock{position:absolute;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);text-align:center;text-shadow:0 2px 6px #000}
+#time{display:block;font-size:30px;letter-spacing:3px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+#kills{display:block;font-size:12px;letter-spacing:2px;color:var(--dim);margin-top:-2px}
+#clock .lb{display:block;font-size:11px;letter-spacing:4px;color:var(--dim);margin-bottom:-3px}
+#clock.last #time{color:#ffd28a;animation:last 1s infinite}
+@keyframes last{50%{text-shadow:0 0 16px #ff9a40}}
+#over.won .stone{background:radial-gradient(ellipse at 50% 10%,#8a6a48,#4a3a30 55%,#2a2420);box-shadow:inset 0 0 0 2px #b89a70,inset 0 0 30px #000,0 0 60px rgba(255,180,90,.35),0 20px 50px #000}
+#over.won h2{color:#fff1cc}
+
+/* ---- 右上 ---- */
+#tr{position:absolute;right:max(10px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));display:flex;gap:8px}
+.plate{width:46px;height:46px;border-radius:50%;border:2px solid var(--brass);background:radial-gradient(circle at 40% 35%,#3a2e1c,#120d07);color:var(--brass);font-size:17px;display:grid;place-items:center;box-shadow:0 2px 0 #000,inset 0 1px 0 rgba(255,220,150,.25)}
+.plate:active{transform:translateY(1px)}
+.plate.off{opacity:.5}
+
+/* ---- 下: 残り火(経験)の帯 ---- */
+#xp{position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(0,0,0,.6);border-top:1px solid rgba(201,162,83,.35)}
+#xp i{display:block;height:100%;width:0;background:linear-gradient(90deg,#7a2a06,#ff8a2a,#ffe08a);box-shadow:0 0 10px rgba(255,140,40,.8);transition:width .2s}
+
+/* ---- 右下: 灯を開く ---- */
+#b-flare{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(26px,calc(env(safe-area-inset-bottom) + 14px));width:88px;height:88px;border-radius:50%;
+  background:conic-gradient(rgba(255,170,60,.95) calc(var(--cd,1)*360deg),rgba(60,40,20,.85) 0);padding:4px;box-shadow:0 0 0 2px #000,0 4px 14px rgba(0,0,0,.7)}
+#b-flare .in{width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 50% 40%,#5a3b17,#1a1006 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid rgba(255,200,120,.4)}
+#b-flare .sun{font-size:28px;line-height:1;color:#ffcf6a;text-shadow:0 0 10px #ff9a30}
+#b-flare small{font-size:11px;letter-spacing:1px;color:var(--ink);margin-top:3px;white-space:nowrap}
+#b-flare.wait .sun{color:#6b5636;text-shadow:none}
+#b-flare.nooil .sun{color:#5a2a20;text-shadow:none}
+#b-flare.go{animation:go .3s ease-out}
+@keyframes go{0%{transform:scale(1.15)}100%{transform:none}}
+#b-flare kbd{font:inherit;font-size:10px;color:var(--dim)}
+
+/* ---- ヒント・知らせ・連鎖の数 ---- */
+#hint{position:absolute;left:50%;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 4px);transform:translateX(-50%);max-width:min(560px,calc(100vw - 150px));text-align:center;font-size:16px;line-height:1.5;
+  padding:8px 16px;background:linear-gradient(90deg,transparent,rgba(0,0,0,.75) 12%,rgba(0,0,0,.75) 88%,transparent);color:var(--ink);opacity:0;transition:opacity .4s;text-shadow:0 1px 3px #000}
+#hint.on{opacity:1}
+#hint em{font-style:normal;color:#ffc46a}
+#warn{position:absolute;left:0;right:0;top:28%;text-align:center;font-size:30px;letter-spacing:12px;color:#ff6a4a;text-shadow:0 0 18px #a01000,0 2px 0 #000;opacity:0}
+#warn.on{animation:warn 2.6s ease-out}
+@keyframes warn{0%{opacity:0;letter-spacing:30px}15%{opacity:1;letter-spacing:12px}75%{opacity:1}100%{opacity:0}}
+#pops{position:absolute;inset:0;overflow:hidden}
+.pop{position:absolute;left:0;top:0;white-space:nowrap;text-align:center;font-weight:700;color:#ffd77a;text-shadow:0 0 12px rgba(255,90,10,.95),0 2px 0 #000;will-change:transform;transform-origin:50% 50%}
+.pop b{display:block;font-size:34px;line-height:1}
+.pop small{display:block;font-size:13px;letter-spacing:4px;color:#ffb070}
+.pop.big b{font-size:52px;color:#fff1c0}
+.pop.huge b{font-size:70px;color:#fff}
+.toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:17px;color:#ffcf8a;text-shadow:0 2px 4px #000;animation:toast 1.4s ease-out forwards;white-space:nowrap}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,8px)}15%{opacity:1;transform:translate(-50%,0)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-10px)}}
+
+/* ---- 指のスティック ---- */
+#stick{position:fixed;left:0;top:0;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;border:2px solid rgba(234,223,198,.35);background:rgba(0,0,0,.2);pointer-events:none}
+#stick i{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffe1a0,#b07020);box-shadow:0 0 12px rgba(255,160,60,.6)}
+
+/* ---- 幕(タイトル・強化・結果・一時停止) ---- */
+.veil{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));overflow-y:auto}
+#title{background:radial-gradient(ellipse at 50% 60%,rgba(0,0,0,.15),rgba(0,0,0,.82) 75%)}
+#title .col{max-width:560px;width:100%;text-align:center}
+#title .pre{font-size:13px;letter-spacing:6px;color:var(--dim)}
+#title h1{font-size:clamp(46px,12vw,86px);font-weight:700;letter-spacing:.12em;line-height:1.05;margin:10px 0 4px;
+  background:linear-gradient(180deg,#fff3d0 10%,#f0a040 55%,#7a2a08 95%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 18px rgba(255,120,30,.35))}
+#title h1 span{display:block;font-size:.5em;letter-spacing:.5em;margin-right:-.5em}
+#title .lead{font-size:16px;line-height:1.8;color:var(--ink);margin:14px auto 18px;max-width:440px}
+#title .lead em{font-style:normal;color:#ffc46a}
+.rules{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;text-align:left;max-width:440px;margin:0 auto 22px;font-size:14px;line-height:1.55;color:var(--ink)}
+.rules dt{color:var(--brass);font-weight:700;white-space:nowrap}
+.rules dd{color:#d8ccb2}
+.rules kbd{font:inherit;font-size:12px;border:1px solid #6b5a3a;border-radius:4px;padding:0 5px;color:#f0e2c0;background:#1c150c}
+.btn{display:inline-block;min-width:220px;min-height:54px;padding:12px 28px;font-size:20px;letter-spacing:6px;color:#1b1006;font-weight:700;
+  background:linear-gradient(180deg,#f6d690,#c9933a 55%,#8a5a18);border:1px solid #fbe3a8;border-radius:3px;box-shadow:0 0 0 3px #000,0 0 0 4px #7a5c26,0 6px 20px rgba(255,140,40,.25);text-shadow:0 1px 0 rgba(255,240,200,.5)}
+.btn:active{transform:translateY(2px)}
+.btn.sub{min-width:0;background:none;color:var(--ink);border-color:#6b5a3a;box-shadow:none;font-size:15px;letter-spacing:3px;text-shadow:none}
+.best{margin-top:16px;font-size:13px;color:var(--dim);letter-spacing:1px}
+
+/* 強化: 縦長のカード3枚 */
+#cards{background:rgba(3,2,4,.72);flex-direction:column}
+#cards h2{font-size:15px;letter-spacing:6px;color:var(--brass);font-weight:600;margin-bottom:6px;text-align:center}
+#cards h3{font-size:22px;letter-spacing:4px;margin-bottom:16px;text-align:center;font-weight:600}
+#deck{display:flex;gap:16px;justify-content:center;flex-wrap:nowrap}
+.card{position:relative;width:200px;min-height:290px;padding:18px 14px 16px;text-align:center;color:var(--ink);border-radius:8px;
+  background:linear-gradient(170deg,#241a10,#0e0a07 70%);border:1px solid #8a6a30;box-shadow:inset 0 0 0 5px #0b0805,inset 0 0 0 6px rgba(201,162,83,.55),0 10px 30px rgba(0,0,0,.8);
+  display:flex;flex-direction:column;align-items:center;transition:transform .15s,box-shadow .15s;animation:deal .35s cubic-bezier(.2,1.4,.4,1) backwards}
+.card:nth-child(2){animation-delay:.07s}.card:nth-child(3){animation-delay:.14s}
+@keyframes deal{0%{transform:translateY(40px) rotate(-4deg);opacity:0}100%{transform:none;opacity:1}}
+.card:hover,.card:focus-visible{transform:translateY(-6px);box-shadow:inset 0 0 0 5px #0b0805,inset 0 0 0 6px #ffcf6a,0 0 26px rgba(255,150,50,.45)}
+.card .no{font-size:11px;letter-spacing:3px;color:var(--dim)}
+.card .ic{font-size:44px;margin:12px 0 8px;filter:drop-shadow(0 0 10px rgba(255,140,40,.5))}
+.card .nm{font-size:19px;font-weight:700;letter-spacing:2px}
+.card .pips{margin:6px 0 10px;font-size:11px;letter-spacing:3px;color:#ffb050}
+.card .pips i{font-style:normal;color:#4a3a22}
+.card .ds{font-size:13.5px;line-height:1.6;color:#d6c9ae;text-align:left}
+.card kbd{position:absolute;right:10px;top:8px;font:inherit;font-size:12px;color:var(--dim)}
+
+/* 結果: 墓碑 */
+#over{background:rgba(2,2,4,.78)}
+.stone{position:relative;width:min(380px,100%);padding:36px 26px 26px;text-align:center;border-radius:160px 160px 10px 10px;
+  background:radial-gradient(ellipse at 50% 20%,#4a4743,#2a2826 60%,#1b1a19);box-shadow:inset 0 0 0 2px #5d5953,inset 0 0 30px #000,0 20px 50px #000}
+.stone .cap{font-size:13px;letter-spacing:6px;color:#b8b1a4}
+.stone h2{font-size:34px;letter-spacing:10px;margin:8px 0 2px;font-weight:700;color:#efe6d2;text-shadow:0 2px 0 #000}
+.stone .cause{font-size:14px;color:#c9a690;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px 8px;margin-bottom:14px}
+.stats div{background:rgba(0,0,0,.28);border-radius:4px;padding:8px 4px}
+.stats b{display:block;font-size:26px;font-weight:700;color:#ffd890;font-variant-numeric:tabular-nums}
+.stats small{font-size:12px;color:#bdb4a2;letter-spacing:2px}
+.stats .nb{color:#ff9a5a;font-size:11px;letter-spacing:1px}
+#build{font-size:22px;letter-spacing:2px;min-height:30px;margin-bottom:6px}
+#build small{font-size:12px;color:#bdb4a2;letter-spacing:1px;display:block}
+#tip{font-size:13px;color:#d8cfbf;line-height:1.6;margin:8px 0 16px}
+
+#pause{background:rgba(0,0,0,.7)}
+#pause .box{text-align:center;max-width:460px}
+#pause h2{font-size:28px;letter-spacing:10px;margin-bottom:16px}
+#pause .row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+
+#nogl{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:20px;background:#000;font-size:18px;line-height:1.8}
+
+@media (max-width:640px){
+  #deck{flex-direction:column;gap:10px;width:100%;max-width:420px}
+  .card{width:100%;min-height:0;flex-direction:row;flex-wrap:wrap;align-items:center;text-align:left;padding:12px 14px;column-gap:12px;animation-name:deal2}
+  @keyframes deal2{0%{transform:translateX(40px);opacity:0}100%{transform:none;opacity:1}}
+  .card .no{display:none}
+  .card .ic{font-size:34px;margin:0}
+  .card .hd{flex:1}
+  .card .pips{margin:2px 0 0}
+  .card .ds{flex-basis:100%;margin-top:6px;font-size:14px}
+  #cards h3{font-size:19px;margin-bottom:12px}
+  #time{font-size:24px}
+  #hint{font-size:14px;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 104px);max-width:calc(100vw - 32px)}
+  .rules{font-size:13px}
+  #title .lead{font-size:14.5px}
+}
+@media (max-height:500px){
+  #title .lead{margin:6px auto 10px}
+  .rules{margin-bottom:12px}
+  #title h1{font-size:44px}
+  .card{min-height:0}
+  .card .ic{margin:4px 0}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vign"></div>
+<div id="hurt"></div>
+
+<div id="hud" hidden>
+  <div id="vit">
+    <div id="vial"><i id="oil"></i><b>油</b></div>
+    <div>
+      <div id="hearts"></div>
+      <div id="lvl">灯 <b id="lv">1</b></div>
+    </div>
+  </div>
+  <div id="clock"><small class="lb">夜明けまで</small><b id="time">10:00</b><small id="kills">焼いた影 0</small></div>
+  <div id="tr">
+    <button id="b-pause" class="plate hit" aria-label="一時停止">❚❚</button>
+    <button id="b-snd" class="plate hit" aria-label="音">♪</button>
+  </div>
+  <div id="pops"></div>
+  <div id="warn"></div>
+  <div id="hint"></div>
+  <button id="b-flare" class="hit" aria-label="灯を開く"><div class="in"><span class="sun">✺</span><small>灯を開く</small><kbd id="k-flare">Space</kbd></div></button>
+  <div id="xp"><i id="xpbar"></i></div>
+</div>
+<div id="stick" hidden><i></i></div>
+
+<div id="title" class="veil">
+  <div class="col">
+    <div class="pre">夜の墓地で、ひとつの灯をかかげて</div>
+    <h1>影焼き<span>ランタン</span></h1>
+    <p class="lead">光に入った影は、熱を帯びて<em>燃え上がる</em>。<br>燃えた影は爆ぜて、となりの影へ火を移す。<br><em>群れを集めてから焼け。</em>夜明けまでの10分を生きのびろ。</p>
+    <dl class="rules">
+      <dt>歩く</dt><dd><kbd>WASD</kbd> <kbd>矢印キー</kbd> / マウスを押したまま / 画面をドラッグ</dd>
+      <dt>灯を開く</dt><dd><kbd>Space</kbd> / 右クリック / ✺ボタン。油を使って光を一気に広げる</dd>
+      <dt>残り火</dt><dd>燃えた影が落とす火を拾うと、油が戻り、ランタンが育つ</dd>
+      <dt>命</dt><dd>影にふれると灯芯が1本消える。3本消えたら終わり</dd>
+    </dl>
+    <button id="b-start" class="btn">灯をともす</button>
+    <div class="best" id="best"></div>
+  </div>
+</div>
+
+<div id="cards" class="veil" hidden>
+  <h2>残り火が満ちた</h2>
+  <h3>ひとつ選べ</h3>
+  <div id="deck"></div>
+</div>
+
+<div id="over" class="veil" hidden>
+  <div class="stone">
+    <div class="cap" id="o-cap">ここに 灯 尽きる</div>
+    <h2 id="o-time">0:00</h2>
+    <div class="cause" id="o-cause"></div>
+    <div class="stats">
+      <div><b id="o-kills">0</b><small>焼いた影</small><div class="nb" id="o-nb1"></div></div>
+      <div><b id="o-chain">0</b><small>最大連鎖</small><div class="nb" id="o-nb2"></div></div>
+    </div>
+    <div id="build"></div>
+    <div id="tip"></div>
+    <button id="b-again" class="btn">もう一度ともす</button>
+  </div>
+</div>
+
+<div id="pause" class="veil" hidden>
+  <div class="box">
+    <h2>一時停止</h2>
+    <dl class="rules">
+      <dt>歩く</dt><dd><kbd>WASD</kbd> <kbd>矢印キー</kbd> / マウスを押したまま / 画面をドラッグ</dd>
+      <dt>灯を開く</dt><dd><kbd>Space</kbd> / 右クリック / ✺ボタン</dd>
+      <dt>コツ</dt><dd>光の外で群れを引き連れて回り、固まったところで灯を開くと大きく連鎖する</dd>
+    </dl>
+    <div class="row">
+      <button id="b-resume" class="btn">つづける</button>
+      <button id="b-quit" class="btn sub">はじめから</button>
+    </div>
+  </div>
+</div>
+
+<div id="nogl" hidden>この端末では 3D(WebGL)が使えないため、遊べません。<br>別のブラウザか端末でお試しください。</div>
+
+<script>
+'use strict';
+// =============================================================================
+//  影焼きランタン
+//  光の中の影は熱をためて燃え、燃えた影は爆ぜて まわりの影に火を移す(連鎖)。
+//  ゲームの進行は 1/60 秒きざみの step() だけで進む。描画は frame() で、毎コマ1回。
+// =============================================================================
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, k) => a + (b - a) * k;
+const TAU = Math.PI * 2;
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+// 見た目だけに使う乱数(ゲームの進行は Math.random を使う。見た目で進行の乱数をずらさないため)
+let vseed = 12345;
+const vr = () => ((vseed = (vseed * 1664525 + 1013904223) >>> 0) / 4294967296);
+
+// ---- 保存 ----
+const SKEY = 'kage-yaki-lantern-v1';
+let save = { sound: true, best: { t: 0, kills: 0, chain: 0 }, plays: 0 };
+try { const s = JSON.parse(localStorage.getItem(SKEY) || 'null'); if (s && typeof s === 'object') save = Object.assign(save, s); } catch (e) { /* 読めなければ はじめから */ }
+function store() { try { localStorage.setItem(SKEY, JSON.stringify(save)); } catch (e) { /* 保存できない環境 */ } }
+
+// =============================================================================
+//  ルールの数字
+// =============================================================================
+const DT = 1 / 60;
+const NIGHT = 600;         // 夜明けまで(秒)
+const ARENA = 26;          // 墓地のさくの半径
+const PR = 0.32;           // 自分の半径
+const OIL_MAX = 100;
+// 影の種類: r=半径 spd=速さ max=燃えるまでの熱 res=光の熱の効きやすさ B=爆ぜる半径 BH=爆ぜてまわりに移す熱 ev=残り火
+const KDEF = [
+  { name: '影',     r: 0.42, spd: 2.75, max: 1.0, res: 1.0,  B: 1.75, BH: 1.3, ev: 1,  sx: 1.0,  sy: 1.0,  lean: 0.06 },
+  { name: '走り影', r: 0.36, spd: 4.25, max: 0.6, res: 1.0,  B: 1.55, BH: 1.2, ev: 1,  sx: 0.72, sy: 1.08, lean: 0.3 },
+  { name: '油影',   r: 0.72, spd: 1.75, max: 4.0, res: 0.45, B: 3.5,  BH: 2.6, ev: 3,  sx: 1.5,  sy: 0.72, lean: 0 },
+  { name: '吐き影', r: 0.45, spd: 2.5,  max: 1.4, res: 0.9,  B: 1.8,  BH: 1.3, ev: 1.5, sx: 0.88, sy: 1.3, lean: -0.08 },
+  { name: '大影',   r: 1.35, spd: 1.95, max: 30,  res: 0.12, B: 6.0,  BH: 4.0, ev: 16, sx: 1.0,  sy: 1.0,  lean: 0.1 },
+];
+// 強化カード
+const UPS = [
+  { id: 'radius', ic: '🕯️', nm: '太い灯芯', max: 5, ds: (l) => `光が広く(+15%)、少し熱くなる。安全に燃やせる距離がのびる` },
+  { id: 'heat',   ic: '🔥', nm: '熱い炎',   max: 5, ds: (l) => `光の中の影が早く燃える(熱+30%)` },
+  { id: 'burst',  ic: '💥', nm: '爆ぜ火',   max: 5, ds: (l) => `燃えた影の爆風が大きく、熱くなる。連鎖がつながりやすい` },
+  { id: 'chain',  ic: '⛓️', nm: '連鎖の火種', max: 3, ds: (l) => `連鎖が続くほど、爆風が育っていく。大きな群れほど化ける` },
+  { id: 'spark',  ic: '✨', nm: '火の粉',   max: 3, ds: (l) => `燃えるたびに火の粉が${l + 1}つ飛び、近くの影に熱を移す。光の外まで届く` },  // l は今の段階(0から)。取ると l+1 つ
+  { id: 'floor',  ic: '♨️', nm: '残り火の床', max: 3, ds: (l) => `燃えた跡がしばらく燃え続け、踏んだ影を焼く。逃げ道に火の罠を張れる` },
+  { id: 'mag',    ic: '🧲', nm: '灰の磁石', max: 3, ds: (l) => `残り火を遠くから吸い寄せる(+60%)` },
+  { id: 'oil',    ic: '🏺', nm: '油壺',     max: 3, ds: (l) => `油が減りにくくなり(−20%)、残り火から戻る油が増える。灯を開く油も少し減る` },
+  { id: 'speed',  ic: '🥾', nm: '早足',     max: 3, ds: (l) => `歩く速さ+8%。走り影を振り切りやすい` },
+  { id: 'flare',  ic: '☀️', nm: '閃光',     max: 3, ds: (l) => `灯を開く油が減り、すぐ次を開ける。開いた光は広く、熱くなる` },
+  { id: 'heart',  ic: '❤️', nm: '守り火',   max: 2, ds: (l) => `灯芯が1本増え、1本ともる(命+1)` },
+];
+const UPI = Object.fromEntries(UPS.map((u, i) => [u.id, i]));
+
+// =============================================================================
+//  ゲームの状態
+// =============================================================================
+let G = null;
+let gstate = 'title';     // title / play / card / over / pause
+function newRun() {
+  G = {
+    t: 0, nid: 1, gid: 1,
+    p: { x: 0, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, face: Math.PI, hp: 3, maxHp: 3, inv: 0, slowT: 0, walk: 0 },
+    oil: OIL_MAX, R: 4, flareT: 0, flareCd: 0, flareGroup: null, flareR: 0,
+    en: [], emb: [], spits: [], patches: [], sparks: [], groups: [],
+    kills: 0, maxChain: 0, chains: [], lv: 1, xp: 0, xpNext: xpNeed(1), up: {}, picks: [], offers: null, pending: 0, cardDelay: 0,
+    offerLog: [], cause: '', obs: [], spawnAcc: 0, opened: false, nextRing: 95, nextGiant: 240, giantWarned: false, nextDeep: 120, spdMul: 1,
+    events: [], hits: 0, flares: 0, srcKills: {}, spread: { n: 0, sum: 0 }, picked: 0, bornKinds: [0, 0, 0, 0, 0], killKinds: [0, 0, 0, 0, 0],
+    fx: { rings: [], scorch: [], lights: [], flareFx: 0 }, shake: 0, slow: 1, slowT: 0, hintT: 0,
+  };
+  for (const u of UPS) G.up[u.id] = 0;
+  makeYard();
+}
+const xpNeed = (lv) => Math.round(8 + 7 * (lv - 1) + 0.9 * (lv - 1) * (lv - 1));
+const ev = (type, o) => { G.events.push(Object.assign({ type, t: +G.t.toFixed(2) }, o || {})); if (G.events.length > 600) G.events.splice(0, 100); };
+
+// ---- 墓地(遊ぶたびに配置が変わる) ----
+function makeYard() {
+  const obs = [];
+  const n = 16 + Math.floor(Math.random() * 6);
+  let tries = 0;
+  while (obs.length < n && tries++ < 600) {
+    const a = Math.random() * TAU, r = 5.5 + Math.sqrt(Math.random()) * (ARENA - 8);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const roll = Math.random();
+    const kind = roll < 0.45 ? 'grave' : roll < 0.72 ? 'pillar' : roll < 0.9 ? 'tree' : 'crypt';
+    const rad = kind === 'grave' ? 0.55 : kind === 'pillar' ? 0.62 : kind === 'tree' ? 0.38 : 1.35;
+    if (obs.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + rad + 2.4)) continue;
+    obs.push({ x, z, r: rad, kind, yaw: Math.random() * TAU, h: 0.8 + Math.random() * 0.6, tilt: (Math.random() - 0.5) * 0.25 });
+  }
+  G.obs = obs;
+  worldDirty = true;
+}
+
+// =============================================================================
+//  強さ(強化から計算する)
+// =============================================================================
+const heatMul = () => 1 + 0.3 * G.up.heat + 0.08 * G.up.radius;
+const lightR = () => (1.7 + 2.5 * Math.sqrt(clamp(G.oil / OIL_MAX, 0, 1))) * (1 + 0.15 * G.up.radius);
+// 夜が深まるほど、影は燃えにくくなる(1分半から。大影はもとから燃えにくい)。
+// ランタンの光はそのまま弱くなるが、連鎖の爆風は深さに合わせて強くなる(群れを集めて燃やすほど得になる)
+const depth = () => 1 + Math.max(0, G.t - 90) / 105;
+const emax = (e) => KDEF[e.k].max * (e.k === 4 ? 1 : depth());
+// 爆風・灯を開く・火の粉・燃える床は、深さの一部だけ追いつく(夜が深いほど、群れをぎゅっと固めないと連鎖が切れる)
+const fireDepth = () => Math.pow(depth(), 0.65);
+const flareR = () => Math.max(lightR() * 1.85, 5.2) * (1 + 0.2 * G.up.flare);
+const flareCost = () => 14 - 3 * G.up.flare - G.up.oil;
+const flareCdMax = () => 3.4 - 0.8 * G.up.flare;
+const flareHeat = () => 4.4 * (1 + 0.45 * G.up.flare) * fireDepth();
+const pickR = () => 1.15 * (1 + 0.6 * G.up.mag);
+const pSpeed = () => 5.0 * (1 + 0.08 * G.up.speed) * (G.p.slowT > 0 ? 0.62 : 1);
+const drain = () => 1.25 * (1 - 0.2 * G.up.oil);
+
+// =============================================================================
+//  空間の格子(近くの影をすばやく探す)
+// =============================================================================
+const CELL = 2, GN = 56, GOFF = GN * CELL / 2;
+const gHead = new Int32Array(GN * GN), gNext = new Int32Array(4096);
+function cellOf(x, z) { const cx = clamp(Math.floor((x + GOFF) / CELL), 0, GN - 1), cz = clamp(Math.floor((z + GOFF) / CELL), 0, GN - 1); return cz * GN + cx; }
+function buildGrid() {
+  gHead.fill(-1);
+  const en = G.en;
+  for (let i = 0; i < en.length; i++) { const c = cellOf(en[i].x, en[i].z); gNext[i] = gHead[c]; gHead[c] = i; }
+}
+// (x,z) から r 以内の影を fn に渡す
+function near(x, z, r, fn) {
+  const x0 = clamp(Math.floor((x - r + GOFF) / CELL), 0, GN - 1), x1 = clamp(Math.floor((x + r + GOFF) / CELL), 0, GN - 1);
+  const z0 = clamp(Math.floor((z - r + GOFF) / CELL), 0, GN - 1), z1 = clamp(Math.floor((z + r + GOFF) / CELL), 0, GN - 1);
+  const en = G.en;
+  for (let cz = z0; cz <= z1; cz++) for (let cx = x0; cx <= x1; cx++) {
+    for (let i = gHead[cz * GN + cx]; i !== -1; i = gNext[i]) fn(en[i], i);
+  }
+}
+
+// =============================================================================
+//  影を出す
+// =============================================================================
+function spawn(k, x, z, opt) {
+  if (G.en.length >= 300) return null;
+  const e = { id: G.nid++, k, x, z, vx: 0, vz: 0, kx: 0, kz: 0, heat: 0, st: 0, bt: 0, grp: null, yaw: Math.atan2(G.p.x - x, G.p.z - z), ph: Math.random(), born: 0, cd: 1.5 + Math.random() * 2, dead: false, slowUntil: 0, mcd: 5 };
+  if (opt) Object.assign(e, opt);
+  G.en.push(e);
+  G.bornKinds[k]++;
+  return e;
+}
+function pickKind() {
+  const t = G.t;
+  // 5分をすぎると、走り影と油影が どんどん増える
+  const late = Math.max(0, t - 300);
+  const w = [1, t > 55 ? Math.min(0.42, 0.1 + (t - 55) / 260) + late / 500 : 0, t > 115 ? Math.min(0.09, 0.04 + (t - 115) / 2400) + late / 3000 : 0, t > 175 ? 0.07 : 0];
+  if (w[3] && G.en.filter((e) => e.k === 3).length >= 5 + Math.floor(t / 200)) w[3] = 0;
+  let s = w.reduce((a, b) => a + b, 0), r = Math.random() * s;
+  for (let i = 0; i < w.length; i++) { r -= w[i]; if (r <= 0) return i; }
+  return 0;
+}
+function spawnPack(size) {
+  // 3分をすぎると、ときどき 行く手(歩いている向き)に群れがわく。同じ所を回っているだけでは逃げきれない
+  const mv = Math.hypot(G.p.vx, G.p.vz);
+  const ahead = G.t > 180 && mv > 1 && Math.random() < 0.3;
+  const a = ahead ? Math.atan2(G.p.vz, G.p.vx) + (Math.random() - 0.5) * 1.4 : Math.random() * TAU, d = 15 + Math.random() * 3;
+  let cx = G.p.x + Math.cos(a) * d, cz = G.p.z + Math.sin(a) * d;
+  const rr = Math.hypot(cx, cz); if (rr > ARENA + 5) { cx *= (ARENA + 5) / rr; cz *= (ARENA + 5) / rr; }
+  for (let i = 0; i < size; i++) {
+    const k = pickKind();
+    spawn(k, cx + (Math.random() - 0.5) * 3, cz + (Math.random() - 0.5) * 3);
+  }
+}
+function rate(t) { return 0.55 + 0.0165 * t + Math.max(0, t - 240) * 0.018; }
+function director(dt) {
+  const t = G.t;
+  if (G.dawn || t >= NIGHT) return;
+  if (!G.opened && t >= 0.5) {
+    // はじまりの群れ: 北から7体が かたまって来る(連鎖を最初に見せるため)
+    G.opened = true;
+    const cx = G.p.x, cz = G.p.z - 10.5;
+    const pts = [[0, 0], [0.85, 0], [-0.85, 0], [0.42, 0.75], [-0.42, 0.75], [0.42, -0.75], [-0.42, -0.75]];
+    for (const [ox, oz] of pts) spawn(0, cx + ox, cz + oz, { slowUntil: 9 });
+    ev('open');
+  }
+  if (t > 7.5) {
+    G.spawnAcc += rate(t) * dt;
+    while (G.spawnAcc >= 1) {
+      const size = Math.min(Math.floor(G.spawnAcc), 2 + Math.floor(Math.random() * 3 + t / 100));
+      G.spawnAcc -= size;
+      spawnPack(size);
+    }
+  }
+  // 囲い込み: 影が輪になって四方から
+  if (t >= G.nextRing) {
+    G.nextRing = t + (t > 300 ? 30 : 50) + Math.random() * 15;
+    const n = Math.min(56, 16 + Math.floor(t / 14));
+    const a0 = Math.random() * TAU;
+    for (let i = 0; i < n; i++) { const a = a0 + (i / n) * TAU; spawn(t > 300 && i % 3 === 0 ? 1 : 0, G.p.x + Math.cos(a) * 11.5, G.p.z + Math.sin(a) * 11.5); }
+    ev('ring', { n });
+    showWarn('囲まれる');
+    sfx.ring();
+  }
+  // 大影
+  if (!G.giantWarned && t >= G.nextGiant - 3) { G.giantWarned = true; showWarn('大影が来る'); sfx.horn(); }
+  if (t >= G.nextGiant) {
+    G.nextGiant = t + (t > 300 ? 110 : 150); G.giantWarned = false;
+    const n = t > 500 ? 2 : 1;
+    for (let i = 0; i < n; i++) { const a = Math.random() * TAU; spawn(4, G.p.x + Math.cos(a) * 16, G.p.z + Math.sin(a) * 16); }
+    ev('giant', { n });
+  }
+  // 夜が深まる知らせ
+  if (t >= G.nextDeep) {
+    G.nextDeep += 150;
+    showWarn('夜が深まる'); toast('影が燃えにくくなった');
+    ev('deep', { depth: +depth().toFixed(2) });
+  }
+}
+
+// =============================================================================
+//  燃える・爆ぜる・連鎖
+// =============================================================================
+function newGroup(src, x, z) { const g = { id: G.gid++, n: 0, pending: 0, last: G.t, src, x: 0, z: 0, slowed: false, pop: null, px: x, pz: z }; G.groups.push(g); return g; }
+function ignite(e, g) {
+  if (e.st !== 0 || e.dead) return;
+  e.st = 1; e.bt = 0.085 + (e.id % 4) * 0.013; e.grp = g; g.pending++;
+}
+function burst(e) {
+  const g = e.grp, def = KDEF[e.k];
+  const k = g.n++;
+  g.pending--; g.last = G.t; g.x += e.x; g.z += e.z;
+  e.dead = true;
+  G.kills++; G.killKinds[e.k]++;
+  // 連鎖の火種: 連鎖が長く続くほど、爆風が広く・熱くなる
+  const grow = G.up.chain ? Math.min(1, k * G.up.chain / 30) : 0;
+  const B = def.B * (1 + 0.12 * G.up.burst) * (1 + 0.5 * grow);
+  const dp = fireDepth() * (1 + 0.6 * grow);
+  near(e.x, e.z, B + 1.4, (o) => {
+    if (o === e || o.dead || o.st !== 0) return;
+    const d = Math.max(0, Math.hypot(o.x - e.x, o.z - e.z) - KDEF[o.k].r * 0.5);
+    if (d > B) return;
+    o.heat += def.BH * (o.k === 4 ? 1 : dp) * (1 + 0.08 * G.up.burst) * (1 - 0.4 * d / B);
+    if (o.heat >= emax(o)) ignite(o, g);
+  });
+  // 残り火
+  const v = def.ev * (1 + 0.12 * k);
+  const n = e.k === 2 || e.k === 4 ? 3 : 1;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, s = 0.3 + Math.random() * 0.9;
+    G.emb.push({ x: e.x + Math.cos(a) * s * 0.4, z: e.z + Math.sin(a) * s * 0.4, vx: Math.cos(a) * s, vz: Math.sin(a) * s, v: v / n, oil: e.k === 2 ? 7 : e.k === 4 ? 15 : 0, life: 9, age: 0, big: e.k === 2 || e.k === 4 });
+  }
+  if (G.up.floor) G.patches.push({ x: e.x, z: e.z, r: Math.min(2.6, B * 0.62), life: 1.0 + 0.6 * G.up.floor, max: 1.0 + 0.6 * G.up.floor });
+  if (G.patches.length > 60) G.patches.shift();
+  for (let s = 0; s < G.up.spark; s++) {
+    let best = null, bd = 1e9;
+    near(e.x, e.z, 6, (o) => {
+      if (o.dead || o.st !== 0 || o.spk) return;
+      const d = Math.hypot(o.x - e.x, o.z - e.z) - (Math.hypot(o.x - G.p.x, o.z - G.p.z) > G.R ? 3 : 0);
+      if (d < bd) { bd = d; best = o; }
+    });
+    if (best) { best.spk = true; G.sparks.push({ x: e.x, z: e.z, y: 1, tgt: best, g, life: 1.2 }); g.pending++; }
+  }
+  if (e.k === 4) { // 大影を倒した: 強化をもう1枚
+    G.pending++; G.cardDelay = Math.max(G.cardDelay, 1.2);
+    ev('giantdown'); toast('大影を焼いた — 強化をもう1枚');
+  }
+  fxBurst(e, B, k);
+  if (g.n >= 3 && !g.pop) g.pop = makePop(g);
+  if (g.n >= 14 && !g.slowed) { g.slowed = true; G.slowT = 0.45; G.shake = Math.max(G.shake, 0.5); }
+}
+function finishGroups() {
+  for (let i = G.groups.length - 1; i >= 0; i--) {
+    const g = G.groups[i];
+    if (g.pending > 0 || G.t - g.last < 0.35 || g === G.flareGroup || (g === G.dawnGroup && G.en.length)) continue;
+    G.groups.splice(i, 1);
+    if (g.n === 0) continue;
+    if (g.pop) g.pop.done = performance.now();
+    if (g.src === 'dawn') continue;  // 朝の光で燃えたぶんは連鎖の記録に入れない
+    G.chains.push(g.n);
+    if (G.chains.length > 500) G.chains.shift();
+    G.srcKills[g.src] = (G.srcKills[g.src] || 0) + g.n;
+    if (g.src === 'light' && g.n >= 3) { G.spread.n++; G.spread.sum += g.n; }
+    if (g.n > G.maxChain) G.maxChain = g.n;
+    if (g.n >= 2) ev('chain', { n: g.n, src: g.src });
+  }
+}
+
+// =============================================================================
+//  自分の操作
+// =============================================================================
+const keys = {};
+let mouseHold = null;            // マウスを押している画面の位置
+let stickV = null;               // 指のスティック {x,y}(-1..1)
+function tryFlare() {
+  if (gstate !== 'play') return;
+  if (G.flareCd > 0) { sfx.deny(); return; }
+  if (G.oil < flareCost()) { sfx.deny(); toast('油が足りない — 残り火を拾え'); flashBtn('nooil'); return; }
+  G.oil -= flareCost();
+  G.flareT = 0.5; G.flareCd = flareCdMax(); G.flareR = flareR();
+  G.flareGroup = newGroup('flare', G.p.x, G.p.z);
+  G.flares++;
+  // そばの影は押しのける(遠くの群れは動かさず、まとまったまま燃やす)
+  buildGrid();  // キーを押した瞬間に呼ばれるので、格子を作りなおしてから探す
+  near(G.p.x, G.p.z, 2.3, (o) => {
+    if (o.dead) return;
+    const dx = o.x - G.p.x, dz = o.z - G.p.z, d = Math.hypot(dx, dz) || 1;
+    const kk = o.k === 4 ? 1.5 : 6.5;
+    o.kx += (dx / d) * kk; o.kz += (dz / d) * kk;
+  });
+  // 吐かれた泥は 光で消える
+  for (const s of G.spits) if (Math.hypot(s.x - G.p.x, s.z - G.p.z) < G.flareR) s.life = 0;
+  ev('flare');
+  fxFlare();
+  flashBtn('go');
+}
+function hurt(e) {
+  const p = G.p;
+  p.hp--; p.inv = 1.6; G.hits++;
+  // 自分も はじき飛ばされる(大影に張りつかれて続けざまに やられないように)
+  { const dx = p.x - e.x, dz = p.z - e.z, d = Math.hypot(dx, dz) || 1, kk = e.k === 4 ? 11 : 6; p.kx = dx / d * kk; p.kz = dz / d * kk; }
+  G.cause = KDEF[e.k].name;
+  ev('hit', { k: e.k, hp: p.hp });
+  near(p.x, p.z, 3.2, (o) => {
+    if (o.dead) return;
+    const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz) || 1;
+    const kk = o.k === 4 ? 2 : 8;
+    o.kx += (dx / d) * kk; o.kz += (dz / d) * kk;
+  });
+  G.shake = Math.max(G.shake, 0.9);
+  sfx.hurt();
+  const h = $('hurt'); h.classList.remove('on'); void h.offsetWidth; h.classList.add('on');
+  if (p.hp <= 0) gameOver();
+}
+
+// =============================================================================
+//  1/60秒ぶん進める
+// =============================================================================
+function step(dt) {
+  const p = G.p;
+  G.t += dt;
+  director(dt);
+  // 夜明け: 朝の光で 影がすべて燃え上がる
+  if (!G.dawn && G.t >= NIGHT) {
+    G.dawn = G.t; p.inv = 99; G.spits.length = 0;
+    G.dawnGroup = newGroup('dawn', p.x, p.z);
+    ev('dawn'); showWarn('夜明け'); sfx.dawn(); setHint('');
+  }
+  if (G.dawn && G.t - G.dawn > 4.2 && !G.en.some((e) => !e.dead) && !G.groups.some((g) => g.pending > 0)) { gameOver(true); return; }
+
+  // ---- 自分 ----
+  let ix = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), iz = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+  if (stickV) { ix += stickV.x; iz += stickV.y; }
+  if (mouseHold && !ix && !iz) {
+    const w = screenToGround(mouseHold.x, mouseHold.y);
+    if (w) { const dx = w.x - p.x, dz = w.z - p.z, d = Math.hypot(dx, dz); if (d > 0.3) { ix = dx / d * Math.min(1, d / 1.2); iz = dz / d * Math.min(1, d / 1.2); } }
+  }
+  const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
+  const sp = pSpeed();
+  const k = Math.min(1, 14 * dt);
+  p.vx += (ix * sp - p.vx) * k; p.vz += (iz * sp - p.vz) * k;
+  p.x += (p.vx + p.kx) * dt; p.z += (p.vz + p.kz) * dt;
+  { const kd = Math.exp(-5 * dt); p.kx *= kd; p.kz *= kd; }
+  for (const o of G.obs) { const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz), m = o.r + PR; if (d < m && d > 1e-4) { p.x = o.x + dx / d * m; p.z = o.z + dz / d * m; } }
+  { const r = Math.hypot(p.x, p.z), m = ARENA - 0.7; if (r > m) { p.x *= m / r; p.z *= m / r; } }
+  const spd = Math.hypot(p.vx, p.vz);
+  if (spd > 0.4) p.face = Math.atan2(p.vx, p.vz);
+  p.walk += spd * dt;
+  if (p.inv > 0) p.inv -= dt;
+  if (p.slowT > 0) p.slowT -= dt;
+
+  // ---- 油と光 ----
+  G.oil = Math.max(0, G.oil - drain() * dt);
+  G.R = lightR();
+  if (G.flareCd > 0) G.flareCd -= dt;
+  if (G.flareT > 0) { G.flareT -= dt; if (G.flareT <= 0) G.flareGroup = null; }
+
+  buildGrid();
+  // はじめは、1体だけで来た影なら ふれる前に燃えつきる熱さ(夜が深まると足りなくなる)
+  const R = G.R, hm = heatMul(), hr = 0.7 * hm, fr = G.flareR, dpt = fireDepth();
+  // 影は だんだん速くなる。5分をすぎると さらに速くなっていく
+  G.spdMul = 1 + Math.min(0.25, G.t / 1000) + Math.max(0, G.t - 240) / 700;
+  const en = G.en;
+  // ---- 影 ----
+  for (let i = 0; i < en.length; i++) {
+    const e = en[i];
+    if (e.dead) continue;
+    const def = KDEF[e.k];
+    if (e.born < 1) e.born = Math.min(1, e.born + dt * 1.6);
+    let dx = p.x - e.x, dz = p.z - e.z;
+    const d = Math.hypot(dx, dz) || 1e-3;
+    if (e.st === 1) {
+      e.bt -= dt; e.vx *= 0.8; e.vz *= 0.8;
+      if (e.bt <= 0) burst(e);
+      continue;
+    }
+    // 動き
+    let tx = dx / d, tz = dz / d;
+    let s = def.spd * G.spdMul;
+    if (G.t < e.slowUntil) s *= 0.62;
+    if (e.k === 1) { const lx = p.x + p.vx * 0.45 - e.x, lz = p.z + p.vz * 0.45 - e.z, l = Math.hypot(lx, lz) || 1; tx = lx / l; tz = lz / l; }
+    if (e.k === 3) {
+      if (d < 6.5) { tx = -tx; tz = -tz; s *= 0.8; }
+      else if (d < 9.5) { const q = tx; tx = -tz * 0.7; tz = q * 0.7; if (e.id % 2) { tx = -tx; tz = -tz; } }
+      e.cd -= dt;
+      if (e.cd <= 0 && d < 12 && e.born >= 1) {
+        e.cd = 3.0 + Math.random();
+        const lead = d / 7.5;
+        const ax = p.x + p.vx * lead * 0.6 - e.x, az = p.z + p.vz * lead * 0.6 - e.z, al = Math.hypot(ax, az) || 1;
+        G.spits.push({ x: e.x, z: e.z, vx: ax / al * 7.5, vz: az / al * 7.5, life: 2.2 });
+        sfx.spit(d);
+      }
+    }
+    if (e.k === 4) {
+      e.mcd -= dt;
+      if (e.mcd <= 0) { e.mcd = 6.5; for (let j = 0; j < 3; j++) { const a = Math.random() * TAU; spawn(0, e.x + Math.cos(a) * 1.8, e.z + Math.sin(a) * 1.8); } }
+    }
+    const ka = Math.min(1, 5 * dt);
+    e.vx += (tx * s - e.vx) * ka; e.vz += (tz * s - e.vz) * ka;
+    e.x += (e.vx + e.kx) * dt; e.z += (e.vz + e.kz) * dt;
+    const kd = Math.exp(-6 * dt); e.kx *= kd; e.kz *= kd;
+    const ty = Math.atan2(e.vx, e.vz);
+    e.yaw += Math.atan2(Math.sin(ty - e.yaw), Math.cos(ty - e.yaw)) * Math.min(1, 8 * dt);
+    // 熱
+    let gain = 0;
+    if (e.born >= 1) {
+      if (d < R + def.r * 0.5) gain += hr * (1 + (1 - Math.min(1, d / R))) * def.res;
+      if (G.flareT > 0 && d < fr + def.r * 0.5) gain += flareHeat() * hm * def.res;
+      for (const pt of G.patches) if (Math.abs(pt.x - e.x) < pt.r && Math.hypot(pt.x - e.x, pt.z - e.z) < pt.r + def.r * 0.5) { gain += 1.4 * Math.max(def.res, 0.3) * (e.k === 4 ? 1 : dpt); break; }
+    }
+    if (G.dawn) gain += (0.4 + (G.t - G.dawn) * 1.6) * (e.k === 4 ? 12 : 1) * (0.6 + 0.8 * ((e.id * 0.618) % 1));
+    if (gain > 0) e.heat += gain * dt; else e.heat = Math.max(0, e.heat - 0.2 * dt);
+    if (e.heat >= emax(e)) ignite(e, G.dawn ? G.dawnGroup : G.flareT > 0 && G.flareGroup && d < fr + 1 ? G.flareGroup : newGroup('light', e.x, e.z));
+    // ふれた
+    if (p.inv <= 0 && e.born >= 0.7 && d < def.r + PR - 0.04 && gstate === 'play') hurt(e);
+  }
+  // ---- 押し合い(重ならない)と、墓石 ----
+  for (let i = 0; i < en.length; i++) {
+    const e = en[i];
+    if (e.dead) continue;
+    const re = KDEF[e.k].r;
+    near(e.x, e.z, re + 1.4, (o, j) => {
+      if (j <= i || o.dead) return;
+      const ro = KDEF[o.k].r, m = (re + ro) * 0.94;
+      let dx = o.x - e.x, dz = o.z - e.z; const d2 = dx * dx + dz * dz;
+      if (d2 >= m * m) return;
+      let d = Math.sqrt(d2);
+      if (d < 1e-4) { dx = Math.cos(o.id); dz = Math.sin(o.id); d = 1; }
+      const ov = m - d, we = ro * ro / (re * re + ro * ro), wo = 1 - we;
+      e.x -= dx / d * ov * we; e.z -= dz / d * ov * we;
+      o.x += dx / d * ov * wo; o.z += dz / d * ov * wo;
+    });
+    for (const ob of G.obs) {
+      const dx = e.x - ob.x, dz = e.z - ob.z; if (Math.abs(dx) > ob.r + re || Math.abs(dz) > ob.r + re) continue;
+      const d = Math.hypot(dx, dz), m = ob.r + re * 0.8; if (d < m && d > 1e-4) { e.x = ob.x + dx / d * m; e.z = ob.z + dz / d * m; }
+    }
+  }
+  // ---- 火の粉 ----
+  for (let i = G.sparks.length - 1; i >= 0; i--) {
+    const s = G.sparks[i], t = s.tgt;
+    s.life -= dt;
+    const dx = t.x - s.x, dz = t.z - s.z, d = Math.hypot(dx, dz);
+    if (t.dead || t.st !== 0 || s.life <= 0 || d < 0.35) {
+      if (!t.dead && t.st === 0 && d < 0.6) { t.heat += 0.8 * hm * (t.k === 4 ? 1 : fireDepth()); if (t.heat >= emax(t)) ignite(t, s.g); }
+      t.spk = false; s.g.pending--; s.g.last = G.t;
+      G.sparks.splice(i, 1);
+      continue;
+    }
+    const v = 13 * dt; s.x += dx / d * v; s.z += dz / d * v;
+    if (vr() < 0.6) particle(s.x, 0.9 + Math.sin(s.life * 9) * 0.2, s.z, (vr() - 0.5) * 0.6, 0.4, (vr() - 0.5) * 0.6, 0.35, 0.18, 1, 0.75, 0.3, 1);
+  }
+  // ---- 吐かれた泥 ----
+  for (let i = G.spits.length - 1; i >= 0; i--) {
+    const s = G.spits[i];
+    s.life -= dt; s.x += s.vx * dt; s.z += s.vz * dt;
+    let hit = false;
+    if (Math.hypot(s.x - p.x, s.z - p.z) < PR + 0.32 && gstate === 'play') {
+      hit = true; G.oil = Math.max(0, G.oil - 14); p.slowT = 1.3; ev('spit'); sfx.splat(); toast('泥を浴びた — 光がしぼむ');
+      for (let j = 0; j < 14; j++) particle(p.x, 0.9, p.z, (vr() - 0.5) * 4, vr() * 3, (vr() - 0.5) * 4, 0.6, 0.25, 0.25, 0.1, 0.35, 0, 1);
+    }
+    for (const ob of G.obs) if (Math.hypot(s.x - ob.x, s.z - ob.z) < ob.r) { hit = true; break; }
+    if (hit || s.life <= 0) G.spits.splice(i, 1);
+  }
+  // ---- 残り火の床 ----
+  for (let i = G.patches.length - 1; i >= 0; i--) { const pt = G.patches[i]; pt.life -= dt; if (pt.life <= 0) G.patches.splice(i, 1); }
+  // ---- 残り火 ----
+  const pr = pickR();
+  for (let i = G.emb.length - 1; i >= 0; i--) {
+    const m = G.emb[i];
+    m.age += dt; m.life -= dt;
+    m.x += m.vx * dt; m.z += m.vz * dt; m.vx *= 0.9; m.vz *= 0.9;
+    const dx = p.x - m.x, dz = p.z - m.z, d = Math.hypot(dx, dz);
+    if (d < pr && m.age > 0.25) { const v = Math.min(d, (8 + (pr - d) * 6) * dt); m.x += dx / d * v; m.z += dz / d * v; }
+    if (d < 0.5 && m.age > 0.25) {
+      G.xp += m.v; G.picked++;
+      G.oil = Math.min(OIL_MAX, G.oil + m.v * 2.3 * (1 + 0.2 * G.up.oil) + m.oil);
+      sfx.pick();
+      G.emb.splice(i, 1);
+      continue;
+    }
+    if (m.life <= 0) G.emb.splice(i, 1);
+  }
+  while (G.xp >= G.xpNext) { G.xp -= G.xpNext; G.lv++; G.xpNext = xpNeed(G.lv); G.pending++; G.cardDelay = Math.max(G.cardDelay, 0.45); ev('level', { lv: G.lv }); }
+  // ---- 片づけ ----
+  if (G.en.some((e) => e.dead)) G.en = G.en.filter((e) => !e.dead);
+  finishGroups();
+  if (G.pending > 0 && gstate === 'play') { G.cardDelay -= dt; if (G.cardDelay <= 0) openCards(); }
+  hints();
+}
+
+// =============================================================================
+//  強化カード
+// =============================================================================
+function openCards() {
+  const avail = UPS.filter((u) => G.up[u.id] < u.max);
+  const offer = [];
+  while (offer.length < 3 && avail.length) offer.push(avail.splice(Math.floor(Math.random() * avail.length), 1)[0].id);
+  while (offer.length < 3) offer.push('mend');
+  G.offers = offer;
+  G.offerLog.push(offer.slice());
+  gstate = 'card';
+  cardOpenAt = performance.now();
+  const deck = $('deck');
+  deck.innerHTML = '';
+  offer.forEach((id, i) => {
+    const b = document.createElement('button');
+    b.className = 'card';
+    b.dataset.i = i; b.dataset.id = id;
+    if (id === 'mend') {
+      b.innerHTML = `<kbd>${i + 1}</kbd><div class="no">—</div><div class="ic">🫙</div><div class="hd"><div class="nm">油を満たす</div><div class="pips">&nbsp;</div></div><div class="ds">油が満タンになり、灯芯が1本ともる</div>`;
+    } else {
+      const u = UPS[UPI[id]], l = G.up[id];
+      const pips = '◆'.repeat(l + 1) + `<i>${'◆'.repeat(u.max - l - 1)}</i>`;
+      b.innerHTML = `<kbd>${i + 1}</kbd><div class="no">${['壱', '弐', '参'][i]}</div><div class="ic">${u.ic}</div><div class="hd"><div class="nm">${u.nm}</div><div class="pips">${pips}</div></div><div class="ds">${u.ds(l)}</div>`;
+    }
+    b.addEventListener('click', () => choose(i));
+    deck.appendChild(b);
+  });
+  $('cards').hidden = false;
+  stickV = null; mouseHold = null; $('stick').hidden = true; for (const k in keys) keys[k] = false;
+  sfx.level();
+  ev('cards', { offer });
+}
+let cardOpenAt = 0;
+function choose(i) {
+  if (gstate !== 'card' || !G.offers || performance.now() - cardOpenAt < 350 && !window.__simSpeed) return;
+  const id = G.offers[i];
+  if (!id) return;
+  if (id === 'mend') { G.oil = OIL_MAX; G.p.hp = Math.min(G.p.maxHp, G.p.hp + 1); }
+  else {
+    G.up[id]++;
+    if (id === 'heart') { G.p.maxHp++; G.p.hp = Math.min(G.p.maxHp, G.p.hp + 1); }
+  }
+  G.picks.push(id);
+  G.pending--;
+  G.offers = null;
+  ev('pick', { id });
+  sfx.pickCard();
+  $('cards').hidden = true;
+  gstate = 'play';
+  if (G.pending > 0) G.cardDelay = 0.3;
+  buildHearts();
+}
+
+// =============================================================================
+//  はじめ・おわり
+// =============================================================================
+function startRun() {
+  unlockAudio();
+  newRun();
+  gstate = 'play';
+  acc = 0;
+  $('title').hidden = true; $('over').hidden = true; $('pause').hidden = true; $('cards').hidden = true;
+  $('hud').hidden = false;
+  buildHearts();
+  save.plays = (save.plays || 0) + 1; store();
+  startAmbient();
+  hintStage = 0; hintShown = '';
+  for (const p of popPool) p.el.remove();
+  popPool.length = 0;
+}
+function gameOver(won) {
+  gstate = 'over';
+  G.won = !!won;
+  overAt = performance.now();
+  ev('over', { cause: G.cause, won: G.won });
+  if (won) sfx.win(); else sfx.die();
+  const t = Math.min(G.t, NIGHT), nb = save.best || { t: 0, kills: 0, chain: 0 };
+  const newT = t > nb.t, newK = G.kills > nb.kills, newC = G.maxChain > nb.chain;
+  save.best = { t: Math.max(nb.t, t), kills: Math.max(nb.kills, G.kills), chain: Math.max(nb.chain, G.maxChain) };
+  if (won) save.clears = (save.clears || 0) + 1;
+  store();
+  setTimeout(() => {
+    if (gstate !== 'over') return;
+    $('over').classList.toggle('won', G.won);
+    $('o-cap').textContent = won ? 'ここに 夜 明ける' : 'ここに 灯 尽きる';
+    $('o-time').textContent = won ? '夜明け' : fmt(t);
+    // 区切りごとに改行しないかたまりにする(「最 / 長記録」のように途中で折れないように)
+    const seg = (a) => a.map((s) => `<span style="white-space:nowrap">${s}</span>`).join(' ・ ');
+    $('o-cause').innerHTML = won ? seg(['ひと晩を生きのびた'].concat(G.hits === 0 ? ['無傷'] : []))
+      : seg([`${G.cause}にのまれた`, `夜明けまで あと${fmt(NIGHT - t)}`].concat(newT ? ['最長記録'] : []));
+    $('o-kills').textContent = G.kills;
+    $('o-chain').textContent = G.maxChain;
+    $('o-nb1').textContent = newK ? '新記録' : `記録 ${save.best.kills}`;
+    $('o-nb2').textContent = newC ? '新記録' : `記録 ${save.best.chain}`;
+    const cnt = {};
+    for (const id of G.picks) cnt[id] = (cnt[id] || 0) + 1;
+    const ics = Object.entries(cnt).map(([id, n]) => (id === 'mend' ? '🫙' : UPS[UPI[id]].ic) + (n > 1 ? `<sub style="font-size:12px">${n}</sub>` : '')).join(' ');
+    $('build').innerHTML = (ics || '—') + `<small>灯の育ち Lv${G.lv}</small>`;
+    $('tip').textContent = tipFor();
+    $('over').hidden = false;
+    $('hud').hidden = true;
+  }, 1100);
+}
+function tipFor() {
+  if (G.won) return G.hits ? '次は無傷で、もっと大きな連鎖を。強化の組み合わせを変えると、夜の景色も変わる。' : '見事な夜だった。ちがう強化の組み立てでも、夜を越えられるか。';
+  if (G.maxChain < 8) return '光の外で群れを引き連れて回り、固まったところで灯を開くと、大きく連鎖する。';
+  if (G.cause === '走り影') return '走り影は先回りしてくる。正面に来たら、ひきつけて灯を開け。';
+  if (G.cause === '大影') return '大影は光ではほとんど焼けない。群れの連鎖の爆風に巻きこめ。';
+  if (G.picked < G.kills * 0.5) return '残り火を半分も拾えていない。燃やした直後が拾いどき。';
+  if (!G.up.chain && !G.up.burst) return '「爆ぜ火」や「連鎖の火種」で、連鎖の届く距離をのばしてみよう。';
+  return '油影を群れの真ん中で燃やすと、大爆発で一気に片づく。';
+}
+const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+let overAt = 0;
+
+// =============================================================================
+//  ヒント(遊びながら覚える)
+// =============================================================================
+let hintStage = 0, hintShown = '';
+function setHint(html) { if (hintShown === html) return; hintShown = html; const h = $('hint'); h.innerHTML = html; h.classList.toggle('on', !!html); }
+function hints() {
+  const t = G.t;
+  if (save.plays > 3 && hintStage === 0) hintStage = 9;
+  const btn = isTouch ? '✺ボタン' : 'Space';
+  if (hintStage === 0) { setHint(`影が来る。<em>光に入れると燃える</em>`); if (t > 3.2) hintStage = 1; }
+  else if (hintStage === 1) {
+    setHint(`群れがかたまったら、<em>${btn}で灯を開け</em>`);
+    if (G.flares > 0 || G.kills >= 4) { hintStage = 2; G.hintT = t; }
+    if (t > 14) { hintStage = 2; G.hintT = t; }
+  } else if (hintStage === 2) {
+    setHint(G.emb.length ? `燃えた跡の<em>残り火</em>を拾え。油が戻る` : '');
+    if (t - G.hintT > 5 || G.picked >= 5) { hintStage = 3; G.hintT = t; }
+  } else if (hintStage === 3) {
+    setHint(`光の外で群れを引き連れて回り、<em>まとめて焼け</em>`);
+    if (t - G.hintT > 6) { hintStage = 9; }
+  } else setHint('');
+  if (hintStage === 9 && G.oil < 18 && t > 20) setHint(`油が切れかけている — <em>残り火</em>を拾え`);
+  else if (hintStage === 9) setHint('');
+}
+
+// =============================================================================
+//  音(Web Audio で合成)
+// =============================================================================
+let AC = null, master = null, sfxBus = null, ambG = null, crackG = null, noiseBuf = null, ambOn = false;
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 対応していないブラウザ */ }
+  try {
+    if (!AC) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      AC = new AudioCtx();
+      master = AC.createGain(); master.gain.value = save.sound ? 0.85 : 0; master.connect(AC.destination);
+      const comp = AC.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 5; comp.connect(master);
+      sfxBus = AC.createGain(); sfxBus.gain.value = 0.85; sfxBus.connect(comp);
+      ambG = AC.createGain(); ambG.gain.value = 0; ambG.connect(comp);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (AC.state === 'suspended') AC.resume();
+    const b = AC.createBuffer(1, 1, 22050), src = AC.createBufferSource();
+    src.buffer = b; src.connect(AC.destination); src.start(0);
+  } catch (e) { /* 音が出せなくても遊べる */ }
+}
+for (const e of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(e, unlockAudio, { capture: true, passive: true });
+const canPlay = () => AC && save.sound && AC.state === 'running';
+function tone(f, dur, type, vol, f2, delay, dest) {
+  if (!canPlay() || !isFinite(f) || f <= 0 || !isFinite(vol)) return;
+  try {
+    const t = AC.currentTime + (delay || 0);
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(f, t);
+    if (f2 && isFinite(f2)) o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest || sfxBus);
+    o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) { /* 音で止めない */ }
+}
+function noise(dur, freq, q, vol, delay, type, f2) {
+  if (!canPlay() || !isFinite(freq) || freq <= 0) return;
+  try {
+    const t = AC.currentTime + (delay || 0);
+    const s = AC.createBufferSource(); s.buffer = noiseBuf; s.playbackRate.value = 0.8 + vr() * 0.4;
+    const f = AC.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.setValueAtTime(freq, t); f.Q.value = q || 1;
+    if (f2 && isFinite(f2)) f.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(sfxBus);
+    s.start(t, vr() * 1.5); s.stop(t + dur + 0.05);
+  } catch (e) { /* 音で止めない */ }
+}
+const last = {};
+const gate = (k, gap) => { if (!AC) return false; const t = AC.currentTime; if (last[k] && t - last[k] < gap) return false; last[k] = t; return true; };
+const PENTA = [0, 3, 5, 7, 10];
+const sfx = {
+  burst(k, kind) {
+    if (!gate('burst', 0.04)) return;
+    const n = Math.min(k, 24);
+    const semi = PENTA[n % 5] + 12 * Math.floor(n / 5);
+    const f = 110 * Math.pow(2, semi / 12);
+    noise(0.32, 1400, 0.7, 0.32, 0, 'lowpass', 160);
+    tone(150, 0.22, 'sine', 0.42, 45);
+    if (k > 0) tone(f * 2, 0.28, 'triangle', 0.09);
+    if (kind === 2 || kind === 4) { noise(0.9, 600, 0.6, 0.55, 0, 'lowpass', 60); tone(70, 0.7, 'sine', 0.6, 28); }
+  },
+  bigChain(n) { if (!gate('big', 0.5)) return; noise(1.4, 3000, 0.4, 0.22, 0.05, 'highpass', 600); tone(55, 1.2, 'sine', 0.4, 35); },
+  flare() { noise(0.55, 300, 0.8, 0.4, 0, 'bandpass', 3800); tone(523, 0.6, 'triangle', 0.12); tone(784, 0.7, 'triangle', 0.09, 0, 0.04); tone(1046, 0.8, 'sine', 0.07, 0, 0.08); },
+  deny() { if (gate('deny', 0.2)) tone(130, 0.12, 'square', 0.06, 90); },
+  pick() { if (!gate('pick', 0.03)) return; const k = (last.pickN = ((last.pickN || 0) + 1) % 8); tone(1320 * Math.pow(2, PENTA[k % 5] / 12), 0.12, 'sine', 0.07); },
+  hurt() { noise(0.4, 500, 1, 0.6, 0, 'lowpass', 80); tone(90, 0.45, 'sawtooth', 0.25, 40); },
+  level() { [0, 4, 7, 12].forEach((s, i) => tone(392 * Math.pow(2, s / 12), 0.5, 'triangle', 0.1, 0, i * 0.07)); },
+  pickCard() { tone(660, 0.25, 'sine', 0.12, 990); },
+  spit(d) { if (gate('spit', 0.12) && d < 14) noise(0.25, 400, 3, 0.15 * (1 - d / 16), 0, 'bandpass', 150); },
+  splat() { noise(0.4, 300, 2, 0.4, 0, 'lowpass', 90); },
+  ring() { tone(98, 1.6, 'sawtooth', 0.08, 92); tone(104, 1.6, 'sawtooth', 0.08, 98); noise(1.5, 200, 1, 0.15, 0, 'lowpass', 400); },
+  horn() { tone(55, 2.4, 'sawtooth', 0.22, 52); tone(82, 2.4, 'sawtooth', 0.12, 78, 0.1); },
+  die() { tone(220, 1.6, 'triangle', 0.18, 55); noise(1.6, 800, 0.6, 0.2, 0, 'lowpass', 60); },
+  dawn() { noise(4, 200, 0.5, 0.25, 0, 'lowpass', 3000); [0, 4, 7, 11, 14].forEach((s, i) => tone(262 * Math.pow(2, s / 12), 3.2, 'sine', 0.08, 0, i * 0.35)); },
+  win() { [0, 7, 12, 16, 19, 24].forEach((s, i) => tone(392 * Math.pow(2, s / 12), 1.6, 'triangle', 0.09, 0, i * 0.11)); },
+};
+function startAmbient() {
+  if (!AC || ambOn) return;
+  ambOn = true;
+  try {
+    // 低いうなり + 風
+    for (const [f, det] of [[55, 0], [55.6, 0], [82.4, 0]]) {
+      const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f + det;
+      const g = AC.createGain(); g.gain.value = 0.05; o.connect(g); g.connect(ambG); o.start();
+    }
+    const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true;
+    const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 420; f.Q.value = 0.7;
+    const lfo = AC.createOscillator(); lfo.frequency.value = 0.07; const lg = AC.createGain(); lg.gain.value = 220; lfo.connect(lg); lg.connect(f.frequency); lfo.start();
+    const g = AC.createGain(); g.gain.value = 0.18; n.connect(f); f.connect(g); g.connect(ambG); n.start();
+    // ランタンの炎のぱちぱち(油の量で大きさが変わる)
+    const n2 = AC.createBufferSource(); n2.buffer = noiseBuf; n2.loop = true; n2.playbackRate.value = 0.6;
+    const f2 = AC.createBiquadFilter(); f2.type = 'highpass'; f2.frequency.value = 2400;
+    crackG = AC.createGain(); crackG.gain.value = 0; n2.connect(f2); f2.connect(crackG); crackG.connect(sfxBus); n2.start();
+    ambG.gain.setTargetAtTime(0.5, AC.currentTime, 1.5);
+  } catch (e) { /* 環境音なしでも遊べる */ }
+}
+function setSound(on) {
+  save.sound = on; store();
+  if (master) master.gain.setTargetAtTime(on ? 0.85 : 0, AC.currentTime, 0.05);
+  $('b-snd').classList.toggle('off', !on);
+}
+
+// =============================================================================
+//  入力
+// =============================================================================
+const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
+addEventListener('keydown', (e) => {
+  const m = KEYMAP[e.code];
+  if (m) { keys[m] = true; e.preventDefault(); }
+  if (e.repeat) return;
+  if (gstate === 'title') { if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); startRun(); } return; }
+  if (gstate === 'over') { if ((e.code === 'Enter' || e.code === 'KeyR' || e.code === 'Space') && performance.now() - overAt > 1500) { e.preventDefault(); startRun(); } return; }
+  if (gstate === 'card') { const i = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code]; if (i !== undefined) choose(i); return; }
+  if (gstate === 'pause') { if (e.code === 'Escape' || e.code === 'KeyP' || e.code === 'Enter') resume(); return; }
+  if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyJ' || e.code === 'KeyK') { e.preventDefault(); tryFlare(); }
+  if (e.code === 'Escape' || e.code === 'KeyP') pause();
+  if (e.code === 'KeyM') setSound(!save.sound);
+});
+addEventListener('keyup', (e) => { const m = KEYMAP[e.code]; if (m) keys[m] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseHold = null; stickV = null; $('stick').hidden = true; if (gstate === 'play') pause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && gstate === 'play') pause(); });
+
+const cv = $('gl');
+let stickId = null, stickO = null;
+cv.addEventListener('contextmenu', (e) => e.preventDefault());
+cv.addEventListener('pointerdown', (e) => {
+  if (gstate !== 'play') return;
+  if (e.pointerType === 'mouse') {
+    if (e.button === 2) { tryFlare(); return; }
+    if (e.button === 0) { mouseHold = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); }
+    return;
+  }
+  if (stickId !== null) return;
+  stickId = e.pointerId; stickO = { x: e.clientX, y: e.clientY }; stickV = { x: 0, y: 0 };
+  const s = $('stick'); s.style.transform = `translate(${e.clientX}px,${e.clientY}px)`; s.firstElementChild.style.transform = ''; s.hidden = false;
+  try { cv.setPointerCapture(e.pointerId); } catch (er) { /* なくても動く */ }
+});
+cv.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') { if (mouseHold) { mouseHold.x = e.clientX; mouseHold.y = e.clientY; } return; }
+  if (e.pointerId !== stickId) return;
+  let dx = e.clientX - stickO.x, dy = e.clientY - stickO.y;
+  const d = Math.hypot(dx, dy), max = 46;
+  // 指が大きく離れたら、スティックの中心が ついてくる
+  if (d > max * 1.6) { stickO.x += dx / d * (d - max * 1.6); stickO.y += dy / d * (d - max * 1.6); dx = e.clientX - stickO.x; dy = e.clientY - stickO.y; $('stick').style.transform = `translate(${stickO.x}px,${stickO.y}px)`; }
+  const dd = Math.hypot(dx, dy);
+  const k = dd < 6 ? 0 : Math.min(1, (dd - 6) / (max - 6));
+  stickV = { x: dd ? dx / dd * k : 0, y: dd ? dy / dd * k : 0 };
+  $('stick').firstElementChild.style.transform = `translate(${dx / Math.max(1, dd) * Math.min(dd, max)}px,${dy / Math.max(1, dd) * Math.min(dd, max)}px)`;
+});
+const endPtr = (e) => {
+  if (e.pointerType === 'mouse') { if (e.button === 0 || e.type === 'pointercancel') mouseHold = null; return; }
+  if (e.pointerId !== stickId) return;
+  stickId = null; stickV = null; $('stick').hidden = true;
+};
+cv.addEventListener('pointerup', endPtr);
+cv.addEventListener('pointercancel', endPtr);
+$('b-flare').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); tryFlare(); });
+$('b-start').addEventListener('click', startRun);
+$('b-again').addEventListener('click', () => { if (performance.now() - overAt > 1500) startRun(); });
+$('b-pause').addEventListener('click', () => pause());
+$('b-resume').addEventListener('click', () => resume());
+$('b-quit').addEventListener('click', () => { $('pause').hidden = true; gstate = 'title'; $('hud').hidden = true; $('title').hidden = false; showBest(); });
+$('b-snd').addEventListener('click', () => setSound(!save.sound));
+function pause() { if (gstate !== 'play') return; gstate = 'pause'; $('pause').hidden = false; mouseHold = null; stickV = null; stickId = null; $('stick').hidden = true; }
+function resume() { if (gstate !== 'pause') return; gstate = 'play'; $('pause').hidden = true; acc = 0; }
+function flashBtn(c) { const b = $('b-flare'); b.classList.remove('go', 'nooil'); void b.offsetWidth; b.classList.add(c); setTimeout(() => b.classList.remove(c), 400); }
+function showWarn(t) { const w = $('warn'); w.textContent = t; w.classList.remove('on'); void w.offsetWidth; w.classList.add('on'); }
+let toastAt = 0;
+function toast(t) {
+  if (performance.now() - toastAt < 900) return; toastAt = performance.now();
+  const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; $('hud').appendChild(d); setTimeout(() => d.remove(), 1500);
+}
+function buildHearts() {
+  const h = $('hearts'); h.innerHTML = '';
+  for (let i = 0; i < G.p.maxHp; i++) { const w = document.createElement('i'); w.className = 'wick' + (i >= G.p.hp ? ' out' : ''); h.appendChild(w); }
+  lastHp = G.p.hp; lastMax = G.p.maxHp;
+}
+let lastHp = -1, lastMax = -1;
+function showBest() {
+  const b = save.best;
+  $('best').textContent = b && b.t > 0 ? `これまでの記録 ― ${fmt(b.t)} 生存 ・ ${b.kills} 体 ・ 最大連鎖 ${b.chain}` : '';
+}
+showBest();
+setSound(save.sound);
+$('k-flare').hidden = isTouch;
+
+// =============================================================================
+//  見た目の効果(粒・輪・光)
+// =============================================================================
+const PMAX = 3200;
+const P = { n: 0, x: new Float32Array(PMAX), y: new Float32Array(PMAX), z: new Float32Array(PMAX), vx: new Float32Array(PMAX), vy: new Float32Array(PMAX), vz: new Float32Array(PMAX),
+  life: new Float32Array(PMAX), max: new Float32Array(PMAX), s: new Float32Array(PMAX), r: new Float32Array(PMAX), g: new Float32Array(PMAX), b: new Float32Array(PMAX), dark: new Uint8Array(PMAX), grav: new Float32Array(PMAX) };
+let pLimit = PMAX;
+function particle(x, y, z, vx, vy, vz, life, size, r, g, b, grav, dark) {
+  if (P.n >= pLimit) return;
+  const i = P.n++;
+  P.x[i] = x; P.y[i] = y; P.z[i] = z; P.vx[i] = vx; P.vy[i] = vy; P.vz[i] = vz; P.life[i] = life; P.max[i] = life; P.s[i] = size;
+  P.r[i] = r; P.g[i] = g; P.b[i] = b; P.grav[i] = grav; P.dark[i] = dark ? 1 : 0;
+}
+function updParticles(dt) {
+  for (let i = 0; i < P.n; i++) {
+    P.life[i] -= dt;
+    if (P.life[i] <= 0) {
+      const j = --P.n;
+      for (const k of ['x', 'y', 'z', 'vx', 'vy', 'vz', 'life', 'max', 's', 'r', 'g', 'b', 'dark', 'grav']) P[k][i] = P[k][j];
+      i--; continue;
+    }
+    P.vy[i] -= P.grav[i] * dt;
+    const dr = Math.exp(-1.6 * dt);
+    P.vx[i] *= dr; P.vz[i] *= dr;
+    P.x[i] += P.vx[i] * dt; P.y[i] += P.vy[i] * dt; P.z[i] += P.vz[i] * dt;
+    if (P.y[i] < 0.03) { P.y[i] = 0.03; P.vy[i] *= -0.3; }
+  }
+}
+function fxBurst(e, B, k) {
+  const def = KDEF[e.k], big = e.k === 2 || e.k === 4;
+  const n = big ? 60 : 16;
+  for (let i = 0; i < n; i++) {
+    const a = vr() * TAU, s = (1.5 + vr() * 3.5) * (big ? 1.8 : 1);
+    particle(e.x, 0.5 + vr() * 0.6, e.z, Math.cos(a) * s, 1.5 + vr() * 3.5, Math.sin(a) * s, 0.35 + vr() * 0.4, 0.5 + vr() * 0.5, 1, 0.45 + vr() * 0.35, 0.12, -1.5, 0);
+  }
+  for (let i = 0; i < (big ? 24 : 7); i++) {
+    const a = vr() * TAU, s = 3 + vr() * 5;
+    particle(e.x, 0.7, e.z, Math.cos(a) * s, 3 + vr() * 5, Math.sin(a) * s, 0.6 + vr() * 0.6, 0.12, 1, 0.85, 0.5, 9, 0);
+  }
+  for (let i = 0; i < (big ? 10 : 3); i++) particle(e.x + (vr() - 0.5), 0.6, e.z + (vr() - 0.5), (vr() - 0.5), 0.8 + vr(), (vr() - 0.5), 1.4 + vr(), 0.9 + vr() * 0.6, 0.02, 0.015, 0.03, -0.3, 1);
+  const fx = G.fx;
+  fx.rings.push({ x: e.x, z: e.z, B, t: 0, dur: big ? 0.6 : 0.35, hot: big ? 1.6 : 1 });
+  fx.scorch.push({ x: e.x, z: e.z, s: B * 0.45 * (big ? 1.4 : 1), t: 0, rot: vr() * TAU });
+  if (fx.scorch.length > 90) fx.scorch.shift();
+  if (fx.rings.length > 80) fx.rings.shift();
+  fx.lights.push({ x: e.x, z: e.z, t: 0, dur: big ? 0.9 : 0.42, int: big ? 2.6 : 1.5, rad: B * 2.4 + 2 });
+  if (fx.lights.length > 40) fx.lights.shift();
+  G.shake = Math.max(G.shake, big ? 0.7 : 0.12 + Math.min(0.25, k * 0.015));
+  sfx.burst(k, e.k);
+  if (k === 14) sfx.bigChain(k);
+}
+function fxFlare() {
+  G.fx.flareFx = 1;
+  for (let i = 0; i < 70; i++) { const a = vr() * TAU, s = 6 + vr() * 6; particle(G.p.x, 1, G.p.z, Math.cos(a) * s, 0.5 + vr() * 2, Math.sin(a) * s, 0.45 + vr() * 0.3, 0.25, 1, 0.8, 0.4, 0, 0); }
+  sfx.flare();
+}
+
+// =============================================================================
+//  WebGL
+// =============================================================================
+let gl = null, GL2 = false, IX = null;
+const glOpt = { antialias: !(isTouch && devicePixelRatio >= 2), alpha: false, powerPreference: 'high-performance' };
+try { gl = cv.getContext('webgl2', glOpt); GL2 = !!gl; } catch (e) { gl = null; }
+if (!gl) { try { gl = cv.getContext('webgl', glOpt) || cv.getContext('experimental-webgl', glOpt); } catch (e) { gl = null; } if (gl) IX = gl.getExtension('ANGLE_instanced_arrays'); }
+if (!gl || (!GL2 && !IX)) { $('nogl').hidden = false; gl = null; }
+const divisor = (i, d) => (GL2 ? gl.vertexAttribDivisor(i, d) : IX.vertexAttribDivisorANGLE(i, d));
+const drawInst = (n, cnt) => (GL2 ? gl.drawArraysInstanced(gl.TRIANGLES, 0, n, cnt) : IX.drawArraysInstancedANGLE(gl.TRIANGLES, 0, n, cnt));
+
+const PREC = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+`;
+const NOISE = `
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
+`;
+// 光: 0番がランタン。ほかは爆ぜた火。月明かりはごく弱い
+const LIGHT = `
+uniform vec3 uEye; uniform vec4 uPL[8]; uniform vec4 uPC[8]; uniform vec3 uAmb; uniform vec3 uMoon; uniform vec3 uMoonC; uniform float uNL;
+vec3 shade(vec3 base, vec3 n, vec3 w, float spec){
+  vec3 v = normalize(uEye - w);
+  vec3 col = base * (uAmb + uMoonC * max(dot(n, uMoon), 0.0));
+  for (int i = 0; i < 8; i++) {
+    if (float(i) >= uNL) break;
+    vec4 L = uPL[i];
+    vec3 lv = L.xyz - w; float d = length(lv); vec3 ld = lv / max(d, 0.001);
+    float a = clamp(1.0 - d / uPC[i].w, 0.0, 1.0); a = a * a * L.w;
+    float nd = max(dot(n, ld), 0.0) * 0.8 + 0.2;
+    col += base * uPC[i].rgb * a * nd;
+    col += uPC[i].rgb * a * pow(max(dot(n, normalize(ld + v)), 0.0), 20.0) * spec;
+  }
+  return col;
+}
+`;
+// 地面の模様(石畳・土・苔)は動かないので、はじめに1回だけテクスチャに焼いて使い回す
+const FEXT = 44.0;
+const FLOOR_BASE = `
+vec3 floorBase(vec2 p){
+  float r = length(p);
+  float row = floor(p.y / 1.25);
+  float qx = p.x + mod(row, 2.0) * 0.62;
+  vec2 cell = vec2(floor(qx / 1.5), row);
+  vec2 f = vec2(fract(qx / 1.5) * 1.5, fract(p.y / 1.25) * 1.25);
+  float e = min(min(f.x, 1.5 - f.x), min(f.y, 1.25 - f.y));
+  float h = h21(cell);
+  float n1 = vn(p * 1.9), n2 = vn(p * 0.37 + 7.0);
+  vec3 stone = mix(vec3(0.16, 0.155, 0.17), vec3(0.27, 0.25, 0.235), h) * (0.82 + 0.36 * n1);
+  stone = mix(stone * 0.3, stone, smoothstep(0.025, 0.085, e));
+  float crack = 1.0 - smoothstep(0.0, 0.03, abs(vn(p * 3.1 + h * 9.0) - 0.5));
+  stone *= 1.0 - crack * 0.45 * step(0.6, h);
+  vec3 soil = mix(vec3(0.055, 0.05, 0.045), vec3(0.1, 0.09, 0.065), vn(p * 2.3)) * (0.8 + 0.4 * n1);
+  vec3 moss = vec3(0.13, 0.18, 0.1) * (0.7 + 0.6 * vn(p * 4.0));
+  float plaza = 1.0 - smoothstep(14.0 + n2 * 7.0, 18.0 + n2 * 7.0, r);
+  float broken = smoothstep(0.6, 0.7, vn(p * 0.7 + 11.0));
+  vec3 base = mix(soil, stone, plaza * (1.0 - broken * 0.85));
+  base = mix(base, moss, smoothstep(0.55, 0.85, vn(p * 0.55 + 3.0)) * 0.55);
+  base *= 1.0 - 0.6 * smoothstep(${ARENA - 1}.0, ${ARENA + 6}.0, r);
+  return base;
+}`;
+// 焼くとき: 暗い色の段差が目立たないよう、平方根にしてしまう(読むときに2乗で戻す)
+const VS_BAKE = `attribute vec2 aQ; varying vec2 vP; void main(){ vP = aQ * ${FEXT.toFixed(1)}; gl_Position = vec4(aQ, 0.0, 1.0); }`;
+const FS_BAKE = PREC + NOISE + FLOOR_BASE + `varying vec2 vP; void main(){ gl_FragColor = vec4(sqrt(floorBase(vP)), 1.0); }`;
+const VS_FLOOR = `attribute vec3 aP; uniform mat4 uVP; varying vec3 vW; void main(){ vW = aP; gl_Position = uVP * vec4(aP, 1.0); }`;
+const FS_FLOOR = PREC + LIGHT + `
+uniform vec3 uPl; uniform float uR; uniform float uT; uniform float uFR; uniform float uFA; uniform sampler2D uFloor;
+varying vec3 vW;
+void main(){
+  vec2 p = vW.xz;
+  vec3 base = texture2D(uFloor, p / ${(FEXT * 2).toFixed(1)} + 0.5).rgb; base *= base;
+  vec3 col = shade(base, vec3(0.0, 1.0, 0.0), vW, 0.12);
+  // 光の届く範囲(燃やせる範囲)の目じるし
+  vec2 dp = p - uPl.xz; float d = length(dp);
+  float ang = atan(dp.y, dp.x);
+  float dash = step(0.4, fract(ang * 36.0 / 6.2832 - uT * 0.25));
+  float ring = exp(-pow((d - uR) / 0.07, 2.0));
+  col += vec3(1.0, 0.6, 0.22) * ring * (0.16 + 0.3 * dash);
+  col += vec3(0.4, 0.18, 0.05) * (1.0 - smoothstep(0.0, uR, d)) * 0.05;
+  float fring = exp(-pow((d - uFR) / 0.35, 2.0)) * uFA;
+  col += vec3(1.0, 0.85, 0.5) * fring * 1.2;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+const VS_MESH = `
+attribute vec3 aP; attribute vec3 aN; attribute vec3 aC;
+uniform mat4 uVP, uM;
+varying vec3 vN, vW, vC;
+void main(){ vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; vN = (uM * vec4(aN, 0.0)).xyz; vC = aC; gl_Position = uVP * w; }`;
+const FS_MESH = PREC + LIGHT + `
+uniform vec3 uEm; uniform float uSpec;
+varying vec3 vN, vW, vC;
+void main(){
+  vec3 n = normalize(vN);
+  vec3 c = shade(vC, n, vW, uSpec) + uEm * vC;
+  gl_FragColor = vec4(c, 1.0);
+}`;
+// 影: 1つの形を、場所・向き・大きさ・熱を変えて まとめて描く
+const VS_EN = `
+attribute vec3 aP; attribute vec3 aN; attribute vec4 iA; attribute vec4 iB; attribute vec4 iC;
+uniform mat4 uVP; uniform float uT;
+varying vec3 vL, vN, vW; varying vec4 vB; varying float vD;
+void main(){
+  vec3 p = aP;
+  float ph = iB.z * 6.2832;
+  float wob = sin(uT * 6.0 + ph + p.y * 4.0) * 0.05;
+  p.x *= iC.x * (1.0 + wob); p.z *= iC.x * (1.0 - wob); p.y *= iC.y * (1.0 + sin(uT * 4.0 + ph) * 0.04);
+  float bot = 1.0 - smoothstep(0.0, 0.4, aP.y);
+  p.xz += vec2(sin(uT * 5.0 + ph * 3.0 + aP.x * 7.0), cos(uT * 4.3 + ph * 2.0 + aP.z * 6.0)) * 0.07 * bot;
+  p.z += iC.z * aP.y;
+  p *= 1.0 + iB.w * 0.35;
+  vL = aP;
+  p *= iA.w;
+  float c = cos(iA.z), s = sin(iA.z);
+  vec3 w = vec3(p.x * c + p.z * s, p.y, -p.x * s + p.z * c) + vec3(iA.x, 0.0, iA.y);
+  vec3 n = vec3(aN.x * c + aN.z * s, aN.y, -aN.x * s + aN.z * c);
+  vW = w; vN = n; vB = iB; vD = iC.w;
+  gl_Position = uVP * vec4(w, 1.0);
+}`;
+const FS_EN = PREC + NOISE + LIGHT + `
+uniform float uT;
+varying vec3 vL, vN, vW; varying vec4 vB; varying float vD;
+void main(){
+  if (h21(floor(vL.xy * 40.0) + floor(vL.z * 40.0) * 7.0) < vD) discard;
+  float kind = vB.y;
+  vec3 base = vec3(0.05, 0.04, 0.075); vec3 eyeC = vec3(0.95, 0.9, 1.0); float spec = 0.35;
+  if (kind > 0.5 && kind < 1.5) { base = vec3(0.08, 0.03, 0.04); eyeC = vec3(1.0, 0.25, 0.15); }
+  else if (kind > 1.5 && kind < 2.5) { base = vec3(0.03, 0.025, 0.02); eyeC = vec3(1.0, 0.7, 0.2); spec = 1.4; }
+  else if (kind > 2.5 && kind < 3.5) { base = vec3(0.035, 0.06, 0.045); eyeC = vec3(0.5, 1.0, 0.4); }
+  else if (kind > 3.5) { base = vec3(0.04, 0.03, 0.06); eyeC = vec3(1.0, 0.2, 0.1); }
+  vec3 n = normalize(vN);
+  vec3 col = shade(base, n, vW, spec);
+  float heat = clamp(vB.x, 0.0, 1.0);
+  // 闇の中でも形が読めるよう、ふちに冷たい紫の光をのせる(燃えはじめると消える)
+  float rim = pow(1.0 - max(dot(n, normalize(uEye - vW)), 0.0), 3.0);
+  col += vec3(0.42, 0.33, 0.78) * rim * 0.6 * (1.0 - heat);
+  float cr = 1.0 - smoothstep(0.0, 0.12, abs(vn(vL.xy * 7.0 + vL.z * 5.0 + vB.z * 11.0) - 0.5));
+  float flick = 0.8 + 0.2 * sin(uT * 23.0 + vB.z * 40.0);
+  col += vec3(1.0, 0.42, 0.08) * heat * heat * (0.25 + 1.7 * cr) * flick;
+  col += vec3(1.0, 0.8, 0.45) * vB.w * 1.8;
+  float de = min(length(vL - vec3(0.15, 0.86, 0.37)), length(vL - vec3(-0.15, 0.86, 0.37)));
+  float eye = 1.0 - smoothstep(0.045, 0.08, de);
+  col = mix(col, eyeC * 1.7, eye);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+// 地面に貼る四角(影の影・爆ぜた輪・焦げ・残り火の床)。あらかじめ掛けた透明度で、足す光と暗くする影を1回で描く
+const VS_DEC = `
+attribute vec2 aQ; attribute vec4 iA; attribute vec4 iB; attribute vec4 iC;
+uniform mat4 uVP;
+varying vec2 vQ; varying vec4 vB; varying vec4 vC;
+void main(){
+  vec2 l = vec2(aQ.x * iA.w, aQ.y * iC.y);
+  float c = cos(iA.z), s = sin(iA.z);
+  vec3 w = vec3(l.x * c + l.y * s + iA.x, 0.012 + iC.x * 0.004, -l.x * s + l.y * c + iA.y);
+  vQ = aQ; vB = iB; vC = iC;
+  gl_Position = uVP * vec4(w, 1.0);
+}`;
+const FS_DEC = PREC + NOISE + `
+uniform float uT;
+varying vec2 vQ; varying vec4 vB; varying vec4 vC;
+void main(){
+  float d = length(vQ); float k = vC.x;
+  if (d > 1.0) discard;
+  if (k < 0.5) { // 影の影(暗く)
+    float a = (1.0 - smoothstep(0.25, 1.0, d)) * vB.a;
+    gl_FragColor = vec4(0.0, 0.0, 0.0, a);
+  } else if (k < 1.5) { // 爆ぜた輪(光)
+    float a = exp(-pow((d - vC.z) / max(vC.w, 0.02), 2.0)) + (1.0 - smoothstep(0.0, vC.z, d)) * 0.35 * (1.0 - vC.z);
+    gl_FragColor = vec4(vB.rgb * a * vB.a, 0.0);
+  } else if (k < 2.5) { // 残り火の床
+    float n = vn(vQ * 3.0 + vec2(uT * 1.3, -uT * 1.7) + vC.z * 13.0);
+    float a = (1.0 - smoothstep(0.35, 1.0, d + (n - 0.5) * 0.5)) * vB.a;
+    gl_FragColor = vec4(vec3(1.0, 0.35 + n * 0.4, 0.06) * a * (0.6 + n), a * 0.25);
+  } else if (k < 3.5) { // やわらかい光
+    float a = pow(1.0 - d, 2.0) * vB.a;
+    gl_FragColor = vec4(vB.rgb * a, 0.0);
+  } else { // 焦げ
+    float n = vn(vQ * 4.0 + vC.z * 17.0);
+    float a = (1.0 - smoothstep(0.3, 1.0, d + (n - 0.5) * 0.6)) * vB.a;
+    gl_FragColor = vec4(vec3(0.05, 0.02, 0.0) * a, a);
+  }
+}`;
+const VS_PT = `
+attribute vec3 aP; attribute vec4 aC; attribute float aS;
+uniform mat4 uVP; uniform float uPx;
+varying vec4 vC;
+void main(){ vec4 p = uVP * vec4(aP, 1.0); gl_Position = p; gl_PointSize = clamp(aS * uPx / max(p.w, 0.1), 1.0, 160.0); vC = aC; }`;
+const FS_PT = `precision mediump float; varying vec4 vC;
+void main(){ vec2 q = gl_PointCoord * 2.0 - 1.0; float d = dot(q, q); if (d > 1.0) discard; float a = exp(-d * 3.0); gl_FragColor = vec4(vC.rgb * a, vC.a * a); }`;
+
+function mkProg(vs, fs, at) {
+  const sh = (type, src) => {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+  at.forEach((name, i) => { if (name) gl.bindAttribLocation(p, i, name); });
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {};
+  const nU = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < nU; i++) { const info = gl.getActiveUniform(p, i); u[info.name.replace('[0]', '')] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+function enable(list) { for (let i = 0; i < 6; i++) { if (list.includes(i)) gl.enableVertexAttribArray(i); else gl.disableVertexAttribArray(i); } }
+
+// ---- 形を作る ----
+function Geo() { return { p: [], n: [], c: [] }; }
+function pushTri(g, a, b, c, na, nb, nc, col) {
+  g.p.push(...a, ...b, ...c); g.n.push(...na, ...nb, ...nc);
+  for (let i = 0; i < 3; i++) g.c.push(col[0], col[1], col[2]);
+}
+function rotP(v, ax, az, ay) {
+  let [x, y, z] = v;
+  let c = Math.cos(ax), s = Math.sin(ax); [y, z] = [y * c - z * s, y * s + z * c];
+  c = Math.cos(az); s = Math.sin(az); [x, y] = [x * c - y * s, x * s + y * c];
+  c = Math.cos(ay); s = Math.sin(ay); [x, z] = [x * c + z * s, -x * s + z * c];
+  return [x, y, z];
+}
+function box(g, cx, cy, cz, sx, sy, sz, col, yaw = 0, ax = 0, az = 0) {
+  const hx = sx / 2, hy = sy / 2, hz = sz / 2;
+  const F = [[[1, 0, 0], [[hx, -hy, -hz], [hx, hy, -hz], [hx, hy, hz], [hx, -hy, hz]]], [[-1, 0, 0], [[-hx, -hy, hz], [-hx, hy, hz], [-hx, hy, -hz], [-hx, -hy, -hz]]],
+    [[0, 1, 0], [[-hx, hy, -hz], [-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz]]], [[0, -1, 0], [[-hx, -hy, hz], [-hx, -hy, -hz], [hx, -hy, -hz], [hx, -hy, hz]]],
+    [[0, 0, 1], [[hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz], [-hx, -hy, hz]]], [[0, 0, -1], [[-hx, -hy, -hz], [-hx, hy, -hz], [hx, hy, -hz], [hx, -hy, -hz]]]];
+  for (const [n, q] of F) {
+    const nn = rotP(n, ax, az, yaw), w = q.map((v) => { const r = rotP(v, ax, az, yaw); return [r[0] + cx, r[1] + cy, r[2] + cz]; });
+    const sh = 0.92 + vr() * 0.16, cc = [col[0] * sh, col[1] * sh, col[2] * sh];
+    pushTri(g, w[0], w[1], w[2], nn, nn, nn, cc); pushTri(g, w[0], w[2], w[3], nn, nn, nn, cc);
+  }
+}
+// 断面(半径, 高さ)を上から下へ並べて回す
+function lathe(g, prof, seg, col, cx = 0, cy = 0, cz = 0, sx = 1, sy = 1) {
+  const N = prof.map((q, i) => {
+    const a = prof[Math.max(0, i - 1)], b = prof[Math.min(prof.length - 1, i + 1)];
+    const dr = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dr, dy) || 1;
+    return [-dy / l, dr / l];
+  });
+  for (let i = 0; i < prof.length - 1; i++) for (let j = 0; j < seg; j++) {
+    const a0 = (j / seg) * TAU, a1 = ((j + 1) / seg) * TAU;
+    const P0 = (k, a) => [cx + Math.sin(a) * prof[k][0] * sx, cy + prof[k][1] * sy, cz + Math.cos(a) * prof[k][0] * sx];
+    const N0 = (k, a) => { const n = N[k]; const l = Math.hypot(n[0] / sx, n[1] / sy) || 1; return [Math.sin(a) * n[0] / sx / l, n[1] / sy / l, Math.cos(a) * n[0] / sx / l]; };
+    const v00 = P0(i, a0), v01 = P0(i, a1), v10 = P0(i + 1, a0), v11 = P0(i + 1, a1);
+    const n00 = N0(i, a0), n01 = N0(i, a1), n10 = N0(i + 1, a0), n11 = N0(i + 1, a1);
+    pushTri(g, v00, v10, v11, n00, n10, n11, col); pushTri(g, v00, v11, v01, n00, n11, n01, col);
+  }
+}
+function upload(g) {
+  const b = gl.createBuffer(), n = g.p.length / 3, d = new Float32Array(n * 9);
+  for (let i = 0; i < n; i++) { d.set(g.p.slice(i * 3, i * 3 + 3), i * 9); d.set(g.n.slice(i * 3, i * 3 + 3), i * 9 + 3); d.set(g.c.slice(i * 3, i * 3 + 3), i * 9 + 6); }
+  gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
+  return { b, n };
+}
+
+let PF, PM, PE, PD, PPT;
+let floorBuf, enMesh, decQuad, enInst, decInst, ptBuf, worldMesh = null, playerMesh, lanternMesh;
+let worldDirty = true;
+const EN_MAX = 320, DEC_MAX = 1400;
+const enData = new Float32Array(EN_MAX * 12), decData = new Float32Array(DEC_MAX * 12), ptData = new Float32Array(PMAX * 8 + 800 * 8);
+function initGL() {
+  PF = mkProg(VS_FLOOR, FS_FLOOR, ['aP']);
+  PM = mkProg(VS_MESH, FS_MESH, ['aP', 'aN', 'aC']);
+  PE = mkProg(VS_EN, FS_EN, ['aP', 'aN', null, 'iA', 'iB', 'iC']);
+  PD = mkProg(VS_DEC, FS_DEC, ['aQ', null, null, 'iA', 'iB', 'iC']);
+  PPT = mkProg(VS_PT, FS_PT, ['aP', 'aS', 'aC']);
+  bakeFloor();
+  floorBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, floorBuf);
+  const F = 70; gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-F, 0, -F, -F, 0, F, F, 0, F, -F, 0, -F, F, 0, F, F, 0, -F]), gl.STATIC_DRAW);
+  // 影の形(ろうそくの炎を逆さにしたような、すその広い形)
+  const eg = Geo();
+  lathe(eg, [[0, 1.32], [0.1, 1.27], [0.22, 1.16], [0.33, 1.02], [0.41, 0.84], [0.47, 0.62], [0.5, 0.4], [0.5, 0.2], [0.44, 0.06], [0.3, 0.0], [0, 0.0]], 12, [1, 1, 1]);
+  const ed = new Float32Array(eg.p.length / 3 * 6);
+  for (let i = 0; i < eg.p.length / 3; i++) { ed.set(eg.p.slice(i * 3, i * 3 + 3), i * 6); ed.set(eg.n.slice(i * 3, i * 3 + 3), i * 6 + 3); }
+  enMesh = { b: gl.createBuffer(), n: eg.p.length / 3 };
+  gl.bindBuffer(gl.ARRAY_BUFFER, enMesh.b); gl.bufferData(gl.ARRAY_BUFFER, ed, gl.STATIC_DRAW);
+  decQuad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, decQuad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]), gl.STATIC_DRAW);
+  enInst = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, enInst); gl.bufferData(gl.ARRAY_BUFFER, enData.byteLength, gl.DYNAMIC_DRAW);
+  decInst = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, decInst); gl.bufferData(gl.ARRAY_BUFFER, decData.byteLength, gl.DYNAMIC_DRAW);
+  ptBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ptBuf); gl.bufferData(gl.ARRAY_BUFFER, ptData.byteLength, gl.DYNAMIC_DRAW);
+  // ランタンを持つ人(フードつきの外套)
+  const pg = Geo();
+  lathe(pg, [[0, 1.5], [0.1, 1.49], [0.17, 1.42], [0.19, 1.3], [0.16, 1.2], [0.2, 1.12], [0.25, 0.95], [0.29, 0.6], [0.34, 0.25], [0.37, 0.04], [0.3, 0], [0, 0]], 12, [0.32, 0.16, 0.12]);
+  lathe(pg, [[0, 1.36], [0.09, 1.34], [0.115, 1.28], [0.09, 1.2], [0, 1.18]], 8, [0.75, 0.62, 0.5], 0, 0, 0.09);
+  box(pg, 0.3, 0.86, 0.08, 0.09, 0.42, 0.09, [0.32, 0.16, 0.12], 0, 0, 0.5);
+  box(pg, 0, 0.66, 0, 0.62, 0.05, 0.5, [0.45, 0.3, 0.12]);
+  playerMesh = upload(pg);
+  const lg = Geo();
+  box(lg, 0, 0, 0, 0.2, 0.26, 0.2, [1, 0.85, 0.5]);
+  box(lg, 0, 0.16, 0, 0.24, 0.05, 0.24, [0.35, 0.25, 0.1]);
+  box(lg, 0, -0.15, 0, 0.24, 0.04, 0.24, [0.35, 0.25, 0.1]);
+  box(lg, 0, 0.24, 0, 0.03, 0.12, 0.03, [0.35, 0.25, 0.1]);
+  lanternMesh = upload(lg);
+}
+let floorTex = null;
+function bakeFloor() {
+  const S = Math.min(2048, gl.getParameter(gl.MAX_TEXTURE_SIZE));
+  const pb = mkProg(VS_BAKE, FS_BAKE, ['aQ']);
+  floorTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, floorTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S, S, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, floorTex, 0);
+  const q = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, q);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]), gl.STATIC_DRAW);
+  gl.viewport(0, 0, S, S);
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
+  gl.useProgram(pb.p);
+  enable([0]); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.deleteFramebuffer(fb); gl.deleteBuffer(q); gl.deleteProgram(pb.p);
+  // 遠くの石畳がちらつかないよう、縮小用の段階を作る
+  gl.bindTexture(gl.TEXTURE_2D, floorTex);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+}
+function buildWorld() {
+  const g = Geo();
+  const stoneC = () => { const v = 0.36 + vr() * 0.14; return [v, v * 0.97, v * 0.93]; };
+  for (const o of G.obs) {
+    if (o.kind === 'grave') {
+      const c = stoneC(), h = o.h;
+      const R3 = (v) => { const r = rotP(v, 0, o.tilt, o.yaw); return [r[0] + o.x, r[1], r[2] + o.z]; };
+      const cb = R3([0, h / 2, 0]);
+      box(g, cb[0], cb[1], cb[2], 0.82, h, 0.22, c, o.yaw, 0, o.tilt);
+      // 上の丸み
+      const fz = rotP([0, 0, 1], 0, o.tilt, o.yaw), bz = rotP([0, 0, -1], 0, o.tilt, o.yaw);
+      for (let i = 0; i < 6; i++) {
+        const a0 = (i / 6) * Math.PI, a1 = ((i + 1) / 6) * Math.PI;
+        const q = (a, zz) => R3([Math.cos(a) * 0.41, h + Math.sin(a) * 0.3, zz]);
+        const n0 = rotP([Math.cos(a0), Math.sin(a0), 0], 0, o.tilt, o.yaw), n1 = rotP([Math.cos(a1), Math.sin(a1), 0], 0, o.tilt, o.yaw);
+        pushTri(g, q(a0, 0.11), q(a1, 0.11), q(a1, -0.11), n0, n1, n1, c); pushTri(g, q(a0, 0.11), q(a1, -0.11), q(a0, -0.11), n0, n1, n0, c);
+        pushTri(g, R3([0, h, 0.11]), q(a1, 0.11), q(a0, 0.11), fz, fz, fz, c); pushTri(g, R3([0, h, -0.11]), q(a0, -0.11), q(a1, -0.11), bz, bz, bz, c);
+      }
+      box(g, o.x, 0.04, o.z, 1.1, 0.08, 0.5, [0.25, 0.24, 0.23], o.yaw);
+    } else if (o.kind === 'pillar') {
+      const c = stoneC(), h = 1.6 + o.h * 1.3;
+      box(g, o.x, 0.15, o.z, 1.2, 0.3, 1.2, [c[0] * 0.8, c[1] * 0.8, c[2] * 0.8], o.yaw);
+      lathe(g, [[0.4, h], [0.48, h - 0.15], [0.5, h - 0.4], [0.52, 0.5], [0.55, 0.3], [0.55, 0.3]], 10, c, o.x, 0, o.z);
+      lathe(g, [[0, h + 0.08], [0.3, h + 0.02], [0.4, h]], 10, c, o.x, 0, o.z);
+      if (o.tilt > 0) box(g, o.x + 0.9, 0.22, o.z + 0.3, 0.5, 0.44, 0.5, c, o.yaw + 0.6, 0.3, 0.2);
+    } else if (o.kind === 'tree') {
+      const c = [0.16, 0.12, 0.1], h = 2.4 + o.h;
+      lathe(g, [[0.06, h], [0.14, h * 0.6], [0.24, 0.3], [0.38, 0.0]], 7, c, o.x, 0, o.z);
+      for (let i = 0; i < 4; i++) {
+        const a = o.yaw + i * 1.7, y = h * (0.45 + i * 0.13), l = 0.9 + vr() * 0.6;
+        box(g, o.x + Math.sin(a) * l * 0.45, y + 0.25, o.z + Math.cos(a) * l * 0.45, 0.08, l, 0.08, c, a, 0, 0);
+        const bb = g.p.length - 36 * 3;
+        // 枝を外へ傾ける
+        for (let v = bb; v < g.p.length; v += 3) {
+          const ly = g.p[v + 1] - (y + 0.25);
+          g.p[v] += Math.sin(a) * ly * 0.8; g.p[v + 2] += Math.cos(a) * ly * 0.8;
+        }
+      }
+    } else {
+      const c = stoneC();
+      box(g, o.x, 0.75, o.z, 2.2, 1.5, 2.0, c, o.yaw);
+      box(g, o.x, 1.62, o.z, 2.5, 0.25, 2.3, [c[0] * 0.85, c[1] * 0.85, c[2] * 0.85], o.yaw);
+      box(g, o.x, 1.95, o.z, 1.6, 0.4, 1.6, c, o.yaw);
+      const dz = rotP([0, 0, 1.01], 0, 0, o.yaw);
+      box(g, o.x + dz[0], 0.55, o.z + dz[2], 0.7, 1.1, 0.04, [0.05, 0.04, 0.04], o.yaw);
+    }
+  }
+  // 鉄のさく
+  const fc = [0.12, 0.11, 0.11], FR = ARENA + 0.3, nb = Math.floor(TAU * FR / 0.5);
+  for (let i = 0; i < nb; i++) {
+    const a = (i / nb) * TAU;
+    if (Math.sin(a * 3 + 1) > 0.93) continue;  // ところどころ 抜けている
+    const h = 1.35 + Math.sin(i * 7.1) * 0.08;
+    box(g, Math.cos(a) * FR, h / 2, Math.sin(a) * FR, 0.05, h, 0.05, fc, -a);
+    box(g, Math.cos(a) * FR, h + 0.06, Math.sin(a) * FR, 0.09, 0.12, 0.09, fc, -a, 0.78, 0.78);
+  }
+  for (let i = 0; i < 96; i++) {
+    const a0 = (i / 96) * TAU, a1 = ((i + 1) / 96) * TAU, am = (a0 + a1) / 2, l = FR * (a1 - a0);
+    for (const y of [0.25, 1.15]) box(g, Math.cos(am) * FR, y, Math.sin(am) * FR, l + 0.02, 0.05, 0.04, fc, Math.PI / 2 - am);
+  }
+  // 小石
+  for (let i = 0; i < 140; i++) {
+    const a = vr() * TAU, r = 3 + vr() * (ARENA + 4), s = 0.08 + vr() * 0.18, v = 0.2 + vr() * 0.15;
+    box(g, Math.cos(a) * r, s * 0.3, Math.sin(a) * r, s, s * 0.6, s * 0.8, [v, v, v * 0.95], vr() * TAU);
+  }
+  if (worldMesh) gl.deleteBuffer(worldMesh.b);
+  worldMesh = upload(g);
+  worldDirty = false;
+}
+
+// ---- 行列 ----
+function persp(fy, asp, n, f) { const t = 1 / Math.tan(fy / 2); return new Float32Array([t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]); }
+const vsub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const vcross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const vdot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const vnorm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+function lookAt(e, c, up) {
+  const z = vnorm(vsub(e, c)), x = vnorm(vcross(up, z)), y = vcross(z, x);
+  return new Float32Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -vdot(x, e), -vdot(y, e), -vdot(z, e), 1]);
+}
+function mmul(a, b) { const o = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k]; o[i * 4 + j] = s; } return o; }
+function mModel(x, y, z, yaw, s, ax = 0) {
+  const c = Math.cos(yaw), sn = Math.sin(yaw), ca = Math.cos(ax), sa = Math.sin(ax);
+  // 回転 = Y(yaw) * X(ax)
+  return new Float32Array([c * s, 0, -sn * s, 0, sn * sa * s, ca * s, c * sa * s, 0, sn * ca * s, -sa * s, c * ca * s, 0, x, y, z, 1]);
+}
+
+// ---- カメラ ----
+const cam = { x: 0, z: 0, dist: 18, pitch: 0.98, fov: 0.85, eye: [0, 10, 10], VP: null, right: [1, 0, 0], up: [0, 1, 0], fwd: [0, 0, -1], sx: 0, sz: 0 };
+let cssW = 1, cssH = 1, dprScale = 1, quality = 0;
+const QSTEPS = [1, 0.8, 0.66, 0.52];
+function resize() {
+  cssW = innerWidth; cssH = innerHeight;
+  const dpr = Math.min(devicePixelRatio || 1, isTouch ? 1.75 : 2) * QSTEPS[quality];
+  cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+  dprScale = dpr;
+}
+addEventListener('resize', resize);
+resize();
+function camFit() {
+  const asp = cssW / cssH;
+  cam.fov = asp < 0.8 ? 0.95 : 0.82;
+  const tv = Math.tan(cam.fov / 2), th = tv * asp;
+  cam.dist = clamp(Math.max(8.2 / tv, 7.6 / th), 12, 40);
+}
+function screenToGround(sx, sy) {
+  if (!cam.VP) return null;
+  const nx = (sx / cssW) * 2 - 1, ny = 1 - (sy / cssH) * 2;
+  const tv = Math.tan(cam.fov / 2), asp = cssW / cssH;
+  const d = vnorm([cam.fwd[0] + nx * tv * asp * cam.right[0] + ny * tv * cam.up[0], cam.fwd[1] + nx * tv * asp * cam.right[1] + ny * tv * cam.up[1], cam.fwd[2] + nx * tv * asp * cam.right[2] + ny * tv * cam.up[2]]);
+  if (d[1] > -1e-3) return null;
+  const t = -cam.eye[1] / d[1];
+  return { x: cam.eye[0] + d[0] * t, z: cam.eye[2] + d[2] * t };
+}
+function toScreen(x, y, z) {
+  if (!cam.VP) return null;
+  const m = cam.VP;
+  const cx = m[0] * x + m[4] * y + m[8] * z + m[12], cy = m[1] * x + m[5] * y + m[9] * z + m[13], cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+  if (cw <= 0) return null;
+  return { x: (cx / cw * 0.5 + 0.5) * cssW, y: (0.5 - cy / cw * 0.5) * cssH };
+}
+
+// =============================================================================
+//  描く
+// =============================================================================
+let clock = 0;
+const lightsU = new Float32Array(32), lightsC = new Float32Array(32);
+function render(rdt) {
+  if (!gl) return;
+  if (worldDirty) buildWorld();
+  clock += rdt;
+  const p = G.p;
+  // カメラ: 進む向きの少し先を見る
+  camFit();
+  const tx = p.x + p.vx * 0.32, tz = p.z + p.vz * 0.32;
+  const kk = 1 - Math.exp(-5 * rdt);
+  cam.x += (tx - cam.x) * kk; cam.z += (tz - cam.z) * kk;
+  G.shake *= Math.exp(-7 * rdt);
+  const sh = G.shake * 0.35;
+  cam.sx = (vr() - 0.5) * sh; cam.sz = (vr() - 0.5) * sh;
+  const tgt = [cam.x + cam.sx, 0.6, cam.z + cam.sz];
+  cam.eye = [tgt[0], tgt[1] + Math.sin(cam.pitch) * cam.dist, tgt[2] + Math.cos(cam.pitch) * cam.dist];
+  cam.fwd = vnorm(vsub(tgt, cam.eye)); cam.right = vnorm(vcross(cam.fwd, [0, 1, 0])); cam.up = vcross(cam.right, cam.fwd);
+  const asp = cssW / cssH;
+  cam.VP = mmul(persp(cam.fov, asp, 0.5, 140), lookAt(cam.eye, tgt, [0, 1, 0]));
+
+  // ---- 光をそろえる ----
+  const lanternA = Math.sin(clock * 3.1) * 0.25;
+  const lx = p.x + Math.sin(p.face) * 0.28 + Math.cos(p.face) * 0.3, lz = p.z + Math.cos(p.face) * 0.28 - Math.sin(p.face) * 0.3;
+  const fl = 0.9 + 0.1 * Math.sin(clock * 17) * Math.sin(clock * 7.3) + (gstate === 'over' ? -0.5 : 0);
+  const flareA = G.fx.flareFx;
+  let nl = 0;
+  const maxL = quality >= 2 ? 5 : 8;  // 重い端末では、同時に照らす火の数を減らす
+  const addL = (x, y, z, int, r, g, b, rad) => { if (nl >= maxL) return; lightsU.set([x, y, z, int], nl * 4); lightsC.set([r, g, b, rad], nl * 4); nl++; };
+  addL(lx, 1.15, lz, (1.05 + flareA * 1.8) * fl, 1.0, 0.66, 0.34, G.R * 2.1 + 2.5 + flareA * 6);
+  const ls = G.fx.lights;
+  for (let i = ls.length - 1; i >= 0; i--) { const l = ls[i]; l.t += rdt; if (l.t > l.dur) ls.splice(i, 1); }
+  const sorted = ls.slice().sort((a, b) => (b.int * (1 - b.t / b.dur)) - (a.int * (1 - a.t / a.dur)));
+  for (const l of sorted) { const k = 1 - l.t / l.dur; addL(l.x, 1.0, l.z, l.int * k * k, 1.0, 0.5, 0.16, l.rad); }
+  for (const pt of G.patches) { if (nl >= maxL) break; addL(pt.x, 0.5, pt.z, 0.5 * pt.life / pt.max, 1, 0.4, 0.1, pt.r * 2.5); }
+  const setLight = (u) => {
+    gl.uniform3fv(u.uEye, cam.eye); gl.uniform4fv(u.uPL, lightsU); gl.uniform4fv(u.uPC, lightsC); gl.uniform1f(u.uNL, nl);
+    gl.uniform3f(u.uAmb, lerp(0.07, 0.3, dk), lerp(0.075, 0.24, dk), lerp(0.11, 0.24, dk)); gl.uniform3fv(u.uMoon, MOON); gl.uniform3f(u.uMoonC, lerp(0.2, 1.1, dk), lerp(0.23, 0.72, dk), lerp(0.35, 0.5, dk));
+  };
+  // 夜明けが近づくと空が白み、夜明けで朝の光になる
+  const dk = gstate === 'title' ? 0 : G.dawn ? clamp((G.t - G.dawn) / 3, 0, 1) * 0.85 + 0.15 : clamp((G.t - (NIGHT - 60)) / 60, 0, 1) * 0.15;
+
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.clearColor(lerp(0.012, 0.2, dk), lerp(0.012, 0.13, dk), lerp(0.02, 0.14, dk), 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+
+  // ---- 地面 ----
+  gl.useProgram(PF.p); setLight(PF.u);
+  gl.uniformMatrix4fv(PF.u.uVP, false, cam.VP);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, floorTex); gl.uniform1i(PF.u.uFloor, 0);
+  gl.uniform3f(PF.u.uPl, p.x, 0, p.z); gl.uniform1f(PF.u.uR, gstate === 'title' ? 0 : G.R); gl.uniform1f(PF.u.uT, clock);
+  const fprog = G.flareT > 0 ? 1 - G.flareT / 0.5 : 1;
+  gl.uniform1f(PF.u.uFR, G.flareR * Math.min(1, fprog * 1.6 + 0.2)); gl.uniform1f(PF.u.uFA, G.flareT > 0 ? Math.min(1, G.flareT * 4) : 0);
+  enable([0]); gl.bindBuffer(gl.ARRAY_BUFFER, floorBuf); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 12, 0);
+  gl.disable(gl.CULL_FACE);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.enable(gl.CULL_FACE);
+
+  // ---- 墓地・自分 ----
+  gl.useProgram(PM.p); setLight(PM.u);
+  gl.uniformMatrix4fv(PM.u.uVP, false, cam.VP);
+  enable([0, 1, 2]);
+  const drawMesh = (m, M, em, spec) => {
+    gl.uniformMatrix4fv(PM.u.uM, false, M); gl.uniform3fv(PM.u.uEm, em); gl.uniform1f(PM.u.uSpec, spec);
+    gl.bindBuffer(gl.ARRAY_BUFFER, m.b);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 36, 0); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 36, 12); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 36, 24);
+    gl.drawArrays(gl.TRIANGLES, 0, m.n);
+  };
+  gl.disable(gl.CULL_FACE);
+  drawMesh(worldMesh, IDENT, [0, 0, 0], 0.25);
+  const blink = p.inv > 0 && gstate === 'play' && Math.floor(clock * 14) % 2 === 0;
+  const bob = Math.abs(Math.sin(p.walk * 2.6)) * 0.05;
+  if (!blink) {
+    drawMesh(playerMesh, mModel(p.x, bob, p.z, p.face, 1, 0.08 * Math.min(1, Math.hypot(p.vx, p.vz) / 5)), [0.0, 0.0, 0.0], 0.3);
+    drawMesh(lanternMesh, mModel(lx, 0.82 + bob, lz, p.face + lanternA, 1, lanternA * 0.5), [2.2 * fl + flareA * 3, 1.8 * fl + flareA * 2, 1.2 * fl], 0.2);
+  }
+  gl.enable(gl.CULL_FACE);
+
+  // ---- 影 ----
+  let ne = 0;
+  for (const e of G.en) {
+    if (ne >= EN_MAX) break;
+    const def = KDEF[e.k], o = ne * 12;
+    const heat = e.st === 1 ? 1 : clamp(e.heat / emax(e), 0, 1);
+    enData[o] = e.x; enData[o + 1] = e.z; enData[o + 2] = e.yaw; enData[o + 3] = def.r / 0.5;
+    enData[o + 4] = heat; enData[o + 5] = e.k; enData[o + 6] = e.ph; enData[o + 7] = e.st === 1 ? 1 - e.bt / 0.13 : 0;
+    enData[o + 8] = def.sx; enData[o + 9] = def.sy; enData[o + 10] = def.lean; enData[o + 11] = 1 - e.born;
+    ne++;
+  }
+  if (ne) {
+    gl.useProgram(PE.p); setLight(PE.u);
+    gl.uniformMatrix4fv(PE.u.uVP, false, cam.VP); gl.uniform1f(PE.u.uT, clock);
+    enable([0, 1, 3, 4, 5]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, enMesh.b);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+    gl.bindBuffer(gl.ARRAY_BUFFER, enInst); gl.bufferSubData(gl.ARRAY_BUFFER, 0, enData.subarray(0, ne * 12));
+    for (let i = 0; i < 3; i++) { gl.vertexAttribPointer(3 + i, 4, gl.FLOAT, false, 48, i * 16); divisor(3 + i, 1); }
+    drawInst(enMesh.n, ne);
+    for (let i = 0; i < 3; i++) divisor(3 + i, 0);
+  }
+
+  // ---- 地面に貼るもの ----
+  let nd = 0;
+  const dec = (x, z, rot, w, l, r, g, b, a, kind, p1, p2) => {
+    if (nd >= DEC_MAX) return;
+    const o = nd * 12;
+    decData[o] = x; decData[o + 1] = z; decData[o + 2] = rot; decData[o + 3] = w;
+    decData[o + 4] = r; decData[o + 5] = g; decData[o + 6] = b; decData[o + 7] = a;
+    decData[o + 8] = kind; decData[o + 9] = l; decData[o + 10] = p1; decData[o + 11] = p2;
+    nd++;
+  };
+  const fx = G.fx;
+  for (let i = fx.scorch.length - 1; i >= 0; i--) { const s = fx.scorch[i]; s.t += rdt; if (s.t > 14) { fx.scorch.splice(i, 1); continue; } dec(s.x, s.z, s.rot, s.s, s.s, 0, 0, 0, 0.75 * Math.min(1, (14 - s.t) / 4), 4, s.rot, 0); }
+  // ランタンに照らされた影は、光と反対へ長い影を落とす
+  const LR = G.R * 2.1 + 2.5;
+  for (const e of G.en) {
+    const def = KDEF[e.k];
+    dec(e.x, e.z, 0, def.r * 1.1, def.r * 1.1, 0, 0, 0, 0.6 * e.born, 0, 0, 0);
+    const dx = e.x - lx, dz = e.z - lz, d = Math.hypot(dx, dz);
+    if (d < LR && d > 0.3) {
+      const len = Math.min(5, 0.5 + 2.2 * def.r * def.sy * 2 / Math.max(0.8, 2.4 - d * 0.1) * (d / 3));
+      const a = (1 - d / LR) * 0.8 * e.born;
+      dec(e.x + dx / d * len * 0.55, e.z + dz / d * len * 0.55, Math.atan2(dx, dz), def.r * def.sx * 0.95, len * 0.6, 0, 0, 0, a, 0, 0, 0);
+    }
+  }
+  for (const o of G.obs) {
+    const dx = o.x - lx, dz = o.z - lz, d = Math.hypot(dx, dz);
+    if (d < LR && d > 0.3) { const len = Math.min(6, 1 + d * 0.6); dec(o.x + dx / d * len * 0.6, o.z + dz / d * len * 0.6, Math.atan2(dx, dz), o.r * 0.9, len * 0.6, 0, 0, 0, (1 - d / LR) * 0.85, 0, 0, 0); }
+  }
+  dec(p.x, p.z, 0, 0.42, 0.42, 0, 0, 0, 0.5, 0, 0, 0);
+  for (const pt of G.patches) dec(pt.x, pt.z, 0, pt.r, pt.r, 1, 1, 1, Math.min(1, pt.life / pt.max * 2), 2, pt.x + pt.z, 0);
+  for (let i = fx.rings.length - 1; i >= 0; i--) {
+    const r = fx.rings[i]; r.t += rdt; if (r.t > r.dur) { fx.rings.splice(i, 1); continue; }
+    const k = r.t / r.dur;
+    dec(r.x, r.z, 0, r.B * 1.05, r.B * 1.05, 1.0, 0.55, 0.18, (1 - k) * 1.6 * r.hot, 1, 0.25 + 0.75 * (1 - Math.pow(1 - k, 3)), 0.07 + 0.1 * (1 - k));
+  }
+  for (const m of G.emb) dec(m.x, m.z, 0, m.big ? 1.1 : 0.6, m.big ? 1.1 : 0.6, 1, 0.5, 0.12, 0.5 * Math.min(1, m.life), 3, 0, 0);
+  dec(lx, lz, 0, G.R * 1.2, G.R * 1.2, 1, 0.55, 0.22, 0.14 + flareA * 0.5, 3, 0, 0);
+  for (const s of G.spits) dec(s.x, s.z, 0, 0.35, 0.35, 0, 0, 0, 0.7, 0, 0, 0);
+  if (nd) {
+    gl.useProgram(PD.p);
+    gl.uniformMatrix4fv(PD.u.uVP, false, cam.VP); gl.uniform1f(PD.u.uT, clock);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); gl.disable(gl.CULL_FACE);
+    enable([0, 3, 4, 5]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, decQuad); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, decInst); gl.bufferSubData(gl.ARRAY_BUFFER, 0, decData.subarray(0, nd * 12));
+    for (let i = 0; i < 3; i++) { gl.vertexAttribPointer(3 + i, 4, gl.FLOAT, false, 48, i * 16); divisor(3 + i, 1); }
+    drawInst(6, nd);
+    for (let i = 0; i < 3; i++) divisor(3 + i, 0);
+    gl.depthMask(true); gl.enable(gl.CULL_FACE);
+  }
+
+  // ---- 粒 ----
+  let np = 0;
+  const pt = (x, y, z, r, g, b, a, s) => { const o = np * 8; ptData[o] = x; ptData[o + 1] = y; ptData[o + 2] = z; ptData[o + 3] = r; ptData[o + 4] = g; ptData[o + 5] = b; ptData[o + 6] = a; ptData[o + 7] = s; np++; };
+  for (let i = 0; i < P.n; i++) {
+    const k = P.life[i] / P.max[i];
+    if (P.dark[i]) pt(P.x[i], P.y[i], P.z[i], 0, 0, 0, 0.5 * k, P.s[i] * (1.6 - k));
+    else pt(P.x[i], P.y[i], P.z[i], P.r[i] * k * 1.6, P.g[i] * k * k * 1.6, P.b[i] * k * k * 1.6, 0, P.s[i] * (0.4 + 0.6 * k));
+  }
+  for (const m of G.emb) {
+    if (np >= PMAX + 790) break;
+    const bl = m.life < 2 ? (Math.floor(m.life * 8) % 2 ? 0.3 : 1) : 1;
+    const y = 0.3 + Math.sin(clock * 4 + m.x * 3) * 0.08;
+    pt(m.x, y, m.z, 1.4 * bl, 0.75 * bl, 0.25 * bl, 0, m.big ? 0.75 : 0.42);
+    pt(m.x, y, m.z, 1.2 * bl, 1.1 * bl, 0.9 * bl, 0, m.big ? 0.25 : 0.14);
+  }
+  for (const s of G.spits) { if (np >= PMAX + 790) break; pt(s.x, 0.8, s.z, 0.25, 0.7, 0.2, 0.3, 0.55); pt(s.x, 0.8, s.z, 0.05, 0.05, 0.02, 0.8, 0.4); }
+  for (const s of G.sparks) { if (np >= PMAX + 790) break; pt(s.x, 0.9, s.z, 2, 1.5, 0.6, 0, 0.45); }
+  pt(lx, 0.85, lz, 1.4 * fl + flareA * 2, 1.0 * fl + flareA, 0.5 * fl, 0, 0.9 + flareA * 3);
+  if (np) {
+    gl.useProgram(PPT.p);
+    gl.uniformMatrix4fv(PPT.u.uVP, false, cam.VP); gl.uniform1f(PPT.u.uPx, cv.height / (2 * Math.tan(cam.fov / 2)));
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+    enable([0, 1, 2]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, ptBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, ptData.subarray(0, np * 8));
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 32, 0); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 12); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 32, 28);
+    gl.drawArrays(gl.POINTS, 0, np);
+    gl.depthMask(true);
+  }
+  gl.disable(gl.BLEND);
+  G.fx.flareFx = Math.max(0, G.fx.flareFx - rdt * 2.2);
+}
+const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+const MOON = vnorm([-0.4, 0.8, -0.45]);
+
+// =============================================================================
+//  画面の表示(HUD・連鎖の数)
+// =============================================================================
+const popPool = [];
+function makePop(g) {
+  const el = document.createElement('div'); el.className = 'pop';
+  $('pops').appendChild(el);
+  const o = { el, g, born: performance.now(), done: 0, n: 0 };
+  popPool.push(o);
+  return o;
+}
+// 表示は、値が変わったときだけ書きかえる(毎コマ同じ値を書くと、ブラウザが無駄に描き直す)
+const hudLast = {};
+function hudSet(id, kind, v) {
+  const k = id + kind;
+  if (hudLast[k] === v) return;
+  hudLast[k] = v;
+  const el = $(id);
+  if (kind === 'text') el.textContent = v;
+  else if (kind[0] === '-') el.style.setProperty(kind, v);
+  else el.style[kind] = v;
+}
+function updHud() {
+  const p = G.p;
+  hudSet('oil', 'height', (G.oil / OIL_MAX * 100).toFixed(1) + '%');
+  $('vial').classList.toggle('low', G.oil < 20);
+  if (p.hp !== lastHp || p.maxHp !== lastMax) buildHearts();
+  hudSet('lv', 'text', String(G.lv));
+  hudSet('time', 'text', fmt(Math.max(0, NIGHT - G.t + 0.999)));
+  $('clock').classList.toggle('last', G.t > NIGHT - 60 && !G.dawn);
+  hudSet('kills', 'text', `焼いた影 ${G.kills}`);
+  hudSet('xpbar', 'width', (G.xp / G.xpNext * 100).toFixed(1) + '%');
+  const b = $('b-flare');
+  hudSet('b-flare', '--cd', G.flareCd > 0 ? (1 - G.flareCd / flareCdMax()).toFixed(2) : '1');
+  b.classList.toggle('wait', G.flareCd > 0);
+  b.classList.toggle('nooil', G.flareCd <= 0 && G.oil < flareCost());
+  hudSet('vign', 'opacity', (0.32 + 0.6 * clamp(1 - G.oil / 35, 0, 1)).toFixed(2));
+  if (crackG && AC) crackG.gain.setTargetAtTime(gstate === 'play' ? 0.012 + 0.03 * G.oil / OIL_MAX : 0, AC.currentTime, 0.2);
+  // 連鎖の数
+  const now = performance.now();
+  for (let i = popPool.length - 1; i >= 0; i--) {
+    const o = popPool[i], g = o.g;
+    if (o.done && now - o.done > 1100) { o.el.remove(); popPool.splice(i, 1); continue; }
+    if (o.n !== g.n) {
+      o.n = g.n;
+      const lab = g.src === 'dawn' ? '日の出' : g.n >= 40 ? '煉獄' : g.n >= 25 ? '業火' : g.n >= 12 ? '大連鎖' : '連鎖';
+      o.el.innerHTML = `<b>×${g.n}</b><small>${lab}</small>`;
+      o.el.className = 'pop' + (g.n >= 25 ? ' huge' : g.n >= 12 ? ' big' : '');
+      o.bump = now;
+    }
+    const cx = g.n ? g.x / g.n : g.px, cz = g.n ? g.z / g.n : g.pz;
+    const s = toScreen(cx, 1.8, cz);
+    if (!s) continue;
+    const age = o.done ? (now - o.done) / 1100 : 0;
+    const bump = Math.max(0, 1 - (now - (o.bump || 0)) / 160) * 0.25;
+    o.el.style.opacity = (1 - age * age).toFixed(2);
+    o.el.style.transform = `translate(${s.x}px,${s.y - age * 40}px) translate(-50%,-50%) scale(${(1 + bump).toFixed(3)})`;
+  }
+}
+
+// =============================================================================
+//  タイトル画面の背景(ゆっくり漂う影)
+// =============================================================================
+function titleScene(dt) {
+  G.t += dt;
+  if (G.en.length < 14 && vr() < 0.05) { const a = vr() * TAU, r = 6 + vr() * 6; const e = spawn(0, Math.cos(a) * r, Math.sin(a) * r); if (e) e.wander = vr() * TAU; }
+  for (const e of G.en) {
+    if (e.born < 1) e.born = Math.min(1, e.born + dt);
+    e.wander = (e.wander || 0) + (vr() - 0.5) * dt * 2;
+    e.vx = Math.sin(e.wander) * 0.8; e.vz = Math.cos(e.wander) * 0.8;
+    e.x += e.vx * dt; e.z += e.vz * dt; e.yaw = e.wander;
+    const d = Math.hypot(e.x, e.z); if (d > 13) e.wander += Math.PI * dt;
+    if (d < 4.5) { e.x *= 4.5 / d; e.z *= 4.5 / d; }
+    e.heat = Math.max(0, 1 - (d - 3.5) / 2.5) * 0.7;
+  }
+  G.oil = OIL_MAX; G.R = lightR();
+  G.p.face += dt * 0.15;
+}
+
+// =============================================================================
+//  まわす
+// =============================================================================
+let acc = 0, lastT = performance.now(), fpsAcc = 0, fpsN = 0, goodT = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let rdt = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  try {
+    const sp = window.__simSpeed || 1;
+    if (gstate === 'play') {
+      if (G.slowT > 0) { G.slowT -= rdt; G.slow = 0.35; } else G.slow = 1;
+      acc += rdt * sp * G.slow;
+      let n = 0;
+      const maxN = Math.ceil(sp * 7) + 2;
+      while (acc >= DT && n < maxN && gstate === 'play') {
+        if (window.__autoStep) window.__autoStep();
+        if (gstate !== 'play') break;
+        step(DT); acc -= DT; n++;
+      }
+      if (acc > DT * maxN) acc = 0;
+    } else if (gstate === 'card') {
+      if (window.__autoStep) window.__autoStep();
+    } else if (gstate === 'title') titleScene(rdt);
+    else if (gstate === 'over') { for (const e of G.en) { e.vx *= 0.95; } }
+    updParticles(gstate === 'play' ? rdt * G.slow : rdt);
+    render(gstate === 'play' ? rdt * G.slow : rdt);
+    if (gstate === 'play' || gstate === 'card' || gstate === 'pause') updHud();
+  } catch (e) {
+    console.error(e);
+  }
+  // 重いときは 解像度を下げ、粒を減らす(軽くなったら戻す)
+  fpsAcc += rdt; fpsN++;
+  if (fpsAcc > 0.5) {
+    const ms = fpsAcc / fpsN * 1000;
+    if (ms > 24 && quality < QSTEPS.length - 1) { quality++; resize(); pLimit = Math.max(900, pLimit - 700); goodT = 0; }
+    else if (ms < 15) { goodT += fpsAcc; if (goodT > 4 && quality > 0) { quality--; resize(); pLimit = Math.min(PMAX, pLimit + 700); goodT = 0; } }
+    else goodT = 0;
+    fpsAcc = 0; fpsN = 0;
+  }
+}
+
+// =============================================================================
+//  テスト用の窓口(読み取りだけ)
+// =============================================================================
+window.gameTest = {
+  state: () => gstate,
+  score: () => G.kills,
+  webgl: () => !!gl,
+  player: () => ({ x: G.p.x, z: G.p.z, vx: G.p.vx, vz: G.p.vz, hp: G.p.hp, maxHp: G.p.maxHp, inv: G.p.inv, oil: G.oil, R: G.R, flareCd: G.flareCd, flareCost: flareCost(), flareR: flareR(), pickR: pickR(), speed: pSpeed() }),
+  enemies: () => G.en.filter((e) => !e.dead).map((e) => ({ id: e.id, k: e.k, x: e.x, z: e.z, heat: e.heat, max: emax(e), r: KDEF[e.k].r, st: e.st, born: e.born })),
+  embers: () => G.emb.map((m) => ({ x: m.x, z: m.z, v: m.v, life: m.life, big: m.big })),
+  obstacles: () => G.obs.map((o) => ({ x: o.x, z: o.z, r: o.r, kind: o.kind })),
+  stats: () => ({ t: G.t, won: !!G.won, dawn: !!G.dawn, depth: depth(), kills: G.kills, maxChain: G.maxChain, lv: G.lv, xp: G.xp, xpNext: G.xpNext, picks: G.picks.slice(), up: Object.assign({}, G.up), cause: G.cause, hits: G.hits, flares: G.flares, picked: G.picked, born: G.bornKinds.slice(), killed: G.killKinds.slice(), best: Object.assign({}, save.best) }),
+  chains: () => G.chains.slice(),
+  // 何で燃えたか(光から燃えひろがった連鎖 / 灯を開いて燃やした)と、燃えひろがった連鎖(3体以上)の数と合計
+  burnLog: () => ({ src: Object.assign({}, G.srcKills), spreadN: G.spread.n, spreadSum: G.spread.sum }),
+  cards: () => (G.offers ? G.offers.slice() : null),
+  offerLog: () => G.offerLog.map((o) => o.slice()),
+  events: () => G.events.slice(),
+  arena: () => ARENA,
+  toScreen: (x, y, z) => toScreen(x, y, z),
+  toGround: (sx, sy) => screenToGround(sx, sy),
+  cam: () => ({ x: cam.x, z: cam.z, dist: cam.dist }),
+  particles: () => P.n,
+  quality: () => quality,
+  sound: () => !!save.sound,
+  burning: () => G.en.filter((e) => e.st === 1).length,
+  liveChain: () => G.groups.reduce((m, g) => Math.max(m, g.src === 'dawn' ? 0 : g.n), 0),
+  patches: () => G.patches.length,
+  sparks: () => G.sparks.length,
+};
+
+// =============================================================================
+//  はじめる
+// =============================================================================
+newRun();
+if (gl) {
+  try { initGL(); } catch (e) { console.error(e); $('nogl').hidden = false; gl = null; }
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

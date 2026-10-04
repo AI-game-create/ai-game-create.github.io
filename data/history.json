@@ -86,5 +86,16 @@
     "structure": "育てる・作る",
     "fun": "創作",
     "status": "success"
+  },
+  {
+    "post_date": "2026-10-07",
+    "title": "影焼きランタン",
+    "dir": "games/2026-10-07-kage-yaki-lantern/",
+    "genre": "3D見下ろしサバイバル(連鎖・強化の組み立て)",
+    "theme": "夜の墓地・ランタンと群がる影",
+    "controls": "WASD・矢印キー / マウスを押したまま / 指でドラッグ(灯を開く: Space・右クリック・✺ボタン / 強化: 1 2 3・タップ)",
+    "structure": "ひとつの大きな出来事",
+    "fun": "爽快感・収集・育成",
+    "status": "success"
   }
 ]
