@@ -122,5 +122,16 @@
     "media": "video",
     "posted_at": "2026-10-04T23:34:40+09:00",
     "metrics": null
+  },
+  {
+    "date": "2026-10-05",
+    "slot": "release",
+    "tweet_id": "2106807305241083913",
+    "title": "まるい星のおとどけ便",
+    "text": "【7日目】今日のゲームは「まるい星のおとどけ便」です📦 小さな丸い星を歩いて、頭に積んだ荷物を住人の家へ届ける3Dゲーム。積みすぎるとグラグラ…!\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-05-hoshi-otodoke/",
+    "posted_at": "2026-10-05T03:02:59+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
