@@ -497,7 +497,8 @@ test.describe('プレイテスト', () => {
           best = Math.max(best, n);
           // 見せ場: 群れに火がついて 連鎖が広がりはじめた瞬間
           if (!marked && n >= 6) { marked = true; markAt = Date.now(); clip.mark(); }
-          if (marked && !shot && Date.now() - markAt > 900) { shot = true; await page.screenshot({ path: path.join(target!.dir, 'screenshot.png') }); }
+          // 投稿画像はふつうの動画のときだけ撮る(ショート用モードの縦長で上書きしない)
+          if (marked && !shot && Date.now() - markAt > 900) { shot = true; if (process.env.SHORT_VIDEO !== '1') await page.screenshot({ path: path.join(target!.dir, 'screenshot.png') }); }
           await page.waitForTimeout(50);
         }
         const s = await gt<Stats>(page, 'stats');
