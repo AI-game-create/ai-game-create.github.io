@@ -10,44 +10,44 @@ import { measureFps } from './perf';
 //  game.spec.ts は「エラーが出ないか」しか見ないので、遊べないゲームでも通ってしまう。
 //  このファイルはゲームごとに中身が違うので、毎回、今日のゲームに合わせて書き直す。
 //
-//  対象: 影焼きランタン(2026-10-07)
-//  ランタンの光に入った影は熱をためて燃え、燃えた影は爆ぜて となりの影へ火を移す(連鎖)。
-//  Space / ✺ボタンで「灯を開く」と、光が一気に広がって まとめて燃える。残り火を拾うと油と経験。
-//  経験がたまると3枚のカードから強化を選ぶ。夜明け(10分)まで生きのびる。
+//  対象: 荒海の救命艇(2026-10-08)
+//  嵐の海で漂流者に近づき、速度を落とすと引き上げられる。灯台の船着き場まで連れて帰ると救助。
+//  水平線から押し寄せる大波は、舳先を向けて勢いよく越えれば無事、横腹や後ろで受けると浸水する。
+//  浸水が満杯になると、乗せていた人ごと沈む(エンドレス)。
 //
 //  ・人の操作のテストは、本物のキー / マウス / 指で行う
-//  ・長い勝負を何回も遊ばせるテスト(腕の差・毎回ちがう・選択の重さ)は、ページの中に自動プレイヤーを仕込み、
-//    ゲームの時間を速回しにする(window.__simSpeed。同じ1/60秒の刻みを1コマで何回も進めるだけ)。
+//  ・長い勝負を何回も遊ばせるテストは、ページの中に自動プレイヤーを仕込み、ゲームの時間を速回しにする
+//    (window.__simSpeed。同じ1/60秒の刻みを1コマで何回も進めるだけ)。
 //    自動プレイヤーは1/60秒ごとに gameTest(読み取り専用)を読んで、キーを押したり離したりする
 //  ・Math.random は種つきの乱数に差しかえる(ゲームは変えない)
 // ============================================================================
 
-const EXPECTED = '2026-10-07-kage-yaki-lantern';
+const EXPECTED = '2026-10-08-storm-lifeboat';
 const target = latestGame();
-const SKEY = 'kage-yaki-lantern-v1';
 const url = () => pathToFileURL(target!.html).href;
 const gt = <T>(page: Page, fn: string, ...args: unknown[]) =>
   page.evaluate(([f, a]) => (window as any).gameTest[f as string](...(a as unknown[])), [fn, args] as const) as Promise<T>;
-const isMobile = (page: Page) => page.viewportSize()!.width < 500;
+const isMobile = (page: Page) => page.evaluate(() => 'ontouchstart' in window);
 
-type Pl = { x: number; z: number; vx: number; vz: number; hp: number; maxHp: number; inv: number; oil: number; R: number; flareCd: number; flareCost: number; flareR: number; pickR: number; speed: number };
-type En = { id: number; k: number; x: number; z: number; heat: number; max: number; r: number; st: number; born: number };
-type Stats = { t: number; won: boolean; dawn: boolean; depth: number; kills: number; maxChain: number; lv: number; xp: number; xpNext: number; picks: string[]; up: Record<string, number>; cause: string; hits: number; flares: number; picked: number; born: number[]; killed: number[]; best: { t: number; kills: number; chain: number } };
+type Boat = { x: number; z: number; h: number; v: number; lever: number; rud: number; water: number; holes: number; aboard: number; y: number; pitch: number; roll: number; haul: number; air: number };
+type Surv = { id: number; cid: number; x: number; z: number; cold: number; cold0: number; flare: boolean };
+type Roll = { id: number; dx: number; dz: number; pos: number; H: number; c: number; s: number; eta: number };
+type Stats = { t: number; saved: number; lost: number; lostAboard: number; picked: number; bowWaves: number; hits: Record<string, number>; holes: number; cause: string; day: number; sea: number; best: { saved: number; t: number }; plays: number };
 type Ev = { type: string; t: number; [k: string]: any };
 
 // ---------------------------------------------------------------------------
 //  ページの中で動く自動プレイヤー
 // ---------------------------------------------------------------------------
-// idle: 立ちつくして何もしない(強化だけ左のカードを選ぶ)。初めての人が様子を見ているときの目安
-type Bot = { kind: 'smart' | 'dumb' | 'idle' | 'none'; seed: number; speed: number; cards?: string[]; sound?: boolean; plays?: number };
-const CHAIN_CARDS = ['chain', 'burst', 'spark', 'floor', 'heat', 'heart', 'mag', 'radius', 'oil', 'flare', 'speed', 'mend'];
-const LIGHT_CARDS = ['radius', 'oil', 'heart', 'flare', 'speed', 'mag', 'heat', 'mend', 'burst', 'spark', 'floor', 'chain'];
+//  smart: 漂流者を選んで近づき、減速して引き上げ、home 人乗せたら(または浸水が waterLimit をこえたら)帰る。大波には舳先を向けて加速する
+//  dumb : 1.5秒ごとに でたらめな舵とスロットル
+//  pilot: window.__pilot = { x, z, lever } の場所へ向かう(face: 'bow' / 'beam' なら、いちばん近い大波に 舳先 / 横腹 を向ける)
+type Bot = { kind: 'smart' | 'dumb' | 'pilot' | 'none'; seed: number; speed: number; home?: number; waterLimit?: number; sound?: boolean; plays?: number };
 
 function installBot(cfg: Bot) {
   let s = cfg.seed >>> 0;
   Math.random = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   // 保存データは はじめの1回だけ書く(再読み込みのたびに書くと、ゲームが残した記録を消してしまう)
-  try { if (!localStorage.getItem('kage-yaki-lantern-v1')) localStorage.setItem('kage-yaki-lantern-v1', JSON.stringify({ sound: !!cfg.sound, plays: cfg.plays ?? 9 })); } catch { /* なし */ }
+  try { if (!localStorage.getItem('storm-lifeboat-v1')) localStorage.setItem('storm-lifeboat-v1', JSON.stringify({ sound: !!cfg.sound, plays: cfg.plays ?? 9 })); } catch { /* なし */ }
   const w = window as any;
   w.__simSpeed = cfg.speed;
   if (cfg.kind === 'none') return;
@@ -59,75 +59,85 @@ function installBot(cfg: Bot) {
     if (on) down.add(code); else down.delete(code);
     w.dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', { code }));
   };
-  const tap = (code: string) => { w.dispatchEvent(new KeyboardEvent('keydown', { code })); w.dispatchEvent(new KeyboardEvent('keyup', { code })); };
-  const steer = (vx: number, vz: number) => {
-    const l = Math.hypot(vx, vz);
-    if (l < 1e-3) { for (const c of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) key(c, false); return; }
-    vx /= l; vz /= l;
-    key('ArrowRight', vx > 0.38); key('ArrowLeft', vx < -0.38); key('ArrowDown', vz > 0.38); key('ArrowUp', vz < -0.38);
-  };
-  const PRI = cfg.cards ?? [];
-  let n = 0, dir = 0, move = true;
+  const TAU = Math.PI * 2;
+  const ad = (a: number, b: number) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+  const steerTo = (b: any, want: number) => { const d = ad(b.h, want); key('ArrowRight', d > 0.05); key('ArrowLeft', d < -0.05); };
+  const leverTo = (b: any, L: number) => { key('ArrowUp', b.lever < L - 0.03); key('ArrowDown', b.lever > L + 0.03); };
+  let n = 0, dRud = 0, dLever = 0.5;
   w.__autoStep = () => {
     const g = w.gameTest;
-    const st = g.state();
-    if (st === 'card') {
-      const offer: string[] = g.cards();
-      if (!offer || w.__holdCards) return;
-      let i = 0, best = 1e9;
-      // 雑な自動プレイヤーは いつも左のカード
-      if (cfg.kind === 'smart') offer.forEach((id, j) => { const r = PRI.indexOf(id); const rr = r < 0 ? 99 : r; if (rr < best) { best = rr; i = j; } });
-      tap('Digit' + (i + 1));
-      return;
-    }
-    if (st !== 'play' || cfg.kind === 'idle') return;
+    if (g.state() !== 'play') return;
     n++;
+    const b = g.boat();
     if (cfg.kind === 'dumb') {
-      // でたらめ: 1秒ごとに でたらめな向きへ歩く(4回に1回は立ち止まる)。ときどき でたらめに灯を開く
-      if (n % 60 === 1) { dir = Math.floor(br() * 8); move = br() > 0.25; }
-      const a = (dir / 8) * Math.PI * 2;
-      steer(move ? Math.cos(a) : 0, move ? Math.sin(a) : 0);
-      if (br() < 0.012) tap('Space');
+      if (n % 90 === 1) { dRud = Math.floor(br() * 3) - 1; dLever = br() * 1.2 - 0.1; }
+      key('ArrowRight', dRud > 0); key('ArrowLeft', dRud < 0); leverTo(b, dLever);
       return;
     }
-    if (n % 3) return;
-    // 考える: 墓地のまんなかのまわりを 円を描いて逃げ、群れを引き連れる。
-    // 光の中(灯を開いた時に届く所)に群れが たまったら灯を開く。安全な残り火を拾う。墓石をよける
-    const p = g.player(), en = g.enemies(), em = g.embers();
-    if (!w.__obs || n < 4) w.__obs = g.obstacles();
-    const r = Math.hypot(p.x, p.z) || 1;
-    let vx = -p.z / r, vz = p.x / r;
-    vx += (p.x / r) * (12 - r) * 0.18; vz += (p.z / r) * (12 - r) * 0.18;
-    let nearest = 99, inFlare = 0;
-    for (const e of en) {
-      const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx, dz);
-      if (d < nearest) nearest = d;
-      if (d < p.flareR * 0.85) inFlare += e.k === 2 || e.k === 4 ? 4 : 1;
-      if (d < 3.4 + e.r) { const k = (3.4 + e.r - d) / (d * d + 0.2) * 1.4 * (e.k === 4 ? 3 : 1); vx -= dx * k; vz -= dz * k; }
+    if (cfg.kind === 'pilot') {
+      const p = w.__pilot;
+      if (!p) return;
+      let want = p.h ?? Math.atan2(p.z - b.z, p.x - b.x);
+      if (p.face) {
+        const r = g.rollers().sort((a: any, c: any) => a.eta - c.eta)[0];
+        if (r) want = p.face === 'bow' ? Math.atan2(-r.dz, -r.dx) : Math.atan2(r.dx, -r.dz);
+      }
+      steerTo(b, want); leverTo(b, p.lever);
+      return;
     }
-    let bestE: any = null, bd = 7;
-    for (const m of em) {
-      const d = Math.hypot(m.x - p.x, m.z - p.z);
-      if (d > bd || m.life < 0.8) continue;
-      let safe = true;
-      for (const e of en) if (Math.hypot(e.x - m.x, e.z - m.z) < 1.4 + e.r) { safe = false; break; }
-      if (safe) { bd = d; bestE = m; }
+    if (n % 2) return;
+    // ---- 考える自動プレイヤー ----
+    const H = g.harbor(), surv = g.survivors(), rs = g.rollers();
+    const home = cfg.home ?? 4, wl = cfg.waterLimit ?? 55;
+    const goHome = b.aboard >= home || (b.aboard > 0 && (b.water > wl || b.holes >= 2 || surv.length === 0)) || (b.aboard === 0 && b.water > 75);
+    let gx = 0, gz = 0, arrive = false, harbor = false;
+    const inCone = b.x > 3 && b.z < -22 && b.z > -54;
+    if (goHome) {
+      if (inCone) { gx = H.x; gz = H.z; arrive = true; harbor = true; } else { gx = 16; gz = -50; }
+    } else {
+      let best: any = null, bc = 1e9;
+      for (const sv of surv) {
+        const d = Math.hypot(sv.x - b.x, sv.z - b.z), eta = d / 9 + 3;
+        if (sv.cold < eta) continue;
+        const c = d + Math.max(0, 40 - (sv.cold - eta)) * 2;
+        if (c < bc) { bc = c; best = sv; }
+      }
+      if (best) { gx = best.x; gz = best.z; arrive = true; } else { gx = 30; gz = -60; }
     }
-    if (bestE) { const d = Math.max(0.3, bd); vx += (bestE.x - p.x) / d * 1.6; vz += (bestE.z - p.z) / d * 1.6; }
-    for (const o of w.__obs) {
-      const dx = p.x - o.x, dz = p.z - o.z, d = Math.hypot(dx, dz) - o.r;
-      if (d < 1.6) { vx += dx / (d + o.r) * (1.6 - d) * 2.5; vz += dz / (d + o.r) * (1.6 - d) * 2.5; }
+    // 船着き場から出るときは、桟橋にぶつからないよう いったん南へ出る
+    if (!goHome && b.x > -3 && b.z > -50 && b.z < -14 && b.x < 30) { gx = 14; gz = -60; arrive = false; }
+    const dist = Math.hypot(gx - b.x, gz - b.z);
+    let want = Math.atan2(gz - b.z, gx - b.x);
+    // 島をよける(進む線が島に近いときは、島のまわりを回る)
+    {
+      const ex = gx - b.x, ez = gz - b.z, L2 = ex * ex + ez * ez || 1;
+      const t = Math.max(0, Math.min(1, -(b.x * ex + b.z * ez) / L2));
+      const px = b.x + ex * t, pz = b.z + ez * t, rb = Math.hypot(b.x, b.z);
+      if (Math.hypot(px, pz) < 44 && rb > 36 && !harbor) {
+        const ba = Math.atan2(b.z, b.x), ga = Math.atan2(gz, gx), sg = ad(ba, ga) > 0 ? 1 : -1;
+        const wa = ba + sg * 0.75, wx = Math.cos(wa) * 54, wz = Math.sin(wa) * 54;
+        want = Math.atan2(wz - b.z, wx - b.x);
+      }
     }
-    steer(vx, vz);
-    const ready = p.flareCd <= 0 && p.oil >= p.flareCost;
-    if (ready && (inFlare >= 8 || (nearest < 1.25 && inFlare >= 2))) tap('Space');
+    // 岩と漂流物をよける
+    for (const o of [...g.rocks(), ...g.debris()]) {
+      const dx = o.x - b.x, dz = o.z - b.z, d = Math.hypot(dx, dz);
+      if (d > 32 || d < 1) continue;
+      const f = Math.cos(want) * dx + Math.sin(want) * dz, lat = -Math.sin(want) * dx + Math.cos(want) * dz;
+      if (f > 0 && Math.abs(lat) < o.r + 5) want += (lat > 0 ? -1 : 1) * 0.7 * (1 - d / 40);
+    }
+    let lever = 1;
+    if (arrive) lever = harbor ? (dist < 14 ? 0.12 : 0.5) : dist < 9 ? 0.12 : dist < 26 ? 0.3 : 1;
+    // 大波: 来る前に舳先を向けて加速する(島の近くは波が小さいので気にしない)
+    const nr = rs.filter((r: any) => r.H > 1.6 && r.eta > -0.3).sort((a: any, c: any) => a.eta - c.eta)[0];
+    if (nr && nr.eta < 8 && Math.hypot(b.x, b.z) > 42) { want = Math.atan2(-nr.dz, -nr.dx); lever = 1; }
+    steerTo(b, want); leverTo(b, lever);
   };
 }
 
-type Result = { t: number; won: boolean; kills: number; maxChain: number; lv: number; picks: string[]; cause: string; hits: number; flares: number; picked: number; giants: number; giantsBorn: number; chains: number[]; offers: string[][]; obs: string; ev: Ev[]; burn: Burn; overText: string; crowd: number[] };
-type Burn = { src: Record<string, number>; spreadN: number; spreadSum: number };
-async function play(browser: Browser, cfg: Bot, cap = 700): Promise<Result> {
-  const ctx = await browser.newContext({ viewport: { width: 640, height: 400 } });
+type Result = { t: number; saved: number; lost: number; lostAboard: number; picked: number; bowWaves: number; hits: Record<string, number>; holes: number; cause: string; ev: Ev[]; rollerLog: number[][]; clusterLog: number[][]; rocks: string; overText: string };
+async function play(browser: Browser, cfg: Bot, cap = 600): Promise<Result> {
+  const ctx = await browser.newContext({ viewport: { width: 480, height: 300 } });
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -136,72 +146,42 @@ async function play(browser: Browser, cfg: Bot, cap = 700): Promise<Result> {
   await page.goto(url());
   await expect.poll(() => page.evaluate(() => !!(window as any).gameTest)).toBeTruthy();
   await page.locator('#b-start').click();
-  const crowd: number[] = [];   // 1分ごとの、いちばん多かった影の数
   await expect.poll(async () => {
-    const s = await gt<string>(page, 'state'); const t = (await gt<Stats>(page, 'stats')).t;
-    const n = await page.evaluate(() => (window as any).gameTest.enemies().length);
-    const m = Math.floor(t / 60); crowd[m] = Math.max(crowd[m] ?? 0, n);
-    return s === 'over' || t >= cap;
+    const st = await gt<string>(page, 'state');
+    return st === 'over' || st === 'sink' || (await gt<Stats>(page, 'stats')).t >= cap;
   }, { timeout: 8 * 60_000, intervals: [400] }).toBeTruthy();
-  const s = await gt<Stats>(page, 'stats');
   let overText = '';
-  if ((await gt<string>(page, 'state')) === 'over') {
-    await expect(page.locator('#over')).toBeVisible({ timeout: 5000 });
-    overText = (await page.locator('#over .stone').innerText()).replace(/\s+/g, ' ');
+  if ((await gt<string>(page, 'state')) !== 'play') {
+    await expect(page.locator('#over')).toBeVisible({ timeout: 8000 });
+    overText = (await page.locator('#log').innerText()).replace(/\s+/g, ' ');
   }
+  const s = await gt<Stats>(page, 'stats');
   const r: Result = {
-    t: s.t, won: s.won, kills: s.kills, maxChain: s.maxChain, lv: s.lv, picks: s.picks, cause: s.cause, hits: s.hits, flares: s.flares, picked: s.picked, giants: s.killed[4], giantsBorn: s.born[4],
-    chains: await gt<number[]>(page, 'chains'), offers: await gt<string[][]>(page, 'offerLog'),
-    obs: JSON.stringify((await gt<{ x: number; z: number }[]>(page, 'obstacles')).map((o) => [o.x.toFixed(1), o.z.toFixed(1)])),
-    ev: await gt<Ev[]>(page, 'events'), burn: await gt<Burn>(page, 'burnLog'), overText, crowd:Array.from(crowd, (c) => c ?? 0),
+    t: s.t, saved: s.saved, lost: s.lost, lostAboard: s.lostAboard, picked: s.picked, bowWaves: s.bowWaves, hits: s.hits, holes: s.holes, cause: s.cause,
+    ev: await gt<Ev[]>(page, 'events'), rollerLog: await gt<number[][]>(page, 'rollerLog'), clusterLog: await gt<number[][]>(page, 'clusterLog'),
+    rocks: JSON.stringify((await gt<{ x: number; z: number }[]>(page, 'rocks')).map((o) => [Math.round(o.x), Math.round(o.z)])), overText,
   };
   expect(errors, `遊んでいる間に エラーが出ました: ${errors.join(' / ')}`).toEqual([]);
   await ctx.close();
   return r;
 }
 const line = (name: string, r: Result) =>
-  `  ${name}: ${r.won ? '夜明けまで生きのびた' : `${r.t.toFixed(0)}秒で${r.cause}に`}・${r.kills}体・最大連鎖${r.maxChain}・5以上の連鎖${r.chains.filter((c) => c >= 5).length}回・灯${r.lv}・被弾${r.hits}・灯を開いた${r.flares}回・残り火${r.picked}・大影 ${r.giants}/${r.giantsBorn}・強化 ${r.picks.join(',') || 'なし'}`;
+  `  ${name}: ${r.cause ? `${r.t.toFixed(0)}秒で沈没(${r.cause})` : `${r.t.toFixed(0)}秒もちこたえた`}・救助${r.saved}・引き上げ${r.picked}・消えた${r.lost}・沈んだ${r.lostAboard}・舳先で越えた${r.bowWaves}・大波 ${Object.entries(r.hits).map(([k, v]) => `${k}${v}`).join(' ')}・穴${r.holes}`;
 
 // ---------------------------------------------------------------------------
-//  人の操作のテスト用: 種つきの乱数で開く
+//  人の操作のテスト用
 // ---------------------------------------------------------------------------
-async function open(page: Page, opt: { seed?: number; plays?: number; sound?: boolean; speed?: number } = {}) {
-  await page.addInitScript(installBot, { kind: 'none', seed: opt.seed ?? 5, speed: opt.speed ?? 1, plays: opt.plays ?? 0, sound: opt.sound ?? false } as Bot);
+async function open(page: Page, opt: { seed?: number; plays?: number; sound?: boolean; speed?: number; kind?: Bot['kind'] } = {}) {
+  await page.addInitScript(installBot, { kind: opt.kind ?? 'none', seed: opt.seed ?? 5, speed: opt.speed ?? 1, plays: opt.plays ?? 0, sound: opt.sound ?? false } as Bot);
   await page.goto(url());
   await expect.poll(() => page.evaluate(() => !!(window as any).gameTest)).toBeTruthy();
 }
 async function start(page: Page) {
-  if (isMobile(page)) await page.locator('#b-start').tap(); else await page.locator('#b-start').click();
+  if (await isMobile(page)) await page.locator('#b-start').tap(); else await page.locator('#b-start').click();
   await expect.poll(() => gt<string>(page, 'state')).toBe('play');
 }
-async function flare(page: Page) {
-  if (isMobile(page)) await page.locator('#b-flare').tap(); else await page.keyboard.press('Space');
-}
 const evs = (page: Page) => gt<Ev[]>(page, 'events');
-const nearestD = (p: Pl, en: En[]) => Math.min(99, ...en.map((e) => Math.hypot(e.x - p.x, e.z - p.z)));
-
-// 指 / キーで、ある向き(x, z)へ ms ミリ秒 歩く
-async function walk(page: Page, dx: number, dz: number, ms: number) {
-  const l = Math.hypot(dx, dz) || 1;
-  dx /= l; dz /= l;
-  if (isMobile(page)) {
-    const cdp = await page.context().newCDPSession(page);
-    const v = page.viewportSize()!;
-    const o = { x: v.width * 0.4, y: v.height * 0.62 };
-    const t = (type: string, p?: { x: number; y: number }) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p.x, y: p.y, id: 1 }] : [] } as any);
-    await t('touchStart', o);
-    for (let i = 1; i <= 6; i++) { await t('touchMove', { x: o.x + dx * 10 * i, y: o.y + dz * 10 * i }); await page.waitForTimeout(16); }
-    await page.waitForTimeout(Math.max(0, ms - 100));
-    await t('touchEnd');
-    await cdp.detach();
-    return;
-  }
-  const ks: string[] = [];
-  if (dx > 0.38) ks.push('ArrowRight'); if (dx < -0.38) ks.push('ArrowLeft'); if (dz > 0.38) ks.push('ArrowDown'); if (dz < -0.38) ks.push('ArrowUp');
-  for (const k of ks) await page.keyboard.down(k);
-  await page.waitForTimeout(ms);
-  for (const k of ks) await page.keyboard.up(k);
-}
+const pilot = (page: Page, p: Record<string, unknown> | null) => page.evaluate((q) => { (window as any).__pilot = q; }, p);
 
 test.describe('プレイテスト', () => {
   test.skip(target === null, 'games/ にまだゲームがありません');
@@ -210,267 +190,244 @@ test.describe('プレイテスト', () => {
     expect(target!.name, 'tests/play.spec.ts が前のゲーム用のままです。今日のゲームに合わせて書き直してください').toBe(EXPECTED);
   });
 
-  test('テスト用の窓口 window.gameTest があり、3D(WebGL)で描いている', async ({ page }) => {
+  test('テスト用の窓口 window.gameTest があり、3D(WebGL2・HDR)で描いている', async ({ page }) => {
     await page.goto(url());
     const ok = await page.evaluate(() => {
       const g = (window as any).gameTest;
-      return !!g && ['state', 'score', 'webgl', 'player', 'enemies', 'embers', 'obstacles', 'stats', 'chains', 'cards', 'offerLog', 'events', 'toScreen', 'cam', 'particles', 'quality', 'sound', 'liveChain'].every((k) => typeof g[k] === 'function');
+      return !!g && ['state', 'score', 'webgl', 'hdr', 'boat', 'survivors', 'rollers', 'debris', 'rocks', 'harbor', 'seaH', 'stats', 'events', 'rollerLog', 'clusterLog', 'toScreen', 'cam', 'particles', 'quality', 'sound', 'flash'].every((k) => typeof g[k] === 'function');
     });
     expect(ok, 'window.gameTest が無いか、関数が足りません').toBeTruthy();
-    expect(await gt<boolean>(page, 'webgl'), 'WebGL が使えていません').toBeTruthy();
-    await page.waitForTimeout(1200);
+    expect(await gt<boolean>(page, 'webgl'), 'WebGL2 が使えていません').toBeTruthy();
+    console.log(`  HDR(浮動小数の描画先): ${await gt<boolean>(page, 'hdr')}`);
+    await page.waitForTimeout(1500);
     const png = await page.locator('#gl').screenshot();
-    expect(png.length, '3Dの画面に何も描かれていないようです').toBeGreaterThan(20_000);
+    expect(png.length, '3Dの画面に何も描かれていないようです').toBeGreaterThan(40_000);
   });
 
-  // 核の遊び(1): 光の中だけ熱がたまり、燃えた影の火が となりへ移る(連鎖)
-  test('光と連鎖: 光の中の影だけが熱を帯び、灯を開かなくても 燃えた影の火が となりへ移って連鎖する', async ({ page }) => {
-    test.setTimeout(60_000);
-    await open(page, { plays: 0 });
+  // 核の遊び(1): 速いまま そばを通っても引き上げられない。減速して近づくと引き上げる
+  test('引き上げ: 10ノットで真上を通りすぎても引き上げられず、6ノット以下に減速して近づくと引き上げて乗員が増える', async ({ page }) => {
+    test.setTimeout(120_000);
+    await open(page, { kind: 'pilot', plays: 9, speed: 3 });
     await start(page);
-    await expect(page.locator('#hint'), '最初の説明が出ません').toContainText('光に入れると燃える');
-    let checked = false, inside = 0, outside = 0;
-    for (let i = 0; i < 200 && !checked; i++) {
-      const [p, en] = await Promise.all([gt<Pl>(page, 'player'), gt<En[]>(page, 'enemies')]);
-      for (const e of en) {
-        const d = Math.hypot(e.x - p.x, e.z - p.z);
-        if (e.st === 0 && d < p.R - 0.6 && e.heat > 0) inside++;
-        if (e.st === 0 && d > p.R + 1.2) { outside++; expect(e.heat, `光の外(${d.toFixed(1)}m)の影に熱がたまっています`).toBe(0); }
-      }
-      if (inside >= 1 && outside >= 2) checked = true;
-      await page.waitForTimeout(40);
-    }
-    expect(checked, '光の中と外の影を くらべられませんでした').toBeTruthy();
-    // 光で燃えた1体の火が、かたまった群れに移っていく
-    await expect.poll(async () => Math.max(0, ...(await evs(page)).filter((e) => e.type === 'chain' && e.src === 'light').map((e) => e.n)), { timeout: 20_000, message: '燃えた影の火が となりへ移りません' }).toBeGreaterThanOrEqual(4);
-    const ch = (await evs(page)).filter((e) => e.type === 'chain');
-    console.log(`  灯を開かずに待った: 連鎖 ${ch.map((e) => `×${e.n}(${e.t}秒)`).join(' ')}`);
-    await expect(page.locator('.pop').first(), '連鎖の数が画面に出ません').toBeAttached();
+    // 0) まず沖へ出て、全速になる
+    await pilot(page, { x: 30, z: -110, lever: 1 });
+    await expect.poll(async () => { const b = await gt<Boat>(page, 'boat'); return b.v > 9 && Math.hypot(b.x, b.z) > 75; }, { timeout: 60_000 }).toBeTruthy();
+    // 1) 10ノットほど(引き上げには速すぎる)で、いちばん前にいる漂流者の真上を通りすぎる
+    await pilot(page, { x: 30, z: -110, lever: 0.45 });
+    await expect.poll(async () => (await gt<Boat>(page, 'boat')).v, { timeout: 30_000 }).toBeLessThan(5.6);
+    const b0 = await gt<Boat>(page, 'boat');
+    const s0 = (await gt<Surv[]>(page, 'survivors')).sort((a, c) => Math.abs(Math.atan2(a.z - b0.z, a.x - b0.x) - b0.h) - Math.abs(Math.atan2(c.z - b0.z, c.x - b0.x) - b0.h))[0];
+    let closest = 99, vAt = 0;
+    await expect.poll(async () => {
+      const b = await gt<Boat>(page, 'boat'), sv = (await gt<Surv[]>(page, 'survivors')).find((q) => q.id === s0.id);
+      if (!sv) return true;
+      // 真上を通るよう、漂流者の少し先をねらう
+      await pilot(page, { x: sv.x + Math.cos(b.h) * 2, z: sv.z + Math.sin(b.h) * 2, lever: 0.45 });
+      const d = Math.hypot(sv.x - b.x, sv.z - b.z);
+      if (d < closest) { closest = d; vAt = b.v; }
+      return closest < 4 && d > closest + 8;
+    }, { timeout: 60_000, intervals: [20] }).toBeTruthy();
+    console.log(`  速すぎる: いちばん近づいたのは ${closest.toFixed(1)}m(${(vAt * 1.944).toFixed(0)}ノット)・引き上げ ${(await gt<Stats>(page, 'stats')).picked}人`);
+    expect(vAt, '10ノットほどになっていません').toBeGreaterThan(4);
+    expect((await gt<Stats>(page, 'stats')).picked, '6ノットより速いまま通りすぎただけで引き上げてしまいました').toBe(0);
+    // 2) 減速して近づく
+    const sv = (await gt<Surv[]>(page, 'survivors')).find((q) => q.id === s0.id) ?? (await gt<Surv[]>(page, 'survivors'))[0];
+    await pilot(page, { x: sv.x, z: sv.z, lever: 0.6 });
+    await expect.poll(async () => { const b = await gt<Boat>(page, 'boat'); const q = (await gt<Surv[]>(page, 'survivors')).find((x) => x.id === sv.id); if (q) await pilot(page, { x: q.x, z: q.z, lever: Math.hypot(q.x - b.x, q.z - b.z) < 22 ? 0.15 : 0.6 }); return (await gt<Stats>(page, 'stats')).picked; }, { timeout: 60_000, intervals: [100] }).toBeGreaterThanOrEqual(1);
+    const pk = (await evs(page)).find((e) => e.type === 'pick')!;
+    console.log(`  減速: ${pk.t}秒に引き上げた・乗員 ${(await gt<Boat>(page, 'boat')).aboard}`);
+    expect((await gt<Boat>(page, 'boat')).aboard).toBeGreaterThanOrEqual(1);
+    await expect(page.locator('#seats s.on').first(), '乗員の表示が増えません').toBeAttached();
   });
 
-  // 核の遊び(2): 群れが来たところで灯を開くと、まとめて燃える。開いたあとは しばらく開けない
-  test('灯を開く: 群れが光のふちに来たところで Space / ✺ボタンを押すと、まとめて燃える。油を使い、すぐには次を開けない', async ({ page }) => {
-    test.setTimeout(60_000);
-    await open(page, { plays: 9 });
-    await start(page);
-    let p = await gt<Pl>(page, 'player');
-    await expect.poll(async () => { p = await gt<Pl>(page, 'player'); return nearestD(p, await gt<En[]>(page, 'enemies')); }, { timeout: 15_000, intervals: [30] }).toBeLessThan(p.R + 1.4);
-    const before = await gt<Stats>(page, 'stats');
-    const oil0 = (await gt<Pl>(page, 'player')).oil;
-    await flare(page);
-    await expect.poll(async () => (await gt<Stats>(page, 'stats')).kills, { timeout: 1500, message: '灯を開いても まとめて燃えません' }).toBeGreaterThanOrEqual(before.kills + 5);
-    const after = await gt<Pl>(page, 'player');
-    console.log(`  灯を開く前 燃えた${before.kills}体 → 1.5秒以内に ${(await gt<Stats>(page, 'stats')).kills}体・油 ${oil0.toFixed(1)} → ${after.oil.toFixed(1)}`);
-    expect(oil0 - after.oil, '灯を開いても油が減りません').toBeGreaterThan(10);
-    await flare(page);
-    await page.waitForTimeout(200);
-    expect((await gt<Stats>(page, 'stats')).flares, '開いた直後に もう一度開けました').toBe(1);
-    await expect.poll(async () => (await evs(page)).filter((e) => e.type === 'chain' && e.src === 'flare').map((e) => e.n)[0] ?? 0, { timeout: 3000 }).toBeGreaterThanOrEqual(5);
+  // 核の遊び(2): 同じ大波を、舳先で受けるか横腹で受けるかで、入る水がはっきり違う
+  test('大波の受け方: 舳先を向けて勢いよく越えると浸水は少なく、横腹で受けると何倍も水が入る', async ({ browser }, info) => {
+    test.skip(info.project.name !== 'desktop', '自動プレイは desktop で');
+    test.setTimeout(180_000);
+    const run = async (face: 'bow' | 'beam') => {
+      const ctx = await browser.newContext({ viewport: { width: 480, height: 300 } });
+      const page = await ctx.newPage();
+      await page.addInitScript(installBot, { kind: 'pilot', seed: 11, speed: 8, plays: 9 } as Bot);
+      await page.goto(url());
+      await start(page);
+      // 沖へ出てから(島の近くは波が小さい)、大波に向き合う
+      await pilot(page, { h: Math.PI * -0.5, lever: 1 });
+      await expect.poll(async () => { const b = await gt<Boat>(page, 'boat'); return Math.hypot(b.x, b.z); }, { timeout: 60_000 }).toBeGreaterThan(95);
+      await pilot(page, { face, lever: face === 'bow' ? 1 : 0.5 });
+      await expect.poll(async () => (await evs(page)).filter((e) => e.type === 'roller').length, { timeout: 90_000, intervals: [100] }).toBeGreaterThanOrEqual(2);
+      const r = (await evs(page)).filter((e) => e.type === 'roller');
+      await ctx.close();
+      return r;
+    };
+    const bow = await run('bow'), beam = await run('beam');
+    const sum = (a: Ev[]) => a.reduce((s, e) => s + e.add, 0);
+    console.log(`  舳先: ${bow.map((e) => `${e.kind} 高さ${e.H}m → +${e.add}%`).join(' / ')}`);
+    console.log(`  横腹: ${beam.map((e) => `${e.kind} 高さ${e.H}m → +${e.add}%`).join(' / ')}`);
+    expect(bow.every((e) => e.kind === 'bow'), '舳先を向けて加速しても、舳先で越えた扱いになりません').toBeTruthy();
+    expect(beam.every((e) => e.kind === 'beam'), '横を向いて受けても、横腹で受けた扱いになりません').toBeTruthy();
+    expect(sum(beam) / sum(bow), '舳先と横腹で、入る水があまり変わりません').toBeGreaterThanOrEqual(4);
   });
 
-  // 核の遊び(3): 残り火を拾うと 油と経験。たまると強化を選べる
-  test('残り火と強化: 燃えた跡の残り火を拾うと油と経験が増え、たまると3枚のカードから強化を1つ選べる', async ({ page }) => {
-    test.setTimeout(60_000);
-    await open(page, { plays: 9 });
-    await start(page);
-    let p = await gt<Pl>(page, 'player');
-    await expect.poll(async () => { p = await gt<Pl>(page, 'player'); return nearestD(p, await gt<En[]>(page, 'enemies')); }, { timeout: 15_000, intervals: [30] }).toBeLessThan(p.R + 1.4);
-    await flare(page);
-    await expect.poll(async () => (await gt<unknown[]>(page, 'embers')).length, { timeout: 3000 }).toBeGreaterThanOrEqual(5);
-    const oil0 = (await gt<Pl>(page, 'player')).oil;
-    // いちばん近い残り火へ 歩いていく(人と同じく、見て、歩いて、また見る)
-    for (let i = 0; i < 30 && (await gt<string>(page, 'state')) === 'play'; i++) {
-      const [pl, em] = await Promise.all([gt<Pl>(page, 'player'), gt<{ x: number; z: number }[]>(page, 'embers')]);
-      if (!em.length) break;
-      em.sort((a, b) => Math.hypot(a.x - pl.x, a.z - pl.z) - Math.hypot(b.x - pl.x, b.z - pl.z));
-      const m = em[0];
-      await walk(page, m.x - pl.x, m.z - pl.z, Math.min(500, 120 + Math.hypot(m.x - pl.x, m.z - pl.z) / pl.speed * 1000));
-    }
-    const st = await gt<Stats>(page, 'stats');
-    console.log(`  拾った残り火 ${st.picked}・油 ${oil0.toFixed(1)} → ${(await gt<Pl>(page, 'player')).oil.toFixed(1)}・灯 ${st.lv}`);
-    expect(st.picked, '残り火が拾えません').toBeGreaterThanOrEqual(4);
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 3000, message: '経験がたまっても 強化が選べません' }).toBe('card');
-    const cards = page.locator('#cards .card');
-    await expect(cards).toHaveCount(3);
-    const offer = (await gt<string[]>(page, 'cards'))!;
-    if (isMobile(page)) {
-      const v = page.viewportSize()!;
-      for (const c of await cards.all()) {
-        const b = (await c.boundingBox())!;
-        expect(b.y + b.height, 'カードが画面からはみ出しています').toBeLessThanOrEqual(v.height + 0.5);
-        expect(b.height, 'カードが小さすぎます').toBeGreaterThanOrEqual(44);
-      }
-      await page.waitForTimeout(400);
-      await cards.nth(1).tap();
-    } else {
-      await page.waitForTimeout(400);
-      await page.keyboard.press('2');
-    }
-    await expect.poll(() => gt<string>(page, 'state')).toBe('play');
-    const st2 = await gt<Stats>(page, 'stats');
-    console.log(`  カード ${offer.join(' / ')} → ${st2.picks.join(',')}`);
-    expect(st2.picks, '選んだカードと ちがう強化が入りました').toEqual([offer[1]]);
-    if (offer[1] !== 'mend') expect(st2.up[offer[1]]).toBe(1);
-  });
-
-  test('命と終わり: 影にふれると灯芯が減り、3回で終わる。結果が出て、もう一度遊べる。記録は再読み込みしても残る', async ({ page }) => {
-    test.setTimeout(90_000);
-    // でたらめに歩く自動プレイヤーで、早回しで ふれられる
-    await page.addInitScript(installBot, { kind: 'dumb', seed: 7, speed: 6, plays: 9 } as Bot);
+  test('救助と終わり: 船着き場で降ろすと救助が増える。浸水が満杯で沈み、航海日誌が出て、もう一度遊べる。記録は残る', async ({ page }) => {
+    test.setTimeout(240_000);
+    // 1人乗せたら帰る自動プレイヤーで、救助まで
+    await page.addInitScript(installBot, { kind: 'smart', seed: 7, speed: 8, plays: 9, home: 1 } as Bot);
     await page.goto(url());
     await start(page);
-    await expect.poll(async () => (await evs(page)).filter((e) => e.type === 'hit').length, { timeout: 30_000, message: '影にふれても 何も起きません' }).toBeGreaterThanOrEqual(1);
-    await expect(page.locator('#hearts .wick.out').first(), '灯芯が消えません').toBeAttached();
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 60_000 }).toBe('over');
-    const hits = (await evs(page)).filter((e) => e.type === 'hit').map((e) => e.hp);
-    expect(hits, '3回ふれて終わっていません').toEqual([2, 1, 0]);
-    await page.evaluate(() => { (window as any).__autoStep = null; (window as any).__simSpeed = 1; });
-    await expect(page.locator('#over')).toBeVisible({ timeout: 4000 });
+    await expect.poll(() => gt<number>(page, 'score'), { timeout: 120_000, intervals: [200], message: '船着き場に連れて帰っても救助が増えません' }).toBeGreaterThanOrEqual(1);
+    await expect(page.locator('#saved')).toHaveText(/^[1-9]/);
+    const dv = (await evs(page)).find((e) => e.type === 'deliver')!;
+    const b = await gt<Boat>(page, 'boat'), H = await gt<{ x: number; z: number; r: number }>(page, 'harbor');
+    console.log(`  ${dv.t}秒に1人目を救助(船着き場から ${Math.hypot(b.x - H.x, b.z - H.z).toFixed(1)}m)`);
+    // 横腹で大波を受け続けて沈む
+    await page.evaluate(() => { const w = window as any; w.__autoStep = null; });
+    await page.evaluate(() => {
+      const w = window as any, g = w.gameTest, down = new Set<string>();
+      const key = (c: string, on: boolean) => { if (on === down.has(c)) return; on ? down.add(c) : down.delete(c); w.dispatchEvent(new KeyboardEvent(on ? 'keydown' : 'keyup', { code: c })); };
+      w.__autoStep = () => {
+        const bt = g.boat(), r = g.rollers().sort((a: any, c: any) => a.eta - c.eta)[0];
+        let want = -Math.PI / 2;
+        if (Math.hypot(bt.x, bt.z) > 100 && r) want = Math.atan2(r.dx, -r.dz);
+        let d = (want - bt.h) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2;
+        key('ArrowRight', d > 0.05); key('ArrowLeft', d < -0.05); key('ArrowUp', bt.lever < 0.6); key('ArrowDown', bt.lever > 0.66);
+      };
+    });
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 150_000, intervals: [300] }).toMatch(/sink|over/);
+    await page.evaluate(() => { const w = window as any; w.__autoStep = null; w.__simSpeed = 1; });
+    await expect(page.locator('#over')).toBeVisible({ timeout: 8000 });
     const s = await gt<Stats>(page, 'stats');
+    await expect(page.locator('#o-saved')).toHaveText(`${s.saved} 人`);
     await expect(page.locator('#o-time')).toHaveText(`${Math.floor(s.t / 60)}:${String(Math.floor(s.t % 60)).padStart(2, '0')}`);
-    await expect(page.locator('#o-cause')).toContainText('夜明けまで');
-    await expect(page.locator('#o-kills')).toHaveText(String(s.kills));
-    console.log(`  ${s.t.toFixed(0)}秒で終わり(${s.cause})・結果: ${(await page.locator('#over .stone').innerText()).replace(/\s+/g, ' ')}`);
-    await page.waitForTimeout(1300);
-    if (isMobile(page)) await page.locator('#b-again').tap(); else await page.locator('#b-again').click();
+    console.log(`  ${s.t.toFixed(0)}秒で沈没: ${(await page.locator('#log').innerText()).replace(/\s+/g, ' ')}`);
+    expect(s.cause, '沈んだ理由が出ません').not.toBe('');
+    expect((await evs(page)).some((e) => e.type === 'roller' && e.kind === 'beam'), '横腹で受けていません').toBeTruthy();
+    await page.waitForTimeout(1000);
+    if (await isMobile(page)) await page.locator('#b-again').tap(); else await page.locator('#b-again').click();
     await expect.poll(() => gt<string>(page, 'state')).toBe('play');
-    const s2 = await gt<Stats>(page, 'stats'), p2 = await gt<Pl>(page, 'player');
-    expect(s2.t).toBeLessThan(2);
-    expect(s2.kills).toBe(0);
-    expect(p2.hp).toBe(3);
-    expect(s2.best.t, '記録が残っていません').toBeGreaterThan(5);
+    const s2 = await gt<Stats>(page, 'stats'), b2 = await gt<Boat>(page, 'boat');
+    expect(s2.t).toBeLessThan(2); expect(s2.saved).toBe(0); expect(b2.water).toBe(0); expect(b2.aboard).toBe(0);
+    expect(s2.best.saved, '記録が残っていません').toBeGreaterThanOrEqual(1);
     await page.reload();
-    await expect(page.locator('#best'), '再読み込みすると記録が消えます').toContainText(`${s.kills} 体`);
+    await expect(page.locator('#best'), '再読み込みすると記録が消えます').toContainText(`${s.saved}人`);
   });
 
   // ------------------------------------------------------------------------
   //  面白さの代わりになる数字
   // ------------------------------------------------------------------------
-  test('腕の差: 考えて遊ぶ自動プレイヤーは、でたらめな自動プレイヤーの1.5倍以上 生きのび、1.5倍以上 燃やす', async ({ browser }, info) => {
+  test('腕の差: 考えて遊ぶ自動プレイヤーは、でたらめな自動プレイヤーの1.5倍以上 救助し、長くもちこたえる', async ({ browser }, info) => {
     test.skip(info.project.name !== 'desktop', '自動プレイは desktop で');
     test.setTimeout(10 * 60_000);
     const smart: Result[] = [], dumb: Result[] = [];
     for (const seed of [21, 22, 23]) {
-      const a = await play(browser, { kind: 'smart', seed, speed: 20, cards: CHAIN_CARDS });
-      const b = await play(browser, { kind: 'dumb', seed, speed: 20 });
+      const a = await play(browser, { kind: 'smart', seed, speed: 24 });
+      const b = await play(browser, { kind: 'dumb', seed, speed: 24 });
       console.log(line(`考える 種${seed}`, a));
       console.log(line(`でたらめ 種${seed}`, b));
-      expect(a.t, `種${seed}: 考えて遊んでも でたらめより長く生きられません`).toBeGreaterThan(b.t);
       smart.push(a); dumb.push(b);
-      // 夜明けまで生きのびたら、結果が「夜明け」になる
-      if (a.won) {
-        expect(a.ev.some((e) => e.type === 'dawn'), '夜明けが来ていません').toBeTruthy();
-        expect(a.overText, '夜明けの結果が出ません').toContain('夜明け');
-      }
     }
     const avg = (rs: Result[], f: (r: Result) => number) => rs.reduce((s, r) => s + f(r), 0) / rs.length;
-    const tr = avg(smart, (r) => r.t) / avg(dumb, (r) => r.t), kr = avg(smart, (r) => r.kills) / avg(dumb, (r) => r.kills);
+    const sr = (avg(smart, (r) => r.saved) + 0.01) / (avg(dumb, (r) => r.saved) + 0.33), tr = avg(smart, (r) => r.t) / avg(dumb, (r) => r.t);
     console.log(`  1回の長さ: 考える ${avg(smart, (r) => r.t).toFixed(0)}秒 / でたらめ ${avg(dumb, (r) => r.t).toFixed(0)}秒`);
-    console.log(`  腕の差: 生きのびた時間 ${tr.toFixed(1)}倍・燃やした数 ${kr.toFixed(1)}倍・最大連鎖 ${avg(smart, (r) => r.maxChain).toFixed(0)} / ${avg(dumb, (r) => r.maxChain).toFixed(0)}・夜明け ${smart.filter((r) => r.won).length}/3`);
-    expect(tr, '生きのびる時間に腕の差が出ません').toBeGreaterThanOrEqual(1.5);
-    expect(kr, '燃やした数に腕の差が出ません').toBeGreaterThanOrEqual(1.5);
-    expect(smart.some((r) => r.won), '上手に遊んでも 夜明けまで届きません').toBeTruthy();
-    expect(smart.some((r) => !r.won), '上手な自動プレイヤーが毎回 夜明けまで届くのは やさしすぎます').toBeTruthy();
+    console.log(`  腕の差: 救助 ${avg(smart, (r) => r.saved).toFixed(1)} / ${avg(dumb, (r) => r.saved).toFixed(1)}人(${sr.toFixed(1)}倍)・もちこたえた時間 ${tr.toFixed(1)}倍`);
+    expect(sr, '救助した人数に腕の差が出ません').toBeGreaterThanOrEqual(1.5);
+    expect(tr, 'もちこたえた時間に腕の差が出ません').toBeGreaterThanOrEqual(1.5);
+    expect(smart.every((r) => r.saved >= 3), '上手に遊んでも ほとんど救助できません').toBeTruthy();
+    expect(smart.some((r) => r.cause !== ''), '上手な自動プレイヤーが 一度も沈まないのは やさしすぎます').toBeTruthy();
   });
 
-  // 初めての人は、まず光の中で様子を見る。説明どおり「光に入れると燃える」なら、立っているだけで すぐには終わらない
-  test('初めての人: 光の中で立ちつくしても、1体ずつ来る影は焼けて、1分以上は生きのびる', async ({ browser }, info) => {
-    test.skip(info.project.name !== 'desktop', '自動プレイは desktop で');
-    test.setTimeout(5 * 60_000);
-    const rs = await Promise.all([21, 22, 23].map((seed) => play(browser, { kind: 'idle', seed, speed: 20 })));
-    rs.forEach((r, i) => console.log(line(`立ちつくす 種${21 + i}`, r) + `・1分ごとの影の数 ${r.crowd.join(',')}`));
-    for (const r of rs) expect(r.t, '光の中に立っているだけで、すぐに やられてしまいます').toBeGreaterThanOrEqual(60);
-  });
-
-  test('毎回ちがう: 種を変えると、墓地の配置・出てくるカード・展開がちがう', async ({ browser }, info) => {
+  test('毎回ちがう: 種を変えると、漂流者の場所・大波の時刻と向き・岩の配置がちがう', async ({ browser }, info) => {
     test.skip(info.project.name !== 'desktop', '自動プレイは desktop で');
     test.setTimeout(5 * 60_000);
     const rs: Result[] = [];
     for (const seed of [31, 32, 33]) {
-      const r = await play(browser, { kind: 'smart', seed, speed: 20, cards: CHAIN_CARDS }, 150);
+      const r = await play(browser, { kind: 'smart', seed, speed: 24 }, 150);
       rs.push(r);
-      console.log(`  種${seed}: 墓石など${JSON.parse(r.obs).length}こ・最初のカード ${r.offers.slice(0, 3).map((o) => o.join('/')).join(' → ')}・150秒で${r.kills}体・連鎖 ${r.chains.filter((c) => c >= 3).slice(0, 8).join(',')}`);
+      console.log(`  種${seed}: 群れ ${r.clusterLog.slice(0, 3).map((c) => `(${c[0]},${c[1]})×${c[2]}`).join(' ')}・大波 ${r.rollerLog.slice(0, 4).map((x) => `${x[0]}秒/${x[2]}m`).join(' ')}・岩 ${r.rocks}`);
     }
-    expect(new Set(rs.map((r) => r.obs)).size, '墓地の配置が毎回同じです').toBe(3);
-    expect(new Set(rs.map((r) => JSON.stringify(r.offers.slice(0, 3)))).size, '出てくるカードが毎回同じです').toBe(3);
-    expect(new Set(rs.map((r) => JSON.stringify(r.chains.filter((c) => c >= 3).slice(0, 6)))).size, '連鎖の出方が毎回同じです').toBe(3);
+    expect(new Set(rs.map((r) => JSON.stringify(r.clusterLog.slice(0, 3)))).size, '漂流者の場所が毎回同じです').toBe(3);
+    expect(new Set(rs.map((r) => JSON.stringify(r.rollerLog.slice(0, 4)))).size, '大波が毎回同じです').toBe(3);
+    expect(new Set(rs.map((r) => r.rocks)).size, '岩の配置が毎回同じです').toBe(3);
   });
 
-  // 最大連鎖は、強化がそろう前(1分半ごろ)の大きな群れで決まりやすいので、物差しにしない。
-  // 「何で燃やしたか」(光から燃えひろがった連鎖か、灯を開いたか)と、灯を開く回数で、立ち回りの違いを見る
-  test('選択の重さ: 連鎖の強化を選ぶか、光の強化を選ぶかで、燃やし方(燃えひろがりで焼くか・灯を開いて焼くか)がはっきり変わる', async ({ browser }, info) => {
+  test('選択の重さ: 早めに帰る(3人)か、満員まで欲張る(8人)かで、沈んだときに失う人数と救助の数がはっきり変わる', async ({ browser }, info) => {
     test.skip(info.project.name !== 'desktop', '自動プレイは desktop で');
     test.setTimeout(10 * 60_000);
-    const ch: Result[] = [], li: Result[] = [];
-    for (const seed of [3, 4]) {
-      const a = await play(browser, { kind: 'smart', seed, speed: 20, cards: CHAIN_CARDS });
-      const b = await play(browser, { kind: 'smart', seed, speed: 20, cards: LIGHT_CARDS });
-      console.log(line(`連鎖の強化 種${seed}`, a));
-      console.log(line(`光の強化 種${seed}`, b));
-      ch.push(a); li.push(b);
+    const care: Result[] = [], greed: Result[] = [];
+    for (const seed of [3, 4, 5]) {
+      const a = await play(browser, { kind: 'smart', seed, speed: 24, home: 3, waterLimit: 50 });
+      const b = await play(browser, { kind: 'smart', seed, speed: 24, home: 8, waterLimit: 92 });
+      console.log(line(`慎重 種${seed}`, a));
+      console.log(line(`欲張り 種${seed}`, b));
+      care.push(a); greed.push(b);
     }
     const sum = (rs: Result[], f: (r: Result) => number) => rs.reduce((s, r) => s + f(r), 0);
-    const spreadShare = (rs: Result[]) => sum(rs, (r) => r.burn.src.light ?? 0) / sum(rs, (r) => (r.burn.src.light ?? 0) + (r.burn.src.flare ?? 0));
-    const shareR = spreadShare(ch) / spreadShare(li);
-    const spreadAvg = (rs: Result[]) => sum(rs, (r) => r.burn.spreadSum) / Math.max(1, sum(rs, (r) => r.burn.spreadN));
-    const fpm = (rs: Result[]) => sum(rs, (r) => r.flares) / (sum(rs, (r) => r.t) / 60);
-    const flareR = fpm(li) / fpm(ch);
-    console.log(`  燃えひろがりで焼いた割合: 連鎖の強化 ${(spreadShare(ch) * 100).toFixed(0)}% / 光の強化 ${(spreadShare(li) * 100).toFixed(0)}%(${shareR.toFixed(1)}倍)・燃えひろがりの回数 ${sum(ch, (r) => r.burn.spreadN)} / ${sum(li, (r) => r.burn.spreadN)}・平均 ${spreadAvg(ch).toFixed(1)} / ${spreadAvg(li).toFixed(1)}体`);
-    console.log(`  1分に灯を開く回数 ${flareR.toFixed(1)}倍(光の強化 / 連鎖の強化)・最大連鎖 ${sum(ch, (r) => r.maxChain)} / ${sum(li, (r) => r.maxChain)}`);
-    expect(shareR, '連鎖の強化を選んでも、燃えひろがりで焼けるようになりません').toBeGreaterThanOrEqual(1.5);
-    expect(flareR, '光の強化を選んでも、灯の開き方が変わりません').toBeGreaterThanOrEqual(1.5);
+    const perTrip = (rs: Result[]) => sum(rs, (r) => r.picked) / Math.max(1, sum(rs, (r) => r.ev.filter((e, i, a) => e.type === 'deliver' && a[i - 1]?.type !== 'deliver').length));
+    console.log(`  沈んだときに失った人: 慎重 ${sum(care, (r) => r.lostAboard)} / 欲張り ${sum(greed, (r) => r.lostAboard)}・救助 ${sum(care, (r) => r.saved)} / ${sum(greed, (r) => r.saved)}・1回の帰港で降ろした人数 ${perTrip(care).toFixed(1)} / ${perTrip(greed).toFixed(1)}・もちこたえた ${sum(care, (r) => r.t).toFixed(0)} / ${sum(greed, (r) => r.t).toFixed(0)}秒`);
+    expect(sum(greed, (r) => r.lostAboard), '欲張っても、沈んだときに失う人数が変わりません').toBeGreaterThanOrEqual(sum(care, (r) => r.lostAboard) * 1.5 + 3);
+    const sr = sum(care, (r) => r.saved) / Math.max(1, sum(greed, (r) => r.saved));
+    expect(sr >= 1.3 || sr <= 1 / 1.3, '帰り方を変えても、救助の数がほとんど変わりません').toBeTruthy();
   });
 
   // ------------------------------------------------------------------------
   //  スマホ・重さ・動画・見直し
   // ------------------------------------------------------------------------
-  test('スマホ: 画面に収まり、ボタンは指で押せる大きさで、表示どうしが重ならない', async ({ page }, info) => {
+  test('スマホ: 画面に収まり、ボタンとレバーは指で扱える大きさで、表示どうしが重ならない。指で舵とスロットルが動く', async ({ page }, info) => {
     test.skip(info.project.name !== 'mobile', 'スマホで確かめる');
     await open(page, { plays: 0 });
     const v = page.viewportSize()!;
     const inside = (b: { x: number; y: number; width: number; height: number } | null) => !!b && b.x >= -0.5 && b.y >= -0.5 && b.x + b.width <= v.width + 0.5 && b.y + b.height <= v.height + 0.5;
     const apart = (a: any, b: any) => a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
-    expect(inside(await page.locator('#b-start').boundingBox()), 'タイトルの「灯をともす」が画面の外です').toBeTruthy();
+    expect(inside(await page.locator('#b-start').boundingBox()), 'タイトルの「出航する」が画面の外です').toBeTruthy();
     await start(page);
-    await page.waitForTimeout(500);
-    const ids = ['#b-flare', '#b-pause', '#b-snd', '#vit', '#clock'];
+    await page.waitForTimeout(600);
+    const ids = ['#b-pause', '#b-snd', '#lever', '#inst', '#top-l'];
     const bx: Record<string, any> = {};
     for (const id of ids) { bx[id] = await page.locator(id).boundingBox(); expect(inside(bx[id]), `${id} がはみ出しています`).toBeTruthy(); }
-    for (const id of ['#b-flare', '#b-pause', '#b-snd']) expect(Math.min(bx[id].width, bx[id].height), `${id} が小さすぎます`).toBeGreaterThanOrEqual(44);
+    for (const id of ['#b-pause', '#b-snd']) expect(Math.min(bx[id].width, bx[id].height), `${id} が小さすぎます`).toBeGreaterThanOrEqual(44);
+    expect(bx['#lever'].width, 'レバーが細すぎます').toBeGreaterThanOrEqual(44);
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) expect(apart(bx[ids[i]], bx[ids[j]]), `${ids[i]} と ${ids[j]} が重なっています`).toBeTruthy();
     const hint = await page.locator('#hint').boundingBox();
-    expect(apart(hint, bx['#b-flare']), '説明の文字が ✺ボタンに重なっています').toBeTruthy();
-    // 自分は 上の表示にも 下のボタンにも かくれない
-    const p = await gt<Pl>(page, 'player');
-    const s = (await gt<{ x: number; y: number }>(page, 'toScreen', p.x, 1, p.z))!;
-    expect(s.y).toBeGreaterThan(bx['#clock'].y + bx['#clock'].height);
-    expect(s.y).toBeLessThan(bx['#b-flare'].y);
-    // 指で歩ける
-    await walk(page, 1, 0, 700);
-    expect((await gt<Pl>(page, 'player')).x, '指でなぞっても歩けません').toBeGreaterThan(p.x + 1.5);
+    expect(apart(hint, bx['#lever']) && apart(hint, bx['#inst']), '説明の文字が計器やレバーに重なっています').toBeTruthy();
+    // 艇は 上の表示にも 下の計器にも かくれない
+    const b = await gt<Boat>(page, 'boat');
+    const s = (await gt<{ x: number; y: number }>(page, 'toScreen', b.x, b.y + 1, b.z))!;
+    expect(s.y).toBeGreaterThan(bx['#top-l'].y + bx['#top-l'].height);
+    expect(s.y).toBeLessThan(bx['#inst'].y);
+    // 指でレバーを上げ、画面をなぞって舵を切る
+    const lv = bx['#lever'];
+    await page.touchscreen.tap(lv.x + lv.width / 2, lv.y + 6);
+    await expect.poll(async () => (await gt<Boat>(page, 'boat')).lever, { message: 'レバーを指で上げられません' }).toBeGreaterThan(0.85);
+    const cdp = await page.context().newCDPSession(page);
+    const tp = (type: string, x?: number) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: x === undefined ? [] : [{ x, y: v.height * 0.45, id: 2 }] } as any);
+    const h0 = (await gt<Boat>(page, 'boat')).h;
+    await tp('touchStart', v.width * 0.3);
+    for (let i = 1; i <= 6; i++) { await tp('touchMove', v.width * 0.3 + i * 15); await page.waitForTimeout(16); }
+    await page.waitForTimeout(1200);
+    await tp('touchEnd');
+    await cdp.detach();
+    const h1 = (await gt<Boat>(page, 'boat')).h;
+    console.log(`  指で右へなぞった: 向き ${h0.toFixed(2)} → ${h1.toFixed(2)}・速さ ${((await gt<Boat>(page, 'boat')).v * 1.944).toFixed(0)}ノット`);
+    expect(h1 - h0, '指でなぞっても右へ曲がりません').toBeGreaterThan(0.3);
   });
 
-  test('スマホで重くない(CPU 4倍遅くても、影が群れて連鎖が はじける中で 30fps 以上)', async ({ page }, info) => {
+  test('スマホで重くない(CPU 4倍遅くても、大波と雨としぶきの中で 30fps 以上)', async ({ page }, info) => {
     test.skip(info.project.name !== 'mobile', 'スマホの設定で測る');
     test.setTimeout(4 * 60_000);
-    await page.addInitScript(installBot, { kind: 'smart', seed: 41, speed: 12, cards: CHAIN_CARDS, plays: 9 } as Bot);
+    await page.addInitScript(installBot, { kind: 'smart', seed: 41, speed: 10, plays: 9 } as Bot);
     await page.goto(url());
     await start(page);
-    // 早回しで進め、影が70体をこえて群れた瞬間に ふつうの速さへ戻す(ページの中で見張るので、取りこぼさない)
+    // 早回しで進め、大波が近づいてきた瞬間に ふつうの速さへ戻す(ページの中で見張るので、取りこぼさない)
     await page.evaluate(() => {
       const w = window as any;
-      const id = setInterval(() => { if (w.gameTest.enemies().length >= 70) { w.__simSpeed = 1; clearInterval(id); } }, 30);
+      const id = setInterval(() => { const g = w.gameTest; if (g.stats().t > 75 && g.rollers().some((r: any) => r.eta < 6 && r.eta > 2)) { w.__simSpeed = 1; clearInterval(id); } }, 20);
     });
     await expect.poll(() => page.evaluate(() => (window as any).__simSpeed), { timeout: 3 * 60_000, intervals: [300] }).toBe(1);
-    expect(await gt<string>(page, 'state'), '測る前に終わってしまいました').not.toBe('over');
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 5000, intervals: [30] }).toBe('play');
-    const n =(await gt<En[]>(page, 'enemies')).length, pn = await gt<number>(page, 'particles');
-    // 測っているあいだは gameTest を読まない(自動プレイヤーも止め、灯を開くだけにする)
+    expect(await gt<string>(page, 'state'), '測る前に終わってしまいました').toBe('play');
+    const pn = await gt<number>(page, 'particles');
+    // 測っているあいだは gameTest を読まない(自動プレイヤーも止める。艇はそのまま進む)
     await page.evaluate(() => { (window as any).__autoStep = null; });
-    await page.locator('#b-flare').tap();
     const perf = await measureFps(page, 3000);
-    console.log(`  重さ: 平均${perf.fps}fps / p95 ${perf.p95}ms(mobile・CPU 4倍遅い)・影 ${n}体・粒 ${pn}・画質の段階 ${await gt<number>(page, 'quality')}`);
-    expect(n, '影が少なすぎて 重さを測れません').toBeGreaterThan(60);
+    console.log(`  重さ: 平均${perf.fps}fps / p95 ${perf.p95}ms(mobile・CPU 4倍遅い)・粒 ${pn}・画質の段階 ${await gt<number>(page, 'quality')}`);
     expect(perf.fps, 'スマホで重すぎます').toBeGreaterThanOrEqual(30);
     expect(perf.p95, 'スマホでカクつきます').toBeLessThanOrEqual(50);
   });
@@ -483,67 +440,75 @@ test.describe('プレイテスト', () => {
       focus: '#gl',
       maxSeconds: 60,
       setup: async (page) => {
-        await page.addInitScript(installBot, { kind: 'smart', seed: 51, speed: 12, cards: CHAIN_CARDS, plays: 9, sound: true } as Bot);
+        await page.addInitScript(installBot, { kind: 'smart', seed: 51, speed: 10, plays: 9, sound: true } as Bot);
         await page.goto(url());
         await start(page);
-        // 群れが育つ 1分半すぎまで 早回し
-        await expect.poll(async () => (await gt<Stats>(page, 'stats')).t, { timeout: 60_000, intervals: [300] }).toBeGreaterThan(92);
+        // 大波が育つ 1分すぎまで 早回し(夕日はまだ残っている)
+        await expect.poll(async () => (await gt<Stats>(page, 'stats')).t, { timeout: 60_000, intervals: [300] }).toBeGreaterThan(62);
         await page.evaluate(() => { (window as any).__simSpeed = 1; });
       },
       play: async (page, clip: Clip) => {
-        let marked = false, shot = false, markAt = 0, best = 0;
+        let marked = false, shot = false, markAt = 0;
         while (Date.now() < clip.until) {
-          const n = await gt<number>(page, 'liveChain');
-          best = Math.max(best, n);
-          // 見せ場: 群れに火がついて 連鎖が広がりはじめた瞬間
-          if (!marked && n >= 6) { marked = true; markAt = Date.now(); clip.mark(); }
+          // 見せ場: 大きな波が目の前にそびえ、舳先から突っ込む瞬間
+          if (!marked) {
+            const [b, rs] = await Promise.all([gt<Boat>(page, 'boat'), gt<Roll[]>(page, 'rollers')]);
+            const r = rs.find((x) => x.eta < 1.6 && x.eta > 0.4 && x.H > 3);
+            if (r && Math.cos(b.h) * -r.dx + Math.sin(b.h) * -r.dz > 0.8) { marked = true; markAt = Date.now(); clip.mark(); }
+          }
           // 投稿画像はふつうの動画のときだけ撮る(ショート用モードの縦長で上書きしない)
-          if (marked && !shot && Date.now() - markAt > 900) { shot = true; if (process.env.SHORT_VIDEO !== '1') await page.screenshot({ path: path.join(target!.dir, 'screenshot.png') }); }
-          await page.waitForTimeout(50);
+          if (marked && !shot && Date.now() - markAt > 1700) { shot = true; if (process.env.SHORT_VIDEO !== '1') await page.screenshot({ path: path.join(target!.dir, 'screenshot.png') }); }
+          await page.waitForTimeout(40);
         }
         const s = await gt<Stats>(page, 'stats');
-        console.log(`  動画: mark ${marked}・いちばん大きい連鎖 ×${best}・${s.t.toFixed(0)}秒・${s.kills}体`);
-        expect(marked, '動画の見せ場(連鎖)が来ませんでした').toBeTruthy();
+        console.log(`  動画: mark ${marked}・${s.t.toFixed(0)}秒・救助${s.saved}・舳先で越えた${s.bowWaves}`);
+        expect(marked, '動画の見せ場(大波を越える瞬間)が来ませんでした').toBeTruthy();
       },
     });
   });
 
   test('見直し用のスクショ', async ({ page }, info) => {
-    test.setTimeout(4 * 60_000);
+    test.setTimeout(5 * 60_000);
     const dir = path.join(__dirname, '..', 'test-results', 'review');
     const shot = (name: string) => page.screenshot({ path: path.join(dir, `${info.project.name}-${name}.png`) });
+    const lockQ = (q: number) => page.evaluate((x) => { (window as any).__lockQ = x; }, q);
     await page.addInitScript(installBot, { kind: 'none', seed: 61, speed: 1, plays: 0 } as Bot);
     await page.goto(url());
-    await page.waitForTimeout(1500);
+    await lockQ(1);
+    await page.waitForTimeout(2500);
     await shot('1-title');
     await start(page);
     await page.waitForTimeout(2500);
     await shot('2-start');
-    await expect.poll(() => gt<number>(page, 'liveChain'), { timeout: 15_000, intervals: [30] }).toBeGreaterThanOrEqual(2);
-    await page.waitForTimeout(250);
-    await shot('3-first-chain');
-    // 自動プレイヤーに 2分ほど遊ばせて、にぎやかな場面
-    await page.addInitScript(installBot, { kind: 'smart', seed: 62, speed: 12, cards: CHAIN_CARDS, plays: 9 } as Bot);
+    // 自動プレイヤーに遊ばせて、大波・夜・稲妻の場面
+    await page.addInitScript(installBot, { kind: 'smart', seed: 62, speed: 12, plays: 9 } as Bot);
     await page.goto(url());
     await start(page);
-    await expect.poll(async () => (await gt<Stats>(page, 'stats')).t, { timeout: 90_000, intervals: [300] }).toBeGreaterThan(130);
-    await page.evaluate(() => { (window as any).__simSpeed = 1; });
-    await expect.poll(() => gt<number>(page, 'liveChain'), { timeout: 30_000, intervals: [30] }).toBeGreaterThanOrEqual(5);
-    await page.waitForTimeout(300);
-    await shot('4-busy');
-    await page.evaluate(() => { (window as any).__holdCards = true; });
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 60_000, intervals: [100] }).toBe('card');
-    await page.waitForTimeout(600);
-    await shot('5-cards');
-    await page.evaluate(() => { const w = window as any; w.__holdCards = false; w.__simSpeed = 30; });
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 120_000, intervals: [300] }).toBe('over');
+    await expect.poll(async () => { const g = await gt<Stats>(page, 'stats'); const rs = await gt<Roll[]>(page, 'rollers'); return g.t > 80 && rs.some((r) => r.eta < 2.5 && r.eta > 1); }, { timeout: 120_000, intervals: [50] }).toBeTruthy();
+    await page.evaluate(() => { (window as any).__simSpeed = 0.0001; });
+    await lockQ(1);
+    await page.waitForTimeout(1500);
+    await shot('3-roller');
+    await page.evaluate(() => { (window as any).__simSpeed = 12; });
+    await page.evaluate(() => { delete (window as any).__lockQ; });
+    await expect.poll(async () => (await gt<Stats>(page, 'stats')).t, { timeout: 120_000, intervals: [300] }).toBeGreaterThan(230);
+    await expect.poll(() => gt<number>(page, 'flash'), { timeout: 120_000, intervals: [16] }).toBeGreaterThan(0.5);
+    await page.evaluate(() => { (window as any).__simSpeed = 0.0001; });
+    await lockQ(1);
+    await page.waitForTimeout(1200);
+    await shot('4-night-flash');
+    await page.evaluate(() => { (window as any).__simSpeed = 0.0001; });
+    await page.waitForTimeout(800);
+    await shot('5-night');
+    await page.evaluate(() => { const w = window as any; w.__simSpeed = 30; delete w.__lockQ; });
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 180_000, intervals: [300] }).toBe('over');
     await page.waitForTimeout(1600);
     await shot('6-over');
     if (info.project.name !== 'mobile') return;
     for (const [w, h, name] of [[844, 390, 'a-landscape'], [360, 640, 'b-small']] as const) {
       await page.setViewportSize({ width: w, height: h });
       await page.goto(url());
-      await page.waitForTimeout(1200);
+      await page.waitForTimeout(1500);
       await shot(`${name}-title`);
       await start(page);
       await page.waitForTimeout(2500);

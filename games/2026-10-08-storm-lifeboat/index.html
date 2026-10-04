@@ -1,0 +1,2291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>荒海の救命艇</title>
+<style>
+:root{--amber:#ffb547;--amber2:#ffd89a;--red:#ff4a36;--ink:#e9eef2;--dim:rgba(233,238,242,.62);--glass:rgba(6,12,18,.52);--line:rgba(255,213,150,.28);
+  --mono:"Consolas","SFMono-Regular","Menlo","Courier New",monospace;--serif:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP",serif;--sans:"Yu Gothic UI","Hiragino Sans","Meiryo",sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#05080b;color:var(--ink);overflow:hidden;font-family:var(--sans);touch-action:none;user-select:none;-webkit-user-select:none}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;background:#05080b}
+#hud2d{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+.hidden{display:none!important}
+button{font:inherit;color:inherit;cursor:pointer}
+/* ---- 計器 ---- */
+#hud{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .6s}
+#hud.on{opacity:1}
+#top-l{position:absolute;left:max(14px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));font-family:var(--mono);line-height:1.25;text-shadow:0 1px 3px #000}
+#top-l .k{font-size:10px;letter-spacing:.18em;color:var(--dim)}
+#top-l .v{font-size:26px;color:var(--amber2);font-weight:700}
+#top-l .v small{font-size:12px;color:var(--dim);font-weight:400;margin-left:4px}
+#clock{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:2px}
+#btns{position:absolute;right:max(10px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));display:flex;gap:8px;pointer-events:auto}
+.sq{width:44px;height:44px;border:1px solid var(--line);background:var(--glass);border-radius:3px;font-family:var(--mono);font-size:15px;color:var(--amber2);display:grid;place-items:center;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.sq:active{background:rgba(255,181,71,.25)}
+#inst{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));display:flex;gap:14px;align-items:flex-end;font-family:var(--mono);text-shadow:0 1px 3px #000}
+#bilge{width:20px;height:96px;border:1px solid var(--line);background:rgba(4,10,16,.55);position:relative;border-radius:2px;overflow:hidden}
+#bilge i{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(#5fb9ff,#1d5f98);transition:height .25s}
+#bilge.warn i{background:linear-gradient(#ff8a5c,#c4281c)}
+#bilge b{position:absolute;left:0;right:0;border-top:1px dashed rgba(255,255,255,.35)}
+.gl{display:flex;flex-direction:column;gap:6px}
+.gl .k{font-size:10px;letter-spacing:.16em;color:var(--dim)}
+#water-v{font-size:15px;color:var(--ink)}
+#seats{display:flex;gap:3px}
+#seats s{width:9px;height:14px;border:1px solid var(--line);border-radius:2px;background:rgba(0,0,0,.3)}
+#seats s.on{background:var(--amber);border-color:var(--amber)}
+#speed{font-size:22px;color:var(--ink)}
+#speed small{font-size:11px;color:var(--dim)}
+#holes{font-size:11px;color:#ff8a6a;min-height:13px}
+/* スロットル */
+#lever{position:absolute;right:max(12px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));width:58px;height:min(38vh,230px);pointer-events:auto;touch-action:none}
+#lever .track{position:absolute;left:24px;top:0;bottom:0;width:10px;border:1px solid var(--line);background:rgba(4,10,16,.55);border-radius:5px}
+#lever .zero{position:absolute;left:8px;right:8px;height:1px;background:rgba(255,255,255,.45)}
+#lever .knob{position:absolute;left:3px;width:52px;height:30px;margin-top:-15px;border-radius:4px;background:linear-gradient(#3a434b,#1c2228);border:1px solid #8f99a3;box-shadow:0 2px 6px rgba(0,0,0,.6);display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--amber2)}
+#lever .lb{position:absolute;right:62px;font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap}
+#hint{position:absolute;left:50%;bottom:max(130px,calc(env(safe-area-inset-bottom) + 130px));transform:translateX(-50%);max-width:min(560px,74vw);text-align:center;font-size:15px;line-height:1.5;padding:7px 14px;background:rgba(4,8,12,.55);border-left:2px solid var(--amber);border-right:2px solid var(--amber);opacity:0;transition:opacity .35s;text-shadow:0 1px 2px #000}
+#hint.on{opacity:1}
+#hint em{font-style:normal;color:var(--amber2);font-weight:700}
+#warn{position:absolute;left:50%;top:22%;transform:translateX(-50%);font-family:var(--mono);font-size:clamp(16px,2.6vw,24px);letter-spacing:.12em;color:#fff;text-shadow:0 0 12px rgba(255,80,40,.9),0 2px 4px #000;opacity:0;white-space:nowrap;transition:opacity .2s}
+#warn.on{opacity:1}
+#toast{position:absolute;left:50%;top:34%;transform:translate(-50%,0);font-family:var(--serif);font-size:clamp(20px,3.4vw,34px);color:#fff;text-shadow:0 2px 10px #000;opacity:0;transition:opacity .4s,transform .6s;white-space:nowrap;letter-spacing:.08em}
+#toast.on{opacity:1;transform:translate(-50%,-10px)}
+/* ---- タイトル ---- */
+.bar{position:fixed;left:0;right:0;height:9vh;background:#000;z-index:5;transition:transform 1s ease}
+#bar1{top:0}#bar2{bottom:0}
+body.playing #bar1{transform:translateY(-100%)}body.playing #bar2{transform:translateY(100%)}
+#title{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;justify-content:flex-end;padding:0 max(6vw,20px) calc(9vh + 26px);background:linear-gradient(transparent 45%,rgba(0,0,0,.55));transition:opacity .8s}
+#title h1{margin:0;font-family:var(--serif);font-weight:600;font-size:clamp(38px,7.5vw,84px);letter-spacing:.14em;line-height:1.1;text-shadow:0 4px 30px rgba(0,0,0,.7)}
+#title .en{font-family:var(--mono);letter-spacing:.5em;font-size:clamp(10px,1.3vw,13px);color:var(--amber2);margin:6px 0 16px 4px}
+#title p{margin:0 0 6px;max-width:640px;font-size:clamp(13px,1.6vw,16px);line-height:1.75;color:#d7dde2;text-shadow:0 1px 4px #000}
+#title .ctl{font-family:var(--mono);font-size:12px;color:var(--dim);margin:8px 0 18px;line-height:1.7}
+#title .row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.go{border:1px solid var(--amber);background:rgba(255,181,71,.12);color:var(--amber2);padding:13px 30px;font-family:var(--serif);font-size:19px;letter-spacing:.3em;min-height:48px;border-radius:2px}
+.go:hover,.go:active{background:rgba(255,181,71,.3)}
+#best{font-family:var(--mono);font-size:12px;color:var(--dim)}
+/* ---- 航海日誌 ---- */
+#over{position:fixed;inset:0;z-index:7;display:grid;place-items:center;background:rgba(0,0,0,.35);padding:16px}
+#log{width:min(440px,100%);max-height:100%;overflow:auto;background:#e8e1d0;color:#1d1a14;padding:22px 24px 20px;font-family:var(--mono);box-shadow:0 18px 60px rgba(0,0,0,.7);transform:rotate(-.6deg);border-radius:2px;
+  background-image:repeating-linear-gradient(transparent 0 25px,rgba(60,80,120,.16) 25px 26px)}
+#log h2{margin:0 0 2px;font-family:var(--serif);font-size:24px;letter-spacing:.2em}
+#log .sub{font-size:11px;color:#6b6252;margin-bottom:14px}
+#log table{width:100%;border-collapse:collapse;font-size:14px}
+#log td{padding:4px 0;border-bottom:1px dotted rgba(0,0,0,.25)}
+#log td:last-child{text-align:right;font-weight:700}
+#log .cause{margin:14px 0 4px;font-size:13px;line-height:1.6;color:#7a1f12}
+#log .rec{font-size:12px;color:#4d463a;margin-bottom:14px}
+#log .go{color:#1d1a14;border-color:#1d1a14;background:transparent;width:100%}
+#log .go:active{background:rgba(0,0,0,.1)}
+#pause{position:fixed;inset:0;z-index:7;display:grid;place-items:center;background:rgba(0,0,0,.5)}
+#pause div{text-align:center;font-family:var(--serif);font-size:28px;letter-spacing:.3em}
+#pause small{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--dim);margin-top:10px}
+#nogl{position:fixed;inset:0;z-index:9;display:grid;place-items:center;background:#05080b;padding:24px;text-align:center;line-height:1.8}
+@media (max-width:640px){
+  #top-l .v{font-size:22px}
+  #hint{font-size:13px;bottom:auto;top:calc(max(12px,env(safe-area-inset-top)) + 118px);max-width:86vw}
+  #warn{top:calc(max(12px,env(safe-area-inset-top)) + 178px)}
+  #toast{top:46%}
+  #inst{gap:10px}
+  #bilge{height:78px}
+  #title p{font-size:13px}
+}
+@media (max-height:460px){
+  .bar{height:6vh}
+  #title{padding-bottom:calc(6vh + 12px)}
+  #title h1{font-size:34px}
+  #title .en{margin-bottom:6px}
+  #title p{font-size:12px;line-height:1.5}
+  #title .ctl{margin:4px 0 8px}
+  #lever{height:58vh}
+  #hint{bottom:12px;max-width:52vw}
+  #bilge{height:64px}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="hud2d"></canvas>
+<div id="hud">
+  <div id="top-l">
+    <div class="k">救助</div>
+    <div class="v"><span id="saved">0</span><small>人</small></div>
+    <div id="clock">00:00</div>
+  </div>
+  <div id="btns">
+    <button class="sq" id="b-snd" aria-label="音">♪</button>
+    <button class="sq" id="b-pause" aria-label="一時停止">II</button>
+  </div>
+  <div id="inst">
+    <div class="gl"><div class="k">浸水</div><div id="bilge"><b style="bottom:60%"></b><i></i></div><div id="water-v">0%</div></div>
+    <div class="gl"><div class="k">乗員</div><div id="seats"></div><div class="k">速力</div><div id="speed">0<small> kn</small></div><div id="holes"></div></div>
+  </div>
+  <div id="lever"><div class="track"></div><div class="zero"></div><div class="knob">0%</div><div class="lb" style="top:0">全速</div><div class="lb" id="lb0">停止</div><div class="lb" style="bottom:0">後進</div></div>
+  <div id="hint"></div>
+  <div id="warn"></div>
+  <div id="toast"></div>
+</div>
+<div class="bar" id="bar1"></div><div class="bar" id="bar2"></div>
+<div id="title">
+  <h1>荒海の救命艇</h1>
+  <div class="en">STORM LIFEBOAT</div>
+  <p>日暮れの嵐。沈んだ船から投げ出された人たちが、赤い発炎筒を掲げて波間に浮いている。<br>
+  速度を落として近づけば引き上げられる。灯台の船着き場まで連れて帰れば救助だ。<br>
+  水平線から押し寄せる大波には、舳先を向けて乗り越えろ。横腹で受ければ艇に水が入り、満杯になれば沈む。</p>
+  <div class="ctl" id="ctl">操作: ← → / A D で舵 ・ ↑ ↓ / W S でスロットル(手を離してもレバーはそのまま) ・ Space で全速⇄微速 ・ P 一時停止</div>
+  <div class="row"><button class="go" id="b-start">出航する</button><span id="best"></span></div>
+</div>
+<div id="over" class="hidden">
+  <div id="log">
+    <h2>航海日誌</h2>
+    <div class="sub" id="o-date"></div>
+    <table>
+      <tr><td>連れ帰った人</td><td id="o-saved">0</td></tr>
+      <tr><td>波間に消えた人</td><td id="o-lost">0</td></tr>
+      <tr><td>艇と共に沈んだ人</td><td id="o-aboard">0</td></tr>
+      <tr><td>もちこたえた時間</td><td id="o-time">0:00</td></tr>
+      <tr><td>舳先で越えた大波</td><td id="o-waves">0</td></tr>
+    </table>
+    <div class="cause" id="o-cause"></div>
+    <div class="rec" id="o-rec"></div>
+    <button class="go" id="b-again">もう一度出航する</button>
+  </div>
+</div>
+<div id="pause" class="hidden"><div>一時停止<small>P / タップで再開</small></div></div>
+<div id="nogl" class="hidden">この端末では 3D(WebGL2)が使えないため、遊べません。<br>別のブラウザか端末でお試しください。</div>
+<script>
+'use strict';
+// =============================================================================
+//  荒海の救命艇 — 嵐の海で漂流者を引き上げ、灯台の島へ連れ帰る(WebGL2・すべてコードで生成)
+// =============================================================================
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const TAU = Math.PI * 2;
+const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+const R = () => Math.random();                       // 遊びの乱数(テストで種つきに差しかえられる)
+let vs = 987654321;                                  // 見た目だけの乱数(遊びの展開を変えない)
+const vr = () => ((vs = (vs * 1664525 + 1013904223) >>> 0) / 4294967296);
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+
+// ---- 保存 ----
+const SKEY = 'storm-lifeboat-v1';
+let save = { sound: true, plays: 0, best: { saved: 0, t: 0 } };
+try { const s = JSON.parse(localStorage.getItem(SKEY) || 'null'); if (s) save = Object.assign(save, s, { best: Object.assign({ saved: 0, t: 0 }, s.best || {}) }); } catch (e) { /* 保存なし */ }
+const writeSave = () => { try { localStorage.setItem(SKEY, JSON.stringify(save)); } catch (e) { /* 保存できない */ } };
+
+// =============================================================================
+//  行列(列優先)
+// =============================================================================
+const M4 = {
+  id: () => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; },
+  mul(a, b, o = new Float32Array(16)) {
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    }
+    return o;
+  },
+  persp(fy, asp, n, f) {
+    const m = new Float32Array(16), t = 1 / Math.tan(fy / 2);
+    m[0] = t / asp; m[5] = t; m[10] = (f + n) / (n - f); m[11] = -1; m[14] = (2 * f * n) / (n - f);
+    return m;
+  },
+  ortho(l, r, b, t, n, f) {
+    const m = M4.id();
+    m[0] = 2 / (r - l); m[5] = 2 / (t - b); m[10] = -2 / (f - n);
+    m[12] = -(r + l) / (r - l); m[13] = -(t + b) / (t - b); m[14] = -(f + n) / (f - n);
+    return m;
+  },
+  look(e, c, u) {
+    let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2];
+    let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx;
+    l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    const m = new Float32Array(16);
+    m[0] = xx; m[4] = xy; m[8] = xz; m[1] = yx; m[5] = yy; m[9] = yz; m[2] = zx; m[6] = zy; m[10] = zz;
+    m[12] = -(xx * e[0] + xy * e[1] + xz * e[2]); m[13] = -(yx * e[0] + yy * e[1] + yz * e[2]); m[14] = -(zx * e[0] + zy * e[1] + zz * e[2]); m[15] = 1;
+    return m;
+  },
+  inv(m) {
+    const o = new Float32Array(16);
+    const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3], a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+    const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11], a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
+    const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
+    const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    let d = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+    if (!d) return M4.id();
+    d = 1 / d;
+    o[0] = (a11 * b11 - a12 * b10 + a13 * b09) * d; o[1] = (a02 * b10 - a01 * b11 - a03 * b09) * d;
+    o[2] = (a31 * b05 - a32 * b04 + a33 * b03) * d; o[3] = (a22 * b04 - a21 * b05 - a23 * b03) * d;
+    o[4] = (a12 * b08 - a10 * b11 - a13 * b07) * d; o[5] = (a00 * b11 - a02 * b08 + a03 * b07) * d;
+    o[6] = (a32 * b02 - a30 * b05 - a33 * b01) * d; o[7] = (a20 * b05 - a22 * b02 + a23 * b01) * d;
+    o[8] = (a10 * b10 - a11 * b08 + a13 * b06) * d; o[9] = (a01 * b08 - a00 * b10 - a03 * b06) * d;
+    o[10] = (a30 * b04 - a31 * b02 + a33 * b00) * d; o[11] = (a21 * b02 - a20 * b04 - a23 * b00) * d;
+    o[12] = (a11 * b07 - a10 * b09 - a12 * b06) * d; o[13] = (a00 * b09 - a01 * b07 + a02 * b06) * d;
+    o[14] = (a31 * b01 - a30 * b03 - a32 * b00) * d; o[15] = (a20 * b03 - a21 * b01 + a22 * b00) * d;
+    return o;
+  },
+  // 平行移動・向き(yaw)・縦ゆれ(pitch: 舳先が上)・横ゆれ(roll: 右舷が下)・拡大
+  trs(x, y, z, yaw, pitch, roll, s = 1) {
+    const cy = Math.cos(-yaw), sy = Math.sin(-yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+    // Ry(-yaw) * Rz(pitch) * Rx(roll)
+    const Ry = [cy, 0, -sy, 0, 0, 1, 0, 0, sy, 0, cy, 0, 0, 0, 0, 1];
+    const Rz = [cp, sp, 0, 0, -sp, cp, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const Rx = [1, 0, 0, 0, 0, cr, -sr, 0, 0, sr, cr, 0, 0, 0, 0, 1];
+    const m = M4.mul(M4.mul(Ry, Rz), Rx);
+    for (let i = 0; i < 12; i++) m[i] *= (i % 4 === 3 ? 1 : s);
+    m[12] = x; m[13] = y; m[14] = z; m[15] = 1;
+    return m;
+  },
+  xf(m, x, y, z) { return [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]]; },
+  xn(m, x, y, z) { const a = m[0] * x + m[4] * y + m[8] * z, b = m[1] * x + m[5] * y + m[9] * z, c = m[2] * x + m[6] * y + m[10] * z, l = Math.hypot(a, b, c) || 1; return [a / l, b / l, c / l]; },
+};
+
+// =============================================================================
+//  ノイズ(地形用のなめらかなノイズと、つなぎ目のないテクスチャ用)
+// =============================================================================
+function hash2(x, y, s) { let h = (x * 374761393 + y * 668265263 + s * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y, s = 0, per = 0) {
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const w = (a, b) => (per ? hash2(((a % per) + per) % per, ((b % per) + per) % per, s) : hash2(a, b, s));
+  return lerp(lerp(w(xi, yi), w(xi + 1, yi), ux), lerp(w(xi, yi + 1), w(xi + 1, yi + 1), ux), uy);
+}
+function fbm(x, y, oct, s = 0, per = 0) {
+  let a = 0.5, f = 1, v = 0, n = 0;
+  for (let i = 0; i < oct; i++) { v += a * vnoise(x * f, y * f, s + i * 17, per ? per * f : 0); n += a; a *= 0.5; f *= 2; }
+  return v / n;
+}
+
+// =============================================================================
+//  形を組み立てる道具(位置・法線・色・材質[ざらつき, 金属, 遮蔽, 種類])
+// =============================================================================
+// 材質の種類: 0 ふつう / 1 岩 / 2 船体の塗装 / 3 木 / 4 灯台の塗装 / 5 光るもの(金属の欄が明るさ) / 6 ガラス / 7 波板の金属 / 8 コンクリート
+class Mesh {
+  constructor() { this.v = []; this.idx = []; this.stack = [M4.id()]; }
+  get m() { return this.stack[this.stack.length - 1]; }
+  push(m) { this.stack.push(M4.mul(this.m, m)); return this; }
+  pop() { this.stack.pop(); return this; }
+  vert(p, n, c, mt) {
+    const m = this.m, w = M4.xf(m, p[0], p[1], p[2]), wn = M4.xn(m, n[0], n[1], n[2]);
+    this.v.push(w[0], w[1], w[2], wn[0], wn[1], wn[2], c[0], c[1], c[2], mt[0], mt[1], mt[2], mt[3]);
+    return this.v.length / 13 - 1;
+  }
+  tri(a, b, c) { this.idx.push(a, b, c); }
+  // 平らな面の四角(a b c d は反時計回り)
+  quad(a, b, c, d, col, mt) {
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [d[0] - a[0], d[1] - a[1], d[2] - a[2]];
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    const i0 = this.vert(a, n, col, mt), i1 = this.vert(b, n, col, mt), i2 = this.vert(c, n, col, mt), i3 = this.vert(d, n, col, mt);
+    this.tri(i0, i1, i2); this.tri(i0, i2, i3);
+  }
+  box(cx, cy, cz, sx, sy, sz, col, mt) {
+    const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2;
+    this.quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], col, mt);
+    this.quad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], col, mt);
+    this.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], col, mt);
+    this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], col, mt);
+    this.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], col, mt);
+    this.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], col, mt);
+  }
+  // y 軸まわりの回転体。prof = [[半径, 高さ], ...]
+  lathe(prof, seg, col, mt, a0 = 0, a1 = TAU) {
+    const rows = [];
+    for (let i = 0; i < prof.length; i++) {
+      const [r, y] = prof[i];
+      const p = prof[Math.max(0, i - 1)], q = prof[Math.min(prof.length - 1, i + 1)];
+      let dr = q[0] - p[0], dy = q[1] - p[1];
+      const l = Math.hypot(dr, dy) || 1; dr /= l; dy /= l;
+      const row = [];
+      for (let j = 0; j <= seg; j++) {
+        const a = a0 + (a1 - a0) * (j / seg), ca = Math.cos(a), sa = Math.sin(a);
+        const c = typeof col === 'function' ? col(y, a) : col;
+        row.push(this.vert([r * ca, y, r * sa], [dy * ca, -dr, dy * sa], c, mt));
+      }
+      rows.push(row);
+    }
+    for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < seg; j++) {
+      const a = rows[i][j], b = rows[i][j + 1], c = rows[i + 1][j + 1], d = rows[i + 1][j];
+      this.tri(a, c, b); this.tri(a, d, c);
+    }
+  }
+  cyl(r0, r1, y0, y1, seg, col, mt, caps = true) {
+    this.lathe([[r0, y0], [r1, y1]], seg, col, mt);
+    if (caps) {
+      for (const [r, y, s] of [[r0, y0, -1], [r1, y1, 1]]) {
+        const c = this.vert([0, y, 0], [0, s, 0], col, mt), ring = [];
+        for (let j = 0; j <= seg; j++) { const a = (j / seg) * TAU; ring.push(this.vert([r * Math.cos(a), y, r * Math.sin(a)], [0, s, 0], col, mt)); }
+        for (let j = 0; j < seg; j++) s > 0 ? this.tri(c, ring[j + 1], ring[j]) : this.tri(c, ring[j], ring[j + 1]);
+      }
+    }
+  }
+  sphere(r, seg, col, mt) {
+    const prof = [];
+    for (let i = 0; i <= seg; i++) { const a = -Math.PI / 2 + (i / seg) * Math.PI; prof.push([Math.cos(a) * r + 1e-4, Math.sin(a) * r]); }
+    this.lathe(prof, seg * 2, col, mt);
+  }
+  // 2点を結ぶ細い棒
+  rod(a, b, r, seg, col, mt) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.hypot(dx, dy, dz);
+    const yaw = Math.atan2(dz, dx), pitch = Math.asin(clamp(dy / L, -1, 1));
+    // y 軸の棒を、Rz(-90°) で x 軸に倒してから向ける
+    const m = M4.mul(M4.trs(a[0], a[1], a[2], yaw, pitch, 0), [0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    this.push(m); this.cyl(r, r, 0, L, seg, col, mt, false); this.pop();
+  }
+  torus(R0, r, seg, sseg, colf, mt) {
+    const rows = [];
+    for (let i = 0; i <= seg; i++) {
+      const a = (i / seg) * TAU, ca = Math.cos(a), sa = Math.sin(a), row = [];
+      for (let j = 0; j <= sseg; j++) {
+        const b = (j / sseg) * TAU, cb = Math.cos(b), sb = Math.sin(b);
+        row.push(this.vert([(R0 + r * cb) * ca, r * sb, (R0 + r * cb) * sa], [cb * ca, sb, cb * sa], colf(a), mt));
+      }
+      rows.push(row);
+    }
+    for (let i = 0; i < seg; i++) for (let j = 0; j < sseg; j++) { const a = rows[i][j], b = rows[i][j + 1], c = rows[i + 1][j + 1], d = rows[i + 1][j]; this.tri(a, b, c); this.tri(a, c, d); }
+  }
+  // なめらかな格子(f(i,j) => {p, c, mt})。法線は となりの点から求める
+  grid(nu, nv, f, closeU = false) {
+    const P = [], C = [], T = [];
+    for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) { const o = f(i, j); P.push(o.p); C.push(o.c); T.push(o.mt); }
+    const at = (i, j) => P[(closeU ? ((i % nu) + nu) % nu : clamp(i, 0, nu)) * (nv + 1) + clamp(j, 0, nv)];
+    const base = [];
+    for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) {
+      const a = at(i + 1, j), b = at(i - 1, j), c = at(i, j + 1), d = at(i, j - 1);
+      const u = [a[0] - b[0], a[1] - b[1], a[2] - b[2]], w = [c[0] - d[0], c[1] - d[1], c[2] - d[2]];
+      const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+      const k = i * (nv + 1) + j;
+      base.push(this.vert(P[k], n, C[k], T[k]));
+    }
+    for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+      const a = base[i * (nv + 1) + j], b = base[(i + 1) * (nv + 1) + j], c = base[(i + 1) * (nv + 1) + j + 1], d = base[i * (nv + 1) + j + 1];
+      this.tri(a, b, c); this.tri(a, c, d);
+    }
+  }
+}
+
+// =============================================================================
+//  モデル
+// =============================================================================
+const MT = (rough, metal, ao, id) => [rough, metal, ao, id];
+const ORANGE = [0.85, 0.22, 0.03], WHITE = [0.82, 0.82, 0.8], DARK = [0.035, 0.037, 0.04], STEEL = [0.56, 0.57, 0.58];
+
+// 救命艇(長さ7m)。+x が舳先、+z が右舷、y=0 が喫水線
+function hullHalfBeam(x) { return x < 0.4 ? 1.36 * (1 - Math.pow((0.4 - x) / 4.2, 4) * 0.5) : 1.36 * Math.pow(Math.max(0, Math.cos(((x - 0.4) / 3.25) * Math.PI / 2)), 0.62); }
+function hullSheer(x) { return 1.0 + 0.32 * sstep(0.4, 3.65, x) + 0.05 * sstep(-1, -3.4, x); }
+function hullKeel(x) { return -0.78 + 0.85 * sstep(1.6, 3.65, x) + 0.12 * sstep(-2.2, -3.4, x); }
+function buildBoat() {
+  const m = new Mesh();
+  const X0 = -3.4, X1 = 3.65, NU = 30, NV = 18;
+  const hullPt = (i, j, side) => {
+    const x = X0 + (X1 - X0) * (i / NU), u = j / NV, b = hullHalfBeam(x), g = hullSheer(x), k = hullKeel(x);
+    const z = b * Math.pow(Math.sin(u * Math.PI / 2), 0.85) * side, y = k + (g - k) * Math.pow(u, 1.35);
+    return [x, y, z];
+  };
+  for (const side of [1, -1]) {
+    m.grid(NU, NV, (i, j) => {
+      const p = hullPt(i, j, side);
+      const top = hullSheer(p[0]);
+      const col = p[1] < -0.12 ? [0.3, 0.05, 0.035] : p[1] > top - 0.07 ? DARK : p[1] > top - 0.36 && p[1] < top - 0.2 ? [0.86, 0.86, 0.84] : ORANGE;
+      return { p, c: col, mt: p[1] > hullSheer(p[0]) - 0.07 ? MT(0.7, 0, 1, 0) : MT(0.38, 0, 0.9, 2) };
+    });
+  }
+  // 船尾の板
+  {
+    const ring = [];
+    for (let j = 0; j <= NV; j++) ring.push(hullPt(0, j, 1));
+    for (let j = NV; j >= 0; j--) ring.push(hullPt(0, j, -1));
+    const c = [X0, (hullKeel(X0) + hullSheer(X0)) / 2, 0];
+    for (let j = 0; j < ring.length - 1; j++) {
+      const a = m.vert(c, [-1, 0, 0], ORANGE, MT(0.4, 0, 0.85, 2)), b = m.vert(ring[j], [-1, 0, 0], ORANGE, MT(0.4, 0, 0.85, 2)), d = m.vert(ring[j + 1], [-1, 0, 0], ORANGE, MT(0.4, 0, 0.85, 2));
+      m.tri(a, d, b);
+    }
+  }
+  // 甲板(木)
+  m.grid(NU, 6, (i, j) => {
+    const x = X0 + 0.05 + (X1 - 0.35 - X0) * (i / NU), b = hullHalfBeam(x) * 0.96, z = -b + 2 * b * (j / 6);
+    return { p: [x, 0.78 + 0.18 * sstep(0.4, 3.3, x), z], c: [0.36, 0.25, 0.15], mt: MT(0.62, 0, 0.8, 3) };
+  });
+  // ゴムの防舷帯
+  for (const side of [1, -1]) for (let i = 0; i < NU; i++) {
+    const x0 = X0 + (X1 - X0) * (i / NU), x1 = X0 + (X1 - X0) * ((i + 1) / NU);
+    m.rod([x0, hullSheer(x0) - 0.05, hullHalfBeam(x0) * side * 1.01], [x1, hullSheer(x1) - 0.05, hullHalfBeam(x1) * side * 1.01], 0.075, 6, DARK, MT(0.8, 0, 1, 0));
+  }
+  // 操舵室(白い壁・オレンジの屋根・暗い窓)
+  const W = MT(0.45, 0, 0.85, 0), GL = MT(0.05, 0, 1, 6);
+  m.box(-0.6, 1.45, 0, 2.6, 1.3, 1.7, WHITE, W);
+  m.box(-0.6, 2.16, 0, 2.85, 0.14, 1.95, ORANGE, MT(0.4, 0, 0.95, 2));
+  m.box(0.71, 1.62, 0, 0.04, 0.55, 1.45, [0.02, 0.025, 0.03], GL);
+  for (const s of [1, -1]) {
+    m.box(-0.35, 1.62, 0.86 * s, 1.7, 0.5, 0.04, [0.02, 0.025, 0.03], GL);
+    // 救命浮輪
+    m.push(M4.trs(-1.5, 1.4, 0.87 * s, 0, 0, Math.PI / 2 * s));
+    m.torus(0.26, 0.07, 20, 8, (a) => (Math.floor((a / TAU) * 8) % 2 ? WHITE : ORANGE), MT(0.5, 0, 1, 0));
+    m.pop();
+  }
+  // マストと灯
+  m.rod([-1.1, 2.2, 0], [-1.1, 3.6, 0], 0.045, 8, STEEL, MT(0.35, 1, 1, 0));
+  m.rod([-1.1, 3.25, -0.6], [-1.1, 3.25, 0.6], 0.03, 6, STEEL, MT(0.35, 1, 1, 0));
+  m.push(M4.trs(-1.1, 3.62, 0, 0, 0, 0)); m.sphere(0.07, 6, [1, 0.95, 0.85], MT(0.3, 6, 1, 5)); m.pop();
+  m.push(M4.trs(-0.6, 2.25, -0.92, 0, 0, 0)); m.sphere(0.06, 6, [1, 0.08, 0.05], MT(0.3, 5, 1, 5)); m.pop();
+  m.push(M4.trs(-0.6, 2.25, 0.92, 0, 0, 0)); m.sphere(0.06, 6, [0.1, 1, 0.3], MT(0.3, 5, 1, 5)); m.pop();
+  // レーダー
+  m.box(-1.1, 3.0, 0, 0.12, 0.08, 1.0, [0.9, 0.9, 0.88], W);
+  // 探照灯
+  m.push(M4.mul(M4.trs(0.4, 2.42, 0, 0, 0, 0), [0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]));
+  m.cyl(0.16, 0.2, -0.15, 0.25, 12, [0.08, 0.08, 0.09], MT(0.3, 1, 1, 0), false);
+  m.cyl(0.19, 0.19, 0.25, 0.26, 12, [1, 0.97, 0.9], MT(0.2, 0, 1, 5), true);
+  m.pop();
+  m.box(0.4, 2.27, 0, 0.1, 0.16, 0.1, DARK, MT(0.5, 1, 1, 0));
+  // 手すり(舳先)
+  for (const s of [1, -1]) {
+    let prev = null;
+    for (let i = 0; i <= 6; i++) {
+      const x = 0.9 + i * 0.42, z = hullHalfBeam(x) * 0.9 * s, y = hullSheer(x);
+      m.rod([x, y, z], [x, y + 0.5, z], 0.022, 5, STEEL, MT(0.3, 1, 1, 0));
+      if (prev) m.rod(prev, [x, y + 0.5, z], 0.022, 5, STEEL, MT(0.3, 1, 1, 0));
+      prev = [x, y + 0.5, z];
+    }
+  }
+  // 船尾の機関カバーと手すり
+  m.box(-2.75, 1.08, 0, 0.9, 0.55, 1.2, [0.16, 0.17, 0.18], MT(0.55, 0.2, 0.8, 0));
+  m.rod([-3.25, 1.05, -1.1], [-3.25, 1.6, -1.1], 0.025, 5, STEEL, MT(0.3, 1, 1, 0));
+  m.rod([-3.25, 1.05, 1.1], [-3.25, 1.6, 1.1], 0.025, 5, STEEL, MT(0.3, 1, 1, 0));
+  m.rod([-3.25, 1.6, -1.1], [-3.25, 1.6, 1.1], 0.025, 5, STEEL, MT(0.3, 1, 1, 0));
+  return m;
+}
+
+// 漂流者(水面 y=0。救命胴衣・頭・発炎筒を掲げた腕)
+function buildSurvivor(flare) {
+  const m = new Mesh();
+  const VEST = [0.95, 0.32, 0.02], SKIN = [0.55, 0.36, 0.26], HAIR = [0.05, 0.04, 0.03];
+  m.cyl(0.24, 0.2, -0.45, 0.22, 10, VEST, MT(0.55, 0, 0.85, 0));
+  m.cyl(0.245, 0.245, 0.02, 0.07, 10, [0.9, 0.9, 0.85], MT(0.25, 0.6, 1, 0), false);
+  m.push(M4.trs(0, 0.42, 0, 0, 0, 0)); m.sphere(0.12, 8, SKIN, MT(0.6, 0, 0.95, 0)); m.pop();
+  m.push(M4.trs(-0.02, 0.47, 0, 0, 0, 0)); m.sphere(0.115, 8, HAIR, MT(0.8, 0, 0.9, 0)); m.pop();
+  m.rod([0.16, 0.18, 0.05], [0.24, 0.72, 0.1], 0.055, 6, [0.18, 0.2, 0.26], MT(0.7, 0, 0.9, 0));
+  if (flare) {
+    m.rod([0.24, 0.68, 0.1], [0.27, 0.98, 0.12], 0.03, 6, [0.6, 0.06, 0.04], MT(0.5, 0, 1, 0));
+    m.push(M4.trs(0.27, 1.0, 0.12, 0, 0, 0)); m.sphere(0.05, 6, [1, 0.25, 0.12], MT(0.3, 30, 1, 5)); m.pop();
+  } else {
+    m.push(M4.trs(0.05, 0.24, 0.2, 0, 0, 0)); m.sphere(0.04, 5, [0.9, 0.95, 1], MT(0.3, 1, 1, 5)); m.pop();
+  }
+  return m;
+}
+
+// 灯台の島: 岩・灯台・番小屋・桟橋
+const ISLAND_R = 25;
+function islandH(x, z) {
+  const r = Math.hypot(x, z), a = Math.atan2(z, x);
+  const n = fbm(x * 0.07 + 10, z * 0.07 + 10, 5, 3), n2 = fbm(x * 0.25, z * 0.25, 3, 9);
+  const edge = ISLAND_R * (0.92 + 0.16 * Math.sin(a * 3 + 1) * 0.5 + (n - 0.5) * 0.5);
+  let h = 7.5 * Math.pow(Math.max(0, 1 - Math.pow(r / edge, 2)), 0.8) - 2.2 + (n - 0.5) * 5 + (n2 - 0.5) * 1.6;
+  h = lerp(h, 3.4, sstep(7.5, 4.5, r));                     // 灯台の台地
+  h -= sstep(25, 31, r) * 7;                                 // 沖は必ず海
+  if (z < -8 && Math.abs(x) < 4) h = lerp(h, Math.min(h, 1.4), sstep(4, 2, Math.abs(x)));  // 桟橋への切り通し
+  return h;
+}
+function buildIsland() {
+  const m = new Mesh();
+  const NR = 34, NA = 72, RMAX = 34;
+  const H = [];
+  m.grid(NR, NA, (i, j) => {
+    const r = RMAX * Math.pow(i / NR, 1.2) + 0.01, a = (j / NA) * TAU, x = r * Math.cos(a), z = r * Math.sin(a);
+    const h = islandH(x, z);
+    const ao = clamp(0.55 + (h - (islandH(x + 2, z) + islandH(x - 2, z) + islandH(x, z + 2) + islandH(x, z - 2)) / 4) * 0.35, 0.3, 1);
+    const top = sstep(2.5, 5, h);
+    const col = [lerp(0.15, 0.2, top) * 1.05, lerp(0.14, 0.19, top), lerp(0.13, 0.13, top)];
+    return { p: [x, h, z], c: col, mt: MT(0.85, 0, ao, 1) };
+  });
+  void H;
+  // 灯台(赤白の帯は材質4で描く)
+  const base = 3.4;
+  m.push(M4.trs(0, base, 0, 0, 0, 0));
+  m.cyl(3.6, 3.4, -1.5, 0.6, 28, [0.42, 0.4, 0.37], MT(0.85, 0, 0.75, 8));
+  m.lathe([[3.05, 0.6], [2.75, 6], [2.45, 12], [2.25, 16.6]], 28, [0.86, 0.84, 0.8], MT(0.5, 0, 0.9, 4));
+  m.cyl(3.0, 3.0, 16.6, 16.95, 28, [0.08, 0.08, 0.08], MT(0.5, 0.8, 1, 0));
+  for (let i = 0; i < 24; i++) { const a = (i / 24) * TAU; m.rod([2.85 * Math.cos(a), 16.95, 2.85 * Math.sin(a)], [2.85 * Math.cos(a), 17.9, 2.85 * Math.sin(a)], 0.035, 4, [0.08, 0.08, 0.08], MT(0.5, 0.8, 1, 0)); }
+  m.cyl(2.85, 2.85, 17.88, 17.92, 28, [0.08, 0.08, 0.08], MT(0.5, 0.8, 1, 0), false);
+  m.cyl(1.75, 1.75, 16.95, 17.4, 20, [0.1, 0.1, 0.1], MT(0.5, 0.8, 1, 0));
+  m.cyl(1.6, 1.6, 17.4, 19.6, 20, [0.06, 0.07, 0.07], MT(0.04, 0, 1, 6), false);
+  m.lathe([[1.85, 19.6], [1.7, 20.1], [1.2, 20.7], [0.5, 21.15], [0.05, 21.3]], 20, [0.35, 0.04, 0.03], MT(0.35, 0.6, 1, 0));
+  m.rod([0, 21.2, 0], [0, 22.0, 0], 0.05, 6, [0.1, 0.1, 0.1], MT(0.4, 1, 1, 0));
+  m.pop();
+  // 番小屋
+  m.push(M4.trs(-7.5, islandH(-7.5, 3) + 1.2, 3, 0.35, 0, 0));
+  m.box(0, 0, 0, 5, 3, 3.6, [0.78, 0.76, 0.72], MT(0.8, 0, 0.8, 8));
+  const ROOF = [0.16, 0.09, 0.07], RM = MT(0.7, 0, 0.9, 0), WALL = [0.78, 0.76, 0.72], WM = MT(0.8, 0, 0.8, 8);
+  m.quad([-2.7, 1.4, -2.1], [2.7, 1.4, -2.1], [2.7, 2.7, 0], [-2.7, 2.7, 0], ROOF, RM);
+  m.quad([-2.7, 1.4, 2.1], [-2.7, 2.7, 0], [2.7, 2.7, 0], [2.7, 1.4, 2.1], ROOF, RM);
+  for (const x of [-2.5, 2.5]) { const a = m.vert([x, 1.5, -1.8], [Math.sign(x), 0, 0], WALL, WM), b = m.vert([x, 1.5, 1.8], [Math.sign(x), 0, 0], WALL, WM), c = m.vert([x, 2.6, 0], [Math.sign(x), 0, 0], WALL, WM); m.tri(a, b, c); }
+  m.box(-1.0, 0.2, 1.81, 0.9, 0.8, 0.05, [1, 0.62, 0.3], MT(0.4, 2.2, 1, 5));
+  m.box(1.2, 0.2, 1.81, 0.9, 0.8, 0.05, [1, 0.62, 0.3], MT(0.4, 2.2, 1, 5));
+  m.pop();
+  // 桟橋(コンクリート)と杭
+  m.box(0, 0.9, -29, 3.2, 1.0, 24, [0.46, 0.45, 0.42], MT(0.75, 0, 0.85, 8));
+  for (let z = -18; z >= -41; z -= 3.8) for (const x of [-1.4, 1.4]) { m.push(M4.trs(x, 0, z, 0, 0, 0)); m.cyl(0.3, 0.3, -4, 0.45, 8, [0.2, 0.19, 0.17], MT(0.85, 0, 0.7, 8), false); m.pop(); }
+  for (const z of [-24, -31, -38]) { m.push(M4.trs(1.25, 1.4, z, 0, 0, 0)); m.cyl(0.15, 0.18, 0, 0.4, 10, [0.1, 0.1, 0.1], MT(0.5, 0.7, 0.9, 0)); m.pop(); }
+  // 桟橋の灯
+  m.rod([0.9, 1.4, -40.4], [0.9, 4.4, -40.4], 0.07, 8, [0.12, 0.12, 0.12], MT(0.5, 0.8, 1, 0));
+  m.push(M4.trs(0.9, 4.5, -40.4, 0, 0, 0)); m.sphere(0.2, 8, [1, 0.72, 0.35], MT(0.3, 14, 1, 5)); m.pop();
+  return m;
+}
+// 海の岩(遠くの目印・ぶつかる)
+function buildRock(seed, r) {
+  const m = new Mesh();
+  m.grid(16, 24, (i, j) => {
+    const a = (i / 16) * Math.PI - Math.PI / 2, b = (j / 24) * TAU;
+    const dx = Math.cos(a) * Math.cos(b), dy = Math.sin(a), dz = Math.cos(a) * Math.sin(b);
+    const n = fbm(dx * 1.6 + seed, dz * 1.6 + dy * 1.3 + seed * 2, 4, seed);
+    const rr = r * (0.7 + 0.6 * n) * (dy > 0 ? 1 : 1.15);
+    return { p: [dx * rr * 1.1, dy * rr * 0.75, dz * rr], c: [0.13, 0.125, 0.12], mt: MT(0.85, 0, clamp(0.5 + n * 0.6, 0, 1), 1) };
+  });
+  return m;
+}
+// 沈みかけの貨物船(遠くで燃えている)
+function buildWreck() {
+  const m = new Mesh();
+  const L = 70, B = 9;
+  m.grid(20, 6, (i, j) => {
+    const x = -L / 2 + L * (i / 20), u = j / 6, b = B * (x > L * 0.3 ? Math.cos(((x - L * 0.3) / (L * 0.2)) * Math.PI / 2) : 1);
+    return { p: [x, -6 + 14 * u, b * Math.sin(u * Math.PI / 2)], c: u < 0.5 ? [0.22, 0.05, 0.04] : [0.08, 0.1, 0.13], mt: MT(0.6, 0.3, 0.8, 7) };
+  });
+  m.grid(20, 6, (i, j) => {
+    const x = -L / 2 + L * (i / 20), u = j / 6, b = B * (x > L * 0.3 ? Math.cos(((x - L * 0.3) / (L * 0.2)) * Math.PI / 2) : 1);
+    return { p: [x, -6 + 14 * (1 - u), -b * Math.sin((1 - u) * Math.PI / 2)], c: u > 0.5 ? [0.22, 0.05, 0.04] : [0.08, 0.1, 0.13], mt: MT(0.6, 0.3, 0.8, 7) };
+  });
+  m.box(-22, 14, 0, 10, 12, 14, [0.75, 0.74, 0.7], MT(0.6, 0.1, 0.8, 0));
+  m.box(-25, 22, 0, 3, 6, 3, [0.1, 0.1, 0.1], MT(0.6, 0.3, 0.8, 0));
+  for (let i = 0; i < 6; i++) m.box(-8 + i * 7, 10, (i % 2 ? 2 : -2), 6, 2.5, 2.5, [[0.5, 0.12, 0.08], [0.1, 0.25, 0.45], [0.4, 0.38, 0.1]][i % 3], MT(0.6, 0.4, 0.8, 7));
+  return m;
+}
+function buildCrate() { const m = new Mesh(); m.box(0, 0, 0, 6, 2.5, 2.5, [1, 1, 1], MT(0.55, 0.5, 0.85, 7)); return m; }
+function buildLog() { const m = new Mesh(); m.push(M4.mul(M4.id(), [0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])); m.cyl(0.38, 0.33, -2.6, 2.6, 10, [0.3, 0.2, 0.12], MT(0.8, 0, 0.85, 3)); m.pop(); return m; }
+// 光の帯(+x 方向へ広がる円すい。長さ1・先の半径1)
+function buildCone(seg = 24) {
+  const m = new Mesh();
+  for (let j = 0; j < seg; j++) {
+    const a0 = (j / seg) * TAU, a1 = ((j + 1) / seg) * TAU;
+    for (let i = 0; i < 8; i++) {
+      const x0 = i / 8, x1 = (i + 1) / 8;
+      const p = (x, a) => [x, Math.cos(a) * x, Math.sin(a) * x];
+      const n = (a) => [-0.5, Math.cos(a), Math.sin(a)];
+      const v0 = m.vert(p(x0, a0), n(a0), [1, 1, 1], [x0, 0, 0, 0]), v1 = m.vert(p(x1, a0), n(a0), [1, 1, 1], [x1, 0, 0, 0]);
+      const v2 = m.vert(p(x1, a1), n(a1), [1, 1, 1], [x1, 0, 0, 0]), v3 = m.vert(p(x0, a1), n(a1), [1, 1, 1], [x0, 0, 0, 0]);
+      m.tri(v0, v1, v2); m.tri(v0, v2, v3);
+    }
+  }
+  return m;
+}
+
+// =============================================================================
+//  海の波(Gerstner 波の重ね合わせ + 大波)。画面(GPU)と当たり判定(CPU)で同じ式を使う
+// =============================================================================
+// [波長m, 風からのずれ(rad), 高さ(sea=1 のとき)]
+const WAVES = [[62, 0, 0.52], [43, 0.38, 0.36], [30, -0.47, 0.26], [19.5, 0.82, 0.16], [13, -0.95, 0.105], [8.6, 0.27, 0.066], [5.8, -0.33, 0.042], [3.9, 1.15, 0.026]];
+const LEAN = 1.2;          // 大波の前のめり(前の面が切り立つ)
+const wv = new Float32Array(32), wp = new Float32Array(32), rv = new Float32Array(16), rv2 = new Float32Array(16);
+function setWaves(windA, sea) {
+  WAVES.forEach(([L, off, amp], i) => {
+    const a = windA + off, k = TAU / L, A = amp * sea;
+    wv[i * 4] = Math.cos(a); wv[i * 4 + 1] = Math.sin(a); wv[i * 4 + 2] = k; wv[i * 4 + 3] = A;
+    wp[i * 4] = Math.sqrt(9.81 * k); wp[i * 4 + 1] = i * 1.7; wp[i * 4 + 2] = Math.min(A * 0.85, 0.13 / k); wp[i * 4 + 3] = L * 9;
+  });
+}
+const shelter = (x, z) => lerp(0.25, 1, sstep(30, 80, Math.hypot(x, z)));
+// 格子の点(x, z)が、どこへ動くか(水平のずれと高さ)
+function seaDisp(x, z, t, out) {
+  const sh = shelter(x, z);
+  let dx = 0, dy = 0, dz = 0;
+  for (let i = 0; i < 8; i++) {
+    const A = wv[i * 4 + 3] * sh, Hh = wp[i * 4 + 2] * sh;
+    const th = wv[i * 4 + 2] * (wv[i * 4] * x + wv[i * 4 + 1] * z) - wp[i * 4] * t + wp[i * 4 + 1];
+    const c = Math.cos(th);
+    dx += Hh * wv[i * 4] * c; dz += Hh * wv[i * 4 + 1] * c; dy += A * Math.sin(th);
+  }
+  for (let i = 0; i < 4; i++) {
+    const H = rv[i * 4 + 3]; if (H <= 0) continue;
+    const Dx = rv[i * 4], Dz = rv[i * 4 + 1], W = rv2[i * 4];
+    const s = Dx * x + Dz * z - rv[i * 4 + 2], al = -Dz * x + Dx * z;
+    const Hm = H * sh * (0.78 + 0.22 * Math.sin(al * 0.018 + rv2[i * 4 + 1]));
+    const u = clamp(s / W, -9, 9), ch = Math.cosh(u), prof = Hm / (ch * ch);
+    dy += prof; dx += Dx * LEAN * prof; dz += Dz * LEAN * prof;
+  }
+  out[0] = dx; out[1] = dy; out[2] = dz;
+  return out;
+}
+const _d = [0, 0, 0];
+// 世界の点(x, z)の真上の水面の高さ(水平のずれを3回たどって逆算する)
+function seaH(x, z, t) {
+  let px = x, pz = z;
+  for (let k = 0; k < 3; k++) { seaDisp(px, pz, t, _d); px = x - _d[0]; pz = z - _d[2]; }
+  return seaDisp(px, pz, t, _d)[1];
+}
+
+// =============================================================================
+//  WebGL2
+// =============================================================================
+const cvs = $('gl');
+let gl = null;
+try { gl = cvs.getContext('webgl2', { antialias: false, alpha: false, depth: true, stencil: false, powerPreference: 'high-performance' }); } catch (e) { gl = null; }
+let HDR = false;
+
+const SH_HEAD = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2DShadow;\n';
+const COMMON = `
+uniform vec3 uCam; uniform float uT;
+uniform vec3 uSunDir, uSunCol, uKeyDir, uKeyCol, uAmbSky, uAmbGnd, uFogCol, uZen, uGlowCol, uCloudCol, uBoltDir;
+uniform float uFogDen, uDay, uFlash, uWet, uOS;
+uniform vec2 uWind;
+uniform vec4 uLP[8]; uniform vec3 uLC[8]; uniform int uNL;
+uniform vec3 uSpP, uSpD, uSpC;
+uniform sampler2D uEnv, uNoise;
+uniform sampler2DShadow uShadow;
+uniform mat4 uShM; uniform float uShOn;
+const float PI = 3.14159265;
+vec2 eqUV(vec3 d) { return vec2(atan(d.z, d.x) / (2.0 * PI) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / PI); }
+vec3 env(vec3 d, float lod) { return textureLod(uEnv, eqUV(d), lod).rgb; }
+float D_GGX(float NdH, float r) { float a = r * r; float a2 = a * a; float d = NdH * NdH * (a2 - 1.0) + 1.0; return a2 / (PI * d * d + 1e-6); }
+vec3 brdf(vec3 N, vec3 V, vec3 L, vec3 alb, float r, float m) {
+  float NdL = max(dot(N, L), 0.0);
+  if (NdL <= 0.0) return vec3(0.0);
+  vec3 H = normalize(V + L);
+  float NdV = max(dot(N, V), 1e-3), NdH = max(dot(N, H), 0.0), VdH = max(dot(V, H), 0.0);
+  float k = (r + 1.0) * (r + 1.0) / 8.0;
+  float G = NdV / (NdV * (1.0 - k) + k) * NdL / (NdL * (1.0 - k) + k);
+  vec3 F0 = mix(vec3(0.04), alb, m);
+  vec3 F = F0 + (1.0 - F0) * pow(1.0 - VdH, 5.0);
+  vec3 spec = D_GGX(NdH, r) * G * F / (4.0 * NdV * NdL + 1e-4);
+  return ((1.0 - F) * (1.0 - m) * alb / PI + spec) * NdL;
+}
+float shadowAt(vec3 w) {
+  if (uShOn < 0.5) return 1.0;
+  vec4 s = uShM * vec4(w, 1.0);
+  vec3 p = s.xyz / s.w * 0.5 + 0.5;
+  if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0 || p.z > 1.0) return 1.0;
+  float tx = 1.0 / float(textureSize(uShadow, 0).x), b = 0.0012;
+  float v = texture(uShadow, vec3(p.xy + vec2(-tx, -tx) * 0.7, p.z - b)) + texture(uShadow, vec3(p.xy + vec2(tx, -tx) * 0.7, p.z - b))
+          + texture(uShadow, vec3(p.xy + vec2(-tx, tx) * 0.7, p.z - b)) + texture(uShadow, vec3(p.xy + vec2(tx, tx) * 0.7, p.z - b));
+  return mix(1.0, v * 0.25, uShOn);
+}
+vec3 spotAt(vec3 w, out vec3 Ld) {
+  vec3 Ls = uSpP - w; float d2 = dot(Ls, Ls); Ld = Ls * inversesqrt(d2);
+  float cone = smoothstep(0.945, 0.985, dot(-Ld, uSpD));
+  return uSpC * cone / (d2 + 1.0);
+}
+vec3 localLights(vec3 w, vec3 N, vec3 V, vec3 alb, float r, float m) {
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= uNL) break;
+    vec3 Lv = uLP[i].xyz - w; float d2 = dot(Lv, Lv); float rr = uLP[i].w * uLP[i].w;
+    if (d2 > rr) continue;
+    float att = 1.0 - d2 / rr; att = att * att / (d2 + 1.0);
+    acc += brdf(N, V, Lv * inversesqrt(d2), alb, r, m) * uLC[i] * att;
+  }
+  vec3 Ld; vec3 sp = spotAt(w, Ld);
+  if (dot(sp, sp) > 0.0) acc += brdf(N, V, Ld, alb, r, m) * sp;
+  return acc;
+}
+vec3 skyBase(vec3 d) {
+  float y = max(d.y, 0.0);
+  vec3 c = mix(uFogCol, uZen, pow(y, 0.45));
+  float sd = max(dot(d, uSunDir), 0.0);
+  return c + uGlowCol * (pow(sd, 6.0) * 0.6 + pow(sd, 48.0) * 1.2);
+}
+vec3 skyRad(vec3 d) {
+  vec3 base = skyBase(d);
+  float sd = max(dot(d, uSunDir), 0.0);
+  vec2 cp = d.xz / (max(d.y, 0.0) + 0.07) * 0.085 + uWind * uT * 0.0045;
+  float w = texture(uNoise, cp * 0.31 + uT * 0.0015).a;
+  float n = texture(uNoise, cp * 0.55 + (w - 0.5) * 0.4).r * 0.55 + texture(uNoise, cp * 1.37 - (w - 0.5) * 0.3 + uT * 0.003).g * 0.3 + texture(uNoise, cp * 3.3 + uT * 0.004).b * 0.15;
+  float gap = uDay * smoothstep(0.55, 0.985, sd) * smoothstep(0.34, 0.015, d.y) * 0.45;
+  float cov = smoothstep(0.28, 0.6, n + 0.12 - gap);
+  float thick = smoothstep(0.42, 0.82, n);
+  vec3 cc = uCloudCol * (1.3 - thick * 0.8);
+  float rim = cov * (1.0 - cov) * 4.0;
+  cc += uGlowCol * pow(sd, 4.0) * (0.22 + rim * 1.1) * (1.0 - thick * 0.5);
+  float fl = uFlash * (0.2 + 3.2 * pow(max(dot(d, uBoltDir), 0.0), 5.0)) * (0.35 + thick);
+  cc += vec3(0.72, 0.78, 1.0) * fl;
+  base += vec3(0.4, 0.45, 0.62) * uFlash * 0.22;
+  vec3 col = mix(base, cc, cov * smoothstep(0.0, 0.05, d.y) * 0.97);
+  col += uSunCol * pow(sd, 2200.0) * 14.0 * (1.0 - cov) * uDay;
+  col = mix(col, uFogCol + uGlowCol * pow(sd, 6.0) * 0.6, smoothstep(0.05, 0.0, d.y) * 0.7);
+  return col;
+}
+vec3 fogIt(vec3 col, vec3 w) {
+  vec3 dv = w - uCam; float d = length(dv); dv /= d;
+  float f = 1.0 - exp(-d * uFogDen);
+  vec3 fc = uFogCol + uGlowCol * pow(max(dot(dv, uSunDir), 0.0), 6.0) * 0.6 + vec3(0.3, 0.33, 0.45) * uFlash * 0.25;
+  return mix(col, fc, f);
+}
+`;
+
+const VS_FULL = `layout(location=0) in vec2 aP; out vec2 vUV; void main(){ vUV = aP * 0.5 + 0.5; gl_Position = vec4(aP, 0.0, 1.0); }`;
+const FS_SKY = COMMON + `
+in vec2 vUV; out vec4 o; uniform mat4 uInvVP;
+void main() {
+  vec4 a = uInvVP * vec4(vUV * 2.0 - 1.0, 1.0, 1.0);
+  vec3 d = normalize(a.xyz / a.w - uCam);
+  vec3 c = skyRad(d);
+  if (d.y < 0.0) c = uFogCol + uGlowCol * pow(max(dot(d, uSunDir), 0.0), 6.0) * 0.6;
+  o = vec4(c * uOS, 1.0);
+}`;
+const FS_ENV = COMMON + `
+in vec2 vUV; out vec4 o;
+void main() {
+  float ph = (vUV.x - 0.5) * 2.0 * PI, th = vUV.y * PI;
+  vec3 d = vec3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph));
+  vec3 c = skyRad(d);
+  if (d.y < 0.0) c = uFogCol * 0.5;
+  o = vec4(c * uOS, 1.0);
+}`;
+const VS_OBJ = `layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=2) in vec3 aC; layout(location=3) in vec4 aM;
+uniform mat4 uVP, uM; uniform vec3 uTint;
+out vec3 vW, vN, vC, vO; out vec4 vM;
+void main() { vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; vN = mat3(uM) * aN; vC = aC * uTint; vM = aM; vO = aP; gl_Position = uVP * w; }`;
+const FS_OBJ = COMMON + `
+in vec3 vW, vN, vC, vO; in vec4 vM; out vec4 o; uniform float uEm;
+vec4 tri(vec3 p, vec3 n) { vec3 b = abs(n) + 0.001; b /= (b.x + b.y + b.z); return texture(uNoise, p.yz) * b.x + texture(uNoise, p.xz) * b.y + texture(uNoise, p.xy) * b.z; }
+void main() {
+  vec3 V = normalize(uCam - vW);
+  vec3 N = normalize(vN);
+  vec3 ng = normalize(cross(dFdx(vW), dFdy(vW)));
+  if (dot(ng, V) < 0.0) ng = -ng;
+  if (dot(N, ng) < 0.0) N = -N;
+  vec3 alb = vC; float r = vM.x, m = vM.y, ao = vM.z; int id = int(vM.w + 0.5);
+  vec3 emis = vec3(0.0); float wet = uWet;
+  if (id == 5) { emis = vC * vM.y * uEm; m = 0.0; alb = vC * 0.15; wet = 0.0; }
+  else if (id == 1) {
+    vec4 t1 = tri(vW * 0.07, N), t2 = tri(vW * 0.37, N), t3 = tri(vW * 1.4, N);
+    alb *= 0.45 + 1.1 * t1.r * (0.6 + 0.6 * t2.g);
+    alb = mix(alb, vec3(0.07, 0.085, 0.05), smoothstep(0.52, 0.7, t2.b) * smoothstep(0.45, 0.85, N.y) * smoothstep(2.0, 4.0, vW.y) * 0.7);
+    alb = mix(alb, vec3(0.32, 0.31, 0.28), smoothstep(0.6, 0.8, t3.a) * 0.25);
+    r = 0.6 + 0.35 * t2.r;
+    N = normalize(N + (t3.rgb - 0.5) * 0.7 + (t2.rgb - 0.5) * 0.5);
+    wet = clamp(wet * mix(1.0, 1.5, smoothstep(3.5, 0.0, vW.y)), 0.0, 1.0);
+    ao *= 0.6 + 0.4 * t1.g;
+  } else if (id == 2) {
+    vec4 t = texture(uNoise, vO.xy * vec2(0.3, 1.5)), t2 = texture(uNoise, vO.xz * 1.7 + vO.y * 0.5);
+    alb *= 0.85 + 0.25 * t.r;
+    alb = mix(alb, alb * 0.4, smoothstep(0.6, 0.78, t2.g) * 0.45);
+    alb = mix(alb, vec3(0.5, 0.48, 0.45), smoothstep(0.7, 0.85, t2.b) * 0.3);
+    r = mix(0.25, 0.6, t.g);
+  } else if (id == 3) {
+    float pl = fract(vO.z * 3.6);
+    vec4 t = texture(uNoise, vec2(vO.x * 0.2 + floor(vO.z * 3.6) * 0.37, vO.z * 3.6 * 0.1));
+    alb *= (0.65 + 0.55 * t.r) * (0.85 + 0.15 * sin(vO.x * 35.0 + t.g * 8.0));
+    alb *= smoothstep(0.0, 0.07, pl) * smoothstep(1.0, 0.93, pl) * 0.5 + 0.5;
+    r = 0.5 + 0.35 * t.g;
+  } else if (id == 4) {
+    float band = step(0.5, fract((vW.y - 4.0) / 4.15));
+    alb = mix(vec3(0.85, 0.84, 0.8), vec3(0.58, 0.045, 0.035), band);
+    vec4 t = texture(uNoise, vec2(atan(vO.z, vO.x) * 0.9, vO.y * 0.035)), t2 = texture(uNoise, vec2(atan(vO.z, vO.x) * 3.0, vO.y * 0.4));
+    alb *= 0.72 + 0.32 * t.r;
+    alb = mix(alb, alb * vec3(0.5, 0.42, 0.35), smoothstep(0.5, 0.85, t.g * t2.r * 1.6) * 0.6);
+    r = 0.4 + 0.35 * t2.b;
+  } else if (id == 6) { r = 0.04; m = 0.0; }
+  else if (id == 7) {
+    vec4 t = tri(vW * 0.25, N);
+    alb *= 0.8 + 0.2 * sin(vO.x * 13.0) * sin(vO.x * 13.0);
+    alb = mix(alb, vec3(0.22, 0.1, 0.05), smoothstep(0.5, 0.8, t.r) * 0.6);
+    r = 0.45 + 0.35 * t.g; m *= 1.0 - smoothstep(0.5, 0.8, t.r);
+  } else if (id == 8) {
+    vec4 t = tri(vW * 0.45, N), t2 = tri(vW * 2.0, N);
+    alb *= 0.7 + 0.5 * t.r * (0.8 + 0.4 * t2.g);
+    r = 0.75 + 0.2 * t2.r;
+    N = normalize(N + (t2.rgb - 0.5) * 0.25);
+  }
+  alb *= mix(1.0, 0.5, wet * (1.0 - m));
+  r = mix(r, max(0.07, r * 0.32), wet);
+  vec3 col = brdf(N, V, uSunDir, alb, r, m) * uSunCol * shadowAt(vW);
+  col += brdf(N, V, uKeyDir, alb, r, m) * uKeyCol;
+  col += localLights(vW, N, V, alb, r, m);
+  vec3 irr = mix(uAmbGnd, uAmbSky, N.y * 0.5 + 0.5);
+  float NdV = max(dot(N, V), 0.0);
+  vec3 F0 = mix(vec3(0.04), alb, m);
+  vec3 Fr = F0 + (max(vec3(1.0 - r), F0) - F0) * pow(1.0 - NdV, 5.0);
+  vec3 Rv = reflect(-V, N);
+  vec3 spec = env(Rv, r * 6.0) * (Rv.y < 0.0 ? 0.35 : 1.0) / uOS;
+  col += ((1.0 - Fr) * (1.0 - m) * alb * irr + Fr * spec) * ao;
+  col += emis;
+  o = vec4(fogIt(col, vW) * uOS, 1.0);
+}`;
+const VS_WATER = `layout(location=0) in vec2 aP;
+uniform mat4 uVP; uniform vec2 uCtr; uniform float uT;
+uniform vec4 uWv[8]; uniform vec4 uWp[8]; uniform vec4 uR[4]; uniform vec4 uR2[4];
+out vec3 vW; out vec3 vN; out float vFoam; out float vH;
+void main() {
+  vec2 p = uCtr + aP;
+  float dist = length(aP);
+  float sh = mix(0.25, 1.0, smoothstep(30.0, 80.0, length(p)));
+  vec3 disp = vec3(0.0); float nx = 0.0, nz = 0.0, ny = 1.0, jac = 0.0;
+  for (int i = 0; i < 8; i++) {
+    vec4 w = uWv[i]; vec4 q = uWp[i];
+    float fade = (1.0 - smoothstep(q.w, q.w * 2.5, dist)) * sh;
+    float A = w.w * fade, Hh = q.z * fade;
+    float th = w.z * (w.x * p.x + w.y * p.y) - q.x * uT + q.y;
+    float s = sin(th), c = cos(th);
+    disp.x += Hh * w.x * c; disp.z += Hh * w.y * c; disp.y += A * s;
+    nx -= w.x * w.z * A * c; nz -= w.y * w.z * A * c; ny -= w.z * Hh * s; jac += w.z * Hh * s;
+  }
+  float foam = smoothstep(0.42, 0.85, jac);
+  for (int i = 0; i < 4; i++) {
+    vec4 r = uR[i];
+    if (r.w <= 0.0) continue;
+    vec2 D = r.xy; float W = uR2[i].x;
+    float s = dot(D, p) - r.z, al = dot(vec2(-D.y, D.x), p);
+    float Hm = r.w * sh * (0.78 + 0.22 * sin(al * 0.018 + uR2[i].y));
+    float u = clamp(s / W, -9.0, 9.0); float ch = cosh(u); float se = 1.0 / (ch * ch); float tu = tanh(u);
+    float prof = Hm * se, dp = -2.0 * Hm * se * tu / W;
+    disp.y += prof; disp.x += D.x * ${LEAN.toFixed(2)} * prof; disp.z += D.y * ${LEAN.toFixed(2)} * prof;
+    float g = dp / max(0.12, 1.0 + ${LEAN.toFixed(2)} * dp);
+    nx -= D.x * g; nz -= D.y * g;
+    foam += smoothstep(0.3, 0.85, -${LEAN.toFixed(2)} * dp) * smoothstep(1.2, 3.0, Hm) + smoothstep(0.55, 0.95, se) * smoothstep(2.4, 5.0, Hm) * 0.9;
+    if (s < 0.0) foam += smoothstep(-3.5 * W, 0.0, s) * 0.4 * smoothstep(2.0, 4.0, Hm);
+  }
+  vec3 w = vec3(p.x + disp.x, disp.y, p.y + disp.z);
+  vW = w; vN = vec3(nx, ny, nz); vFoam = foam; vH = disp.y;
+  gl_Position = uVP * vec4(w, 1.0);
+}`;
+const FS_WATER = COMMON + `
+in vec3 vW; in vec3 vN; in float vFoam; in float vH; out vec4 o;
+uniform sampler2D uNrm; uniform vec4 uWake[24]; uniform float uSea, uLQ; uniform int uNW, uNLw;
+void main() {
+  vec3 V = uCam - vW; float dist = length(V); V /= dist;
+  vec3 N = normalize(vN);
+  float df = 1.0 - smoothstep(25.0, 300.0, dist);
+  vec2 uv = vW.xz;
+  vec4 n1 = texture(uNrm, uv * 0.041 + uWind * uT * 0.016);
+  vec4 n2 = uLQ > 0.5 ? vec4(0.5) : texture(uNrm, uv * 0.117 - vec2(uWind.y, -uWind.x) * uT * 0.021);
+  vec2 sl = ((n1.xy - 0.5) * 0.9 + (n2.xy - 0.5) * 0.6) * (0.5 + 0.12 * uSea) * (0.25 + 0.75 * df);
+  N = normalize(N + vec3(sl.x, 0.0, sl.y));
+  float foam = vFoam;
+  float wk = 0.0;
+  for (int i = 0; i < 24; i++) { if (i >= uNW) break; vec4 k = uWake[i]; if (k.w <= 0.0) continue; float d = length(vW.xz - k.xy); wk = max(wk, k.w * smoothstep(k.z, k.z * 0.15, d)); }
+  foam += wk * (0.15 + 1.2 * texture(uNoise, vW.xz * 0.33 + uT * 0.02).b * texture(uNoise, vW.xz * 0.9).r);
+  float rI = length(vW.xz);
+  foam += smoothstep(31.0, 24.0, rI) * (0.45 + 0.45 * sin(uT * 1.3 + rI * 0.55));
+  float fn = texture(uNoise, vW.xz * 0.06 + uWind * uT * 0.012).r, fn2 = texture(uNoise, vW.xz * 0.21 - uT * 0.005).g;
+  float fa = clamp(foam, 0.0, 1.8) * (0.3 + 2.6 * fn * fn2);
+  float foamA = smoothstep(0.3, 0.75, fa) * 0.93 * (1.0 - smoothstep(500.0, 1600.0, dist) * 0.7);
+  float NdV = max(dot(N, V), 0.0);
+  float F = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
+  vec3 Rv = reflect(-V, N); Rv.y = abs(Rv.y) + 0.01; Rv = normalize(Rv);
+  vec3 refl = env(Rv, mix(2.8, 0.6, df)) / uOS;
+  float sh = shadowAt(vW);
+  vec3 H = normalize(V + uSunDir);
+  float rough = mix(0.2, 0.07, df);
+  vec3 sun = uSunCol * D_GGX(max(dot(N, H), 0.0), rough) * F * 0.25 * sh;
+  vec3 keyS = uKeyCol * D_GGX(max(dot(N, normalize(V + uKeyDir)), 0.0), 0.2) * F * 0.25;
+  vec3 deep = vec3(0.004, 0.017, 0.025);
+  vec3 ssc = vec3(0.025, 0.19, 0.16);
+  float sss = pow(max(dot(V, -uSunDir), 0.0), 3.0) * clamp(vH * 0.3 + 0.2, 0.0, 1.5);
+  vec3 body = deep * uAmbSky * 3.0 + ssc * uSunCol * sss * 0.14 * sh + ssc * uAmbSky * clamp(vH * 0.22 + 0.25, 0.0, 1.0) * 0.6;
+  vec3 lt = vec3(0.0), ltd = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= uNLw) break;
+    vec3 Lv = uLP[i].xyz - vW; float d2 = dot(Lv, Lv); float rr = uLP[i].w * uLP[i].w;
+    if (d2 > rr * 9.0) continue;
+    vec3 L = Lv * inversesqrt(d2); vec3 Hl = normalize(V + L);
+    float att = 1.0 / (d2 + 1.0);
+    lt += uLC[i] * D_GGX(max(dot(N, Hl), 0.0), 0.13) * F * 0.5 * att;
+    ltd += uLC[i] * max(dot(N, L), 0.0) * att;
+  }
+  vec3 Ld; vec3 spot = spotAt(vW, Ld);
+  ltd += spot * max(dot(N, Ld), 0.0);
+  vec3 col = mix(body + ssc * ltd * 0.03, refl, F) + sun + keyS + lt;
+  vec3 foamCol = vec3(0.8, 0.84, 0.86) * (uAmbSky * 1.4 + uSunCol * max(dot(N, uSunDir), 0.0) * sh * 0.8 + uKeyCol * max(dot(N, uKeyDir), 0.0) + ltd * 0.5);
+  col = mix(col, foamCol, foamA);
+  o = vec4(fogIt(col, vW) * uOS, 1.0);
+}`;
+const VS_BEAM = `layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=3) in vec4 aM;
+uniform mat4 uVP, uM; out vec3 vW; out vec3 vN; out float vX;
+void main() { vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; vN = normalize(mat3(uM) * vec3(0.0, aN.y, aN.z)); vX = aM.x; gl_Position = uVP * w; }`;
+const FS_BEAM = COMMON + `
+in vec3 vW; in vec3 vN; in float vX; out vec4 o; uniform vec3 uBeamC; uniform float uBeamFall;
+void main() {
+  vec3 V = normalize(uCam - vW);
+  float t = abs(dot(vN, V));
+  float n = texture(uNoise, vW.xz * 0.012 + vW.y * 0.015 + uWind * uT * 0.03).r;
+  float I = t * t * smoothstep(0.0, 0.05, vX) * pow(1.0 - vX, uBeamFall) * (0.55 + 0.9 * n);
+  I *= exp(-length(uCam - vW) * uFogDen * 0.7);
+  o = vec4(uBeamC * I * uOS, 1.0);
+}`;
+const VS_RAIN = `layout(location=0) in vec4 aS;
+uniform mat4 uVP; uniform vec3 uCam; uniform float uT; uniform vec3 uRainV; uniform float uBox; uniform vec3 uSpP, uSpD;
+out float vA; out float vSp;
+void main() {
+  vec3 wp = aS.xyz * uBox + uRainV * uT;
+  vec3 l = mod(wp - uCam + uBox * 0.5, uBox) - uBox * 0.5;
+  vec3 p = uCam + l - uRainV * 0.05 * aS.w;
+  float d = length(l);
+  vA = smoothstep(uBox * 0.5, uBox * 0.15, d) * smoothstep(0.6, 2.5, d);
+  vec3 Ld = normalize(p - uSpP);
+  vSp = smoothstep(0.94, 0.985, dot(Ld, uSpD)) * 60.0 / (dot(p - uSpP, p - uSpP) + 4.0);
+  gl_Position = uVP * vec4(p, 1.0);
+}`;
+const FS_RAIN = `in float vA; in float vSp; out vec4 o; uniform vec3 uRainC; uniform float uOS;
+void main() { o = vec4((uRainC + vec3(1.0, 0.97, 0.9) * vSp) * vA * uOS, 1.0); }`;
+const VS_PART = `layout(location=0) in vec4 aP; layout(location=1) in vec4 aC;
+uniform mat4 uVP; uniform float uPS, uMaxPt; out vec4 vC;
+void main() { gl_Position = uVP * vec4(aP.xyz, 1.0); gl_PointSize = clamp(aP.w * uPS / gl_Position.w, 1.0, uMaxPt); vC = aC; vC.a *= smoothstep(2.0, 7.0, gl_Position.w); }`;
+const FS_PART = `in vec4 vC; out vec4 o; uniform float uOS;
+void main() { vec2 q = gl_PointCoord * 2.0 - 1.0; float r = dot(q, q); if (r > 1.0) discard; float a = 1.0 - r; a *= a * vC.a; o = vec4(vC.rgb * a * uOS, a); }`;
+const VS_LINE = `layout(location=0) in vec3 aP; uniform mat4 uVP; void main() { gl_Position = uVP * vec4(aP, 1.0); }`;
+const FS_LINE = `out vec4 o; uniform vec3 uCol; uniform float uOS; void main() { o = vec4(uCol * uOS, 1.0); }`;
+const VS_SHADOW = `layout(location=0) in vec3 aP; uniform mat4 uLVP, uM; void main() { gl_Position = uLVP * uM * vec4(aP, 1.0); }`;
+const FS_SHADOW = `void main() {}`;
+const FS_DOWN = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc; uniform vec2 uTx; uniform float uTh;
+void main() {
+  vec3 c = (texture(uSrc, vUV + uTx * vec2(-1.0, -1.0)).rgb + texture(uSrc, vUV + uTx * vec2(1.0, -1.0)).rgb + texture(uSrc, vUV + uTx * vec2(-1.0, 1.0)).rgb + texture(uSrc, vUV + uTx * vec2(1.0, 1.0)).rgb) * 0.25;
+  if (uTh > 0.0) { float b = max(c.r, max(c.g, c.b)); c *= max(b - uTh, 0.0) / max(b, 1e-4); }
+  o = vec4(min(c, vec3(60.0)), 1.0);
+}`;
+const FS_UP = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc; uniform vec2 uTx; uniform float uK;
+void main() {
+  vec3 c = texture(uSrc, vUV).rgb * 4.0;
+  c += (texture(uSrc, vUV + vec2(uTx.x, 0.0)).rgb + texture(uSrc, vUV - vec2(uTx.x, 0.0)).rgb + texture(uSrc, vUV + vec2(0.0, uTx.y)).rgb + texture(uSrc, vUV - vec2(0.0, uTx.y)).rgb) * 2.0;
+  c += texture(uSrc, vUV + uTx).rgb + texture(uSrc, vUV - uTx).rgb + texture(uSrc, vUV + vec2(uTx.x, -uTx.y)).rgb + texture(uSrc, vUV + vec2(-uTx.x, uTx.y)).rgb;
+  o = vec4(c / 16.0 * uK, 1.0);
+}`;
+const FS_COMP = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc, uBloom; uniform float uExp, uBloomK, uGrain, uVig, uOS, uHasBloom; uniform vec2 uRes;
+vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+float h12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+void main() {
+  vec3 c = texture(uSrc, vUV).rgb / uOS;
+  if (uHasBloom > 0.5) c += texture(uBloom, vUV).rgb / uOS * uBloomK;
+  c *= uExp;
+  c = aces(c);
+  c = pow(c, vec3(1.0 / 2.2));
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(c * vec3(0.9, 1.0, 1.08), c * vec3(1.05, 1.0, 0.93), smoothstep(0.2, 0.8, l));
+  vec2 q = vUV - 0.5; q.x *= uRes.x / uRes.y;
+  c *= 1.0 - uVig * pow(length(q) * 1.1, 2.6);
+  c += (h12(vUV * uRes + uGrain) - 0.5) * 0.03;
+  o = vec4(c, 1.0);
+}`;
+
+// ---- シェーダーを作る ----
+const UTYPES = {};
+function mkProg(vsrc, fsrc, name) {
+  const mk = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, SH_HEAD + src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(`${name} のシェーダー: ${gl.getShaderInfoLog(s)}`);
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vsrc));
+  gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fsrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`${name} のリンク: ${gl.getProgramInfoLog(p)}`);
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i), key = info.name.replace(/\[0\]$/, '');
+    u[key] = { loc: gl.getUniformLocation(p, info.name), type: info.type, size: info.size };
+  }
+  return { p, u, name };
+}
+let curProg = null;
+function use(pr) { if (curProg !== pr) { gl.useProgram(pr.p); curProg = pr; } }
+function setU(pr, vals) {
+  use(pr);
+  for (const k in vals) {
+    const e = pr.u[k];
+    if (!e) continue;
+    const v = vals[k], l = e.loc;
+    switch (e.type) {
+      case gl.FLOAT: e.size > 1 ? gl.uniform1fv(l, v) : gl.uniform1f(l, v); break;
+      case gl.FLOAT_VEC2: gl.uniform2fv(l, v); break;
+      case gl.FLOAT_VEC3: gl.uniform3fv(l, v); break;
+      case gl.FLOAT_VEC4: gl.uniform4fv(l, v); break;
+      case gl.FLOAT_MAT4: gl.uniformMatrix4fv(l, false, v); break;
+      default: gl.uniform1i(l, v);
+    }
+  }
+}
+
+// ---- 形を GPU へ ----
+function upload(mesh) {
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const vb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(mesh.v), gl.STATIC_DRAW);
+  const S = 13 * 4;
+  [[0, 3, 0], [1, 3, 3], [2, 3, 6], [3, 4, 9]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, S, off * 4); });
+  const ib = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(mesh.idx), gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, n: mesh.idx.length };
+}
+function drawMesh(m) { gl.bindVertexArray(m.vao); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0); }
+
+// ---- 手続きテクスチャ ----
+function makeTex(w, h, data, opt = {}) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, opt.ifmt || gl.RGBA8, w, h, 0, opt.fmt || gl.RGBA, opt.type || gl.UNSIGNED_BYTE, data);
+  const mip = opt.mip !== false && data;
+  if (mip) gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, opt.wrap === false ? gl.CLAMP_TO_EDGE : gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, opt.wrapT === false || opt.wrap === false ? gl.CLAMP_TO_EDGE : gl.REPEAT);
+  return t;
+}
+function noiseTexData() {
+  const N = 256, d = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = x / N, v = y / N, i = (y * N + x) * 4;
+    d[i] = fbm(u * 4, v * 4, 5, 1, 4) * 255;
+    d[i + 1] = fbm(u * 8, v * 8, 4, 2, 8) * 255;
+    d[i + 2] = fbm(u * 16, v * 16, 3, 3, 16) * 255;
+    d[i + 3] = fbm(u * 6, v * 6, 4, 4, 6) * 255;
+  }
+  return d;
+}
+function waterNrmData() {
+  const N = 256, h = new Float32Array(N * N), d = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = x / N, v = y / N;
+    const r = 1 - Math.abs(fbm(u * 8, v * 8, 3, 7, 8) * 2 - 1);
+    h[y * N + x] = fbm(u * 6, v * 6, 4, 5, 6) * 0.6 + r * r * 0.4 + fbm(u * 24, v * 24, 2, 8, 24) * 0.15;
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const hx = h[y * N + ((x + 1) % N)] - h[y * N + ((x + N - 1) % N)], hy = h[((y + 1) % N) * N + x] - h[((y + N - 1) % N) * N + x];
+    const i = (y * N + x) * 4;
+    d[i] = clamp(128 - hx * 900, 0, 255); d[i + 1] = clamp(128 - hy * 900, 0, 255); d[i + 2] = 255; d[i + 3] = 255;
+  }
+  return d;
+}
+
+// ---- 描画先(HDR) ----
+const QSTEPS = [1, 0.82, 0.68, 0.55, 0.45, 0.36, 0.3, 0.25];
+let quality = 0, cssW = 1, cssH = 1, rw = 1, rh = 1;
+const RT = { scene: null, sceneTex: null, depth: null, bloom: [], env: null, envTex: null, envW: 0, shadow: null, shadowTex: null, shadowN: 0 };
+let progs = {}, meshes = {}, waterMesh = [], fullVao = null, rainVao = null, rainN = 0, partVao = null, partBuf = null, lineVao = null, lineBuf = null;
+let noiseTex = null, nrmTex = null;
+const fmt = () => (HDR ? { ifmt: gl.RGBA16F, type: gl.HALF_FLOAT } : { ifmt: gl.RGBA8, type: gl.UNSIGNED_BYTE });
+function mkTarget(w, h, depth) {
+  const f = fmt();
+  const tex = makeTex(w, h, null, { ifmt: f.ifmt, type: f.type, wrap: false, mip: false });
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let rb = null;
+  if (depth) {
+    rb = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+  }
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fb, tex, rb, w, h, ok };
+}
+function freeTarget(t) { if (!t) return; gl.deleteFramebuffer(t.fb); gl.deleteTexture(t.tex); if (t.rb) gl.deleteRenderbuffer(t.rb); }
+const bloomLevels = () => [5, 5, 4, 4, 3, 3, 2, 2][quality];
+function resize() {
+  cssW = Math.max(1, innerWidth); cssH = Math.max(1, innerHeight);
+  const dpr = Math.min(devicePixelRatio || 1, isTouch ? 1.6 : 2);
+  rw = Math.max(64, Math.round(cssW * dpr * QSTEPS[quality]));
+  rh = Math.max(64, Math.round(cssH * dpr * QSTEPS[quality]));
+  if (!gl) return;
+  cvs.width = rw; cvs.height = rh;
+  freeTarget(RT.scene);
+  RT.scene = mkTarget(rw, rh, true);
+  RT.bloom.forEach(freeTarget);
+  RT.bloom = [];
+  let w = rw, h = rh;
+  for (let i = 0; i < bloomLevels(); i++) { w = Math.max(2, w >> 1); h = Math.max(2, h >> 1); RT.bloom.push(mkTarget(w, h, false)); }
+  const ew = quality <= 2 ? 256 : 128;
+  if (RT.envW !== ew) {
+    freeTarget(RT.env);
+    const f = fmt();
+    const tex = makeTex(ew, ew / 2, null, { ifmt: f.ifmt, type: f.type, mip: false, wrapT: false });
+    gl.texImage2D(gl.TEXTURE_2D, 0, f.ifmt, ew, ew / 2, 0, gl.RGBA, f.type, null);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    RT.env = { fb, tex, w: ew, h: ew / 2 };
+    RT.envW = ew;
+  }
+  const sn = quality === 0 ? 2048 : 1024;
+  if (RT.shadowN !== sn) {
+    if (RT.shadowTex) { gl.deleteTexture(RT.shadowTex); gl.deleteFramebuffer(RT.shadow); }
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, sn, sn, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, t, 0);
+    gl.clearDepth(1); gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    RT.shadowTex = t; RT.shadow = fb; RT.shadowN = sn;
+  }
+}
+
+function initGL() {
+  if (gl.getExtension('EXT_color_buffer_float')) HDR = true;
+  gl.getExtension('OES_texture_float_linear');
+  progs = {
+    sky: mkProg(VS_FULL, FS_SKY, '空'), env: mkProg(VS_FULL, FS_ENV, '映りこみ'), obj: mkProg(VS_OBJ, FS_OBJ, '物'),
+    water: mkProg(VS_WATER, FS_WATER, '海'), beam: mkProg(VS_BEAM, FS_BEAM, '光の帯'), rain: mkProg(VS_RAIN, FS_RAIN, '雨'),
+    part: mkProg(VS_PART, FS_PART, '粒'), line: mkProg(VS_LINE, FS_LINE, '稲妻'), shadow: mkProg(VS_SHADOW, FS_SHADOW, '影'),
+    down: mkProg(VS_FULL, FS_DOWN, '光のにじみ(縮小)'), up: mkProg(VS_FULL, FS_UP, '光のにじみ(拡大)'), comp: mkProg(VS_FULL, FS_COMP, '仕上げ'),
+  };
+  for (const k of ['sky', 'env', 'obj', 'water', 'beam']) setU(progs[k], { uNoise: 0, uNrm: 1, uEnv: 2, uShadow: 3 });
+  setU(progs.down, { uSrc: 4 }); setU(progs.up, { uSrc: 4 }); setU(progs.comp, { uSrc: 4, uBloom: 5 });
+  noiseTex = makeTex(256, 256, noiseTexData());
+  nrmTex = makeTex(256, 256, waterNrmData());
+  // 全画面の三角
+  fullVao = gl.createVertexArray(); gl.bindVertexArray(fullVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  // 海の格子(カメラを中心にした同心円。近くほど細かい)
+  // 重い端末用に、粗い格子も作っておく
+  const mkWater = (NA, NR, step0, grow) => {
+    const pts = [], idx = [];
+    let r = 0, step = step0;
+    const radii = [0];
+    for (let i = 0; i < NR; i++) { r += step; step *= grow; radii.push(r); }
+    for (let i = 0; i <= NR; i++) for (let j = 0; j < NA; j++) { const a = (j / NA) * TAU + (i % 2) * (Math.PI / NA); pts.push(Math.cos(a) * radii[i], Math.sin(a) * radii[i]); }
+    for (let i = 0; i < NR; i++) for (let j = 0; j < NA; j++) {
+      const a = i * NA + j, b = i * NA + ((j + 1) % NA), c = (i + 1) * NA + j, d = (i + 1) * NA + ((j + 1) % NA);
+      idx.push(a, c, b, b, c, d);
+    }
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pts), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
+    return { vao, n: idx.length };
+  };
+  waterMesh = [mkWater(160, 118, 0.32, 1.056), mkWater(84, 72, 0.55, 1.09)];
+  // 雨(2点で1本のすじ)
+  {
+    const N = 3200, d = new Float32Array(N * 8);
+    for (let i = 0; i < N; i++) { const x = vr(), y = vr(), z = vr(); d.set([x, y, z, 0, x, y, z, 1], i * 8); }
+    rainVao = gl.createVertexArray(); gl.bindVertexArray(rainVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+    rainN = N;
+  }
+  partVao = gl.createVertexArray(); gl.bindVertexArray(partVao);
+  partBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferData(gl.ARRAY_BUFFER, PMAX * 8 * 4, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 32, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 16);
+  lineVao = gl.createVertexArray(); gl.bindVertexArray(lineVao);
+  lineBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf); gl.bufferData(gl.ARRAY_BUFFER, 400 * 4 * 3, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  meshes = {
+    boat: upload(buildBoat()), island: upload(buildIsland()), surv: upload(buildSurvivor(false)), survF: upload(buildSurvivor(true)),
+    wreck: upload(buildWreck()), crate: upload(buildCrate()), log: upload(buildLog()), cone: upload(buildCone()),
+    rocks: [upload(buildRock(3, 7)), upload(buildRock(8, 5)), upload(buildRock(13, 9))],
+  };
+  resize();
+}
+
+// =============================================================================
+//  描く
+// =============================================================================
+const cam = { x: 0, y: 6, z: -60, tx: 0, ty: 0, tz: 0, fov: 0.95, shake: 0, h: 0 };
+let VP = M4.id(), VIEW = M4.id(), PROJ = M4.id(), envAge = 99, frameN = 0;
+const L = { sunDir: [0, 0.06, 1], sunCol: [0, 0, 0], keyDir: [0, 1, 0], keyCol: [0, 0, 0], ambSky: [0, 0, 0], ambGnd: [0, 0, 0], fog: [0, 0, 0], zen: [0, 0, 0], glow: [0, 0, 0], cloud: [0, 0, 0], fogDen: 0.002, exp: 1, wet: 0.8 };
+const LP = new Float32Array(32), LC = new Float32Array(24), WAKE = new Float32Array(96);
+let nLights = 0;
+function toScreen(x, y, z) {
+  const m = VP, cx = m[0] * x + m[4] * y + m[8] * z + m[12], cy = m[1] * x + m[5] * y + m[9] * z + m[13], cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+  if (cw <= 0.05) return null;
+  return { x: (cx / cw * 0.5 + 0.5) * cssW, y: (1 - (cy / cw * 0.5 + 0.5)) * cssH, w: cw };
+}
+function commonU() {
+  const t = G.vt;
+  return {
+    uCam: [cam.x, cam.y, cam.z], uT: t, uSunDir: L.sunDir, uSunCol: L.sunCol, uKeyDir: L.keyDir, uKeyCol: L.keyCol,
+    uAmbSky: L.ambSky, uAmbGnd: L.ambGnd, uFogCol: L.fog, uZen: L.zen, uGlowCol: L.glow, uCloudCol: L.cloud, uBoltDir: FX.boltDir,
+    uFogDen: L.fogDen, uDay: G.day, uFlash: FX.flash, uWet: L.wet, uOS: HDR ? 1 : 0.25, uWind: [Math.cos(G.windA), Math.sin(G.windA)],
+    uLP: LP, uLC: LC, uNL: nLights, uSpP: FX.spP, uSpD: FX.spD, uSpC: FX.spC, uShM: SHM, uShOn: shadowOn ? 1 : 0, uVP: VP,
+  };
+}
+let SHM = M4.id(), shadowOn = false;
+function bindTex(unit, tex) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); }
+function fullscreen() { gl.bindVertexArray(fullVao); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+function render(drawList) {
+  frameN++;
+  const cu = commonU();
+  bindTex(0, noiseTex); bindTex(1, nrmTex); bindTex(3, RT.shadowTex);
+  gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
+  // 1) 空の映りこみ(正距円筒)。稲妻の間は毎コマ、ふだんは数コマごと
+  envAge++;
+  if (envAge >= (FX.flash > 0.02 ? 1 : quality <= 1 ? 2 : quality <= 4 ? 4 : 6)) {
+    envAge = 0;
+    bindTex(2, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, RT.env.fb);
+    gl.viewport(0, 0, RT.env.w, RT.env.h);
+    gl.disable(gl.DEPTH_TEST);
+    setU(progs.env, cu);
+    fullscreen();
+    bindTex(2, RT.env.tex);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  }
+  bindTex(2, RT.env.tex);
+  // 2) 影(夕日があるあいだ)
+  shadowOn = G.day > 0.04 && quality <= 3;
+  if (shadowOn) {
+    bindTex(3, null);
+    const c = [cam.tx, 0, cam.tz], S = 70;
+    const e = [c[0] + L.sunDir[0] * 300, c[1] + Math.max(0.08, L.sunDir[1]) * 300, c[2] + L.sunDir[2] * 300];
+    const lv = M4.look(e, c, [0, 1, 0]), lp = M4.ortho(-S, S, -S, S, 100, 700);
+    SHM = M4.mul(lp, lv);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, RT.shadow);
+    gl.viewport(0, 0, RT.shadowN, RT.shadowN);
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
+    setU(progs.shadow, { uLVP: SHM });
+    for (const d of drawList) if (d.cast !== false) { setU(progs.shadow, { uM: d.M }); drawMesh(d.mesh); }
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    bindTex(3, RT.shadowTex);
+    cu.uShM = SHM; cu.uShOn = 1;
+  } else cu.uShOn = 0;
+  // 3) 本番(HDR)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, RT.scene.fb);
+  gl.viewport(0, 0, rw, rh);
+  gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+  setU(progs.sky, Object.assign({ uInvVP: M4.inv(VP) }, cu));
+  fullscreen();
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LEQUAL);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+  setU(progs.obj, cu);
+  for (const d of drawList) { setU(progs.obj, { uM: d.M, uTint: d.tint || [1, 1, 1], uEm: d.em ?? 1 }); drawMesh(d.mesh); }
+  // 海
+  const lowQ = quality >= 3;
+  setU(progs.water, Object.assign({ uCtr: [Math.round(cam.x / 2) * 2, Math.round(cam.z / 2) * 2], uWv: wv, uWp: wp, uR: rv, uR2: rv2, uWake: WAKE, uSea: G.sea, uNW: lowQ ? 10 : 24, uNLw: lowQ ? Math.min(nLights, 3) : nLights, uLQ: lowQ ? 1 : 0 }, cu));
+  const wm = waterMesh[lowQ ? 1 : 0];
+  gl.bindVertexArray(wm.vao);
+  gl.drawElements(gl.TRIANGLES, wm.n, gl.UNSIGNED_INT, 0);
+  // 光の帯・雨・粒(加算と半透明)
+  gl.depthMask(false);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE);
+  setU(progs.beam, cu);
+  for (const b of FX.beams) { if (b.I <= 0.001) continue; setU(progs.beam, { uM: b.M, uBeamC: b.C, uBeamFall: b.fall }); drawMesh(meshes.cone); }
+  if (FX.rain > 0) {
+    setU(progs.rain, { uVP: VP, uCam: [cam.x, cam.y, cam.z], uT: G.vt, uRainV: FX.rainV, uBox: 34, uSpP: FX.spP, uSpD: FX.spD, uRainC: FX.rainC, uOS: cu.uOS });
+    gl.bindVertexArray(rainVao);
+    gl.drawArrays(gl.LINES, 0, Math.floor(rainN * FX.rain * [1, 1, 0.8, 0.7, 0.55, 0.45, 0.35, 0.3][quality]) * 2);
+  }
+  if (FX.boltN > 0 && FX.flash > 0.05) {
+    gl.bindVertexArray(lineVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, FX.bolt.subarray(0, FX.boltN * 3));
+    setU(progs.line, { uVP: VP, uCol: [40 * FX.flash, 44 * FX.flash, 60 * FX.flash], uOS: cu.uOS });
+    gl.drawArrays(gl.LINES, 0, FX.boltN);
+  }
+  const ps = rh * PROJ[5] * 0.5;
+  const nAdd = packParticles(P.add);
+  const maxPt = Math.min(256, rh * (quality >= 4 ? 0.16 : 0.3));
+  if (nAdd) { setU(progs.part, { uVP: VP, uPS: ps, uMaxPt: maxPt, uOS: cu.uOS }); gl.bindVertexArray(partVao); gl.drawArrays(gl.POINTS, 0, nAdd); }
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  const nAl = packParticles(P.alpha);
+  if (nAl) { setU(progs.part, { uVP: VP, uPS: ps, uMaxPt: maxPt, uOS: cu.uOS }); gl.bindVertexArray(partVao); gl.drawArrays(gl.POINTS, 0, nAl); }
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+  gl.disable(gl.DEPTH_TEST);
+  // 4) 光のにじみ(縮小 → 拡大して重ねる)
+  let src = RT.scene;
+  const nb = RT.bloom.length;
+  for (let i = 0; i < nb; i++) {
+    const dst = RT.bloom[i];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, dst.w, dst.h);
+    bindTex(4, src.tex);
+    setU(progs.down, { uTx: [0.5 / src.w, 0.5 / src.h].map((v) => v * 2), uTh: i === 0 ? (HDR ? 1.1 : 0.27) : 0 });
+    fullscreen();
+    src = dst;
+  }
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  for (let i = nb - 1; i > 0; i--) {
+    const s = RT.bloom[i], d = RT.bloom[i - 1];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, d.fb); gl.viewport(0, 0, d.w, d.h);
+    bindTex(4, s.tex);
+    setU(progs.up, { uTx: [1 / s.w, 1 / s.h], uK: 1 });
+    fullscreen();
+  }
+  gl.disable(gl.BLEND);
+  // 5) 仕上げ(トーンマッピング・周辺減光・粒状感)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, rw, rh);
+  bindTex(4, RT.scene.tex);
+  bindTex(5, nb ? RT.bloom[0].tex : RT.scene.tex);
+  setU(progs.comp, { uExp: L.exp * (1 + FX.flash * 0.25), uBloomK: 0.09 + 0.05 * (1 - G.day), uGrain: (frameN % 64) * 7.13, uVig: 0.42, uOS: cu.uOS, uHasBloom: nb ? 1 : 0, uRes: [rw, rh] });
+  fullscreen();
+  bindTex(4, null); bindTex(5, null);
+}
+
+// =============================================================================
+//  粒(しぶき・煙・火)
+// =============================================================================
+const PMAX = 2400;
+const mkPool = (n) => ({ n: 0, max: n, d: new Float32Array(n * 12) });
+const P = { alpha: mkPool(1700), add: mkPool(700) };
+let pLimit = 1;   // 重いときに減らす割合
+const stage = new Float32Array(PMAX * 8);
+// 種類: 0 しぶき / 1 黒い煙 / 2 発炎筒の煙 / 3 火 / 4 発炎筒の炎 / 5 波頭の霧
+function emit(pool, x, y, z, vx, vy, vz, life, size, type) {
+  if (pool.n >= pool.max * pLimit) return;
+  const o = pool.n++ * 12, d = pool.d;
+  d[o] = x; d[o + 1] = y; d[o + 2] = z; d[o + 3] = vx; d[o + 4] = vy; d[o + 5] = vz;
+  d[o + 6] = life; d[o + 7] = life; d[o + 8] = size; d[o + 9] = type; d[o + 10] = vr(); d[o + 11] = y;
+}
+function updPool(pool, dt) {
+  const d = pool.d, wx = Math.cos(G.windA), wz = Math.sin(G.windA);
+  for (let i = 0; i < pool.n; i++) {
+    const o = i * 12, ty = d[o + 9];
+    d[o + 6] -= dt;
+    if (d[o + 6] <= 0 || (ty === 0 && d[o + 1] < d[o + 11] - 1.2 && d[o + 4] < 0)) {
+      const last = (pool.n - 1) * 12;
+      for (let k = 0; k < 12; k++) d[o + k] = d[last + k];
+      pool.n--; i--; continue;
+    }
+    if (ty === 0 || ty === 5) { d[o + 4] -= (ty === 0 ? 9.8 : 2.5) * dt; const k = Math.exp(-dt * (ty === 0 ? 0.6 : 1.4)); d[o + 3] = d[o + 3] * k + wx * 4 * (1 - k); d[o + 5] = d[o + 5] * k + wz * 4 * (1 - k); }
+    else { const k = Math.exp(-dt * 0.8); d[o + 3] = d[o + 3] * k + wx * 5 * (1 - k); d[o + 5] = d[o + 5] * k + wz * 5 * (1 - k); d[o + 4] = d[o + 4] * k + (ty === 3 ? 4 : 2.2) * (1 - k); }
+    d[o] += d[o + 3] * dt; d[o + 1] += d[o + 4] * dt; d[o + 2] += d[o + 5] * dt;
+  }
+}
+function packParticles(pool) {
+  if (!pool.n) return 0;
+  const d = pool.d, s = stage;
+  const amb = L.ambSky, sun = L.sunCol, key = L.keyCol;
+  const lit = [amb[0] * 2.2 + sun[0] * 0.3 + key[0] * 0.7, amb[1] * 2.2 + sun[1] * 0.3 + key[1] * 0.7, amb[2] * 2.2 + sun[2] * 0.3 + key[2] * 0.7];
+  for (let i = 0; i < pool.n; i++) {
+    const o = i * 12, q = i * 8, ty = d[o + 9], f = d[o + 6] / d[o + 7], age = 1 - f;
+    s[q] = d[o]; s[q + 1] = d[o + 1]; s[q + 2] = d[o + 2];
+    let r, g, b, a, size = d[o + 8];
+    if (ty === 0) { size *= 0.6 + age * 1.2; a = f * 0.62; r = lit[0] * 1.1; g = lit[1] * 1.12; b = lit[2] * 1.15; }
+    else if (ty === 5) { size *= 0.8 + age * 1.6; a = Math.sin(f * Math.PI) * 0.17; r = lit[0]; g = lit[1] * 1.04; b = lit[2] * 1.08; }
+    else if (ty === 1) { size *= 0.5 + age * 2.2; a = Math.min(1, age * 5) * f * 0.55; r = lit[0] * 0.18 + 0.05 * f; g = lit[1] * 0.17 + 0.02 * f; b = lit[2] * 0.17; }
+    else if (ty === 2) { size *= 0.4 + age * 2.4; a = Math.min(1, age * 6) * f * 0.42; r = lit[0] * 0.5 + 2.6 * f * f; g = lit[1] * 0.45 + 0.25 * f * f; b = lit[2] * 0.5 + 0.12 * f * f; }
+    else if (ty === 3) { size *= 0.6 + age * 0.9; a = f; const h = f * f; r = 9 * h + 1.2 * f; g = 3.2 * h * h + 0.3 * f; b = 0.4 * h * h; }
+    else { size *= 1 - age * 0.5; a = f; r = 22 * f; g = 3.5 * f * f; b = 1.2 * f * f; }
+    s[q + 3] = size; s[q + 4] = r; s[q + 5] = g; s[q + 6] = b; s[q + 7] = a;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, partBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, s.subarray(0, pool.n * 8));
+  return pool.n;
+}
+
+// =============================================================================
+//  遊びの状態
+// =============================================================================
+const DT = 1 / 60, CAP = 8;
+const HARBOR = { x: 7, z: -35, r: 8 };
+let gstate = 'title';
+let G = null;
+const FX = { flash: 0, flashes: [], boltDir: [1, 0.3, 0], bolt: new Float32Array(1200), boltN: 0, beams: [{ M: M4.id(), C: [0, 0, 0], fall: 1.4, I: 0 }, { M: M4.id(), C: [0, 0, 0], fall: 1.4, I: 0 }, { M: M4.id(), C: [0, 0, 0], fall: 1.1, I: 0 }],
+  rain: 1, rainV: [0, -16, 0], rainC: [0, 0, 0], spP: [0, 0, 0], spD: [1, 0, 0], spC: [0, 0, 0], shake: 0 };
+const islandEdge = new Float32Array(72);
+function initIslandEdge() {
+  for (let i = 0; i < 72; i++) {
+    const a = (i / 72) * TAU;
+    let r = 34;
+    while (r > 0 && islandH(Math.cos(a) * r, Math.sin(a) * r) < -0.7) r -= 0.5;
+    islandEdge[i] = r;
+  }
+}
+const edgeAt = (x, z) => { const a = ((Math.atan2(z, x) / TAU) * 72 + 72) % 72, i = Math.floor(a), f = a - i; return lerp(islandEdge[i], islandEdge[(i + 1) % 72], f); };
+
+function newRun() {
+  const windA = Math.PI / 2 + (R() * 2 - 1) * 0.6;
+  G = {
+    t: 0, vt: 0, day: 1, sea: 1, windA,
+    boat: { x: HARBOR.x, z: HARBOR.z + 1, h: -Math.PI / 2 + 0.25, v: 0, lever: 0, rud: 0, yawV: 0, y: 0, vy: 0, pitch: 0, roll: 0, rollV: 0, pitchV: 0, water: 0, holes: 0, aboard: 0, haul: 0, haulId: -1, unload: 0, air: 0, sinkT: 0 },
+    surv: [], rollers: [], debris: [], rocks: [], events: [], wake: [], wakeT: 0,
+    saved: 0, lost: 0, lostAboard: 0, picked: 0, bowWaves: 0, hits: { bow: 0, bowslow: 0, stern: 0, beam: 0 }, holesTotal: 0,
+    nextRoller: 14, nextCluster: 22, nextDebris: 100, rid: 0, sid: 0, cid: 0, cause: '', seen: { aboard: false, roller: false },
+    wreck: { x: 0, z: 0, a: 0 }, rollerLog: [], clusterLog: [], nextBolt: 50,
+  };
+  const wa = windA + Math.PI + (R() * 2 - 1) * 0.45;
+  G.wreck = { x: Math.cos(wa) * 430, z: Math.sin(wa) * 430, a: wa + 0.6, sink: 0 };
+  for (let i = 0; i < 5; i++) {
+    for (let k = 0; k < 20; k++) {
+      const a = R() * TAU, d = 95 + R() * 230, x = Math.cos(a) * d, z = Math.sin(a) * d;
+      if (Math.hypot(x - HARBOR.x, z - HARBOR.z) < 70) continue;
+      if (G.rocks.some((r) => Math.hypot(r.x - x, r.z - z) < 40)) continue;
+      G.rocks.push({ x, z, k: i % 3, r: [7, 5, 9][i % 3] * 0.85, yaw: R() * TAU });
+      break;
+    }
+  }
+  setWaves(windA, 1);
+  for (let i = 0; i < 16; i++) { rv[i] = 0; rv2[i] = 0; }
+  spawnCluster(80, 3);
+  P.alpha.n = 0; P.add.n = 0;
+  FX.flash = 0; FX.flashes = [];
+}
+const wreckAngle = () => Math.atan2(G.wreck.z, G.wreck.x);
+function freeSpot(x, z) {
+  if (Math.hypot(x, z) < 60) return false;
+  if (G.rocks.some((r) => Math.hypot(r.x - x, r.z - z) < r.r + 12)) return false;
+  return true;
+}
+function spawnCluster(dist, n) {
+  const min = G.t / 60;
+  for (let k = 0; k < 30; k++) {
+    const a = wreckAngle() + (R() * 2 - 1) * 1.0, d = dist ?? 85 + R() * Math.min(230, 70 + 30 * min);
+    const cx = Math.cos(a) * d, cz = Math.sin(a) * d;
+    if (!freeSpot(cx, cz)) continue;
+    const cnt = n ?? 2 + Math.floor(R() * 3), cid = ++G.cid;
+    const cold0 = clamp(128 - 5 * min, 85, 128);
+    for (let i = 0; i < cnt; i++) {
+      const c = cold0 * (0.9 + R() * 0.2);
+      G.surv.push({ id: ++G.sid, cid, x: cx + (R() * 2 - 1) * 5, z: cz + (R() * 2 - 1) * 5, cold: c, cold0: c, st: 0, flare: i === 0, ph: R() * TAU, yaw: R() * TAU });
+    }
+    G.clusterLog.push([Math.round(cx), Math.round(cz), cnt]);
+    G.events.push({ type: 'cluster', t: +G.t.toFixed(1), x: Math.round(cx), z: Math.round(cz), n: cnt });
+    return;
+  }
+}
+function spawnRoller() {
+  const min = G.t / 60, b = G.boat;
+  const spread = Math.min(1.3, 0.22 + 0.14 * min);
+  const a = G.windA + (R() * 2 - 1) * spread;
+  const dx = Math.cos(a), dz = Math.sin(a);
+  const H = Math.min(7.4, 2.4 + 0.42 * min + R() * 0.9);
+  const r = { id: ++G.rid, dx, dz, H, c: 9.5 + R() * 2, W: 10 + H * 1.3, ph: R() * TAU, born: G.t, done: false };
+  r.pos = dx * b.x + dz * b.z - (160 + R() * 30);
+  r.s = dx * b.x + dz * b.z - r.pos;
+  G.rollers.push(r);
+  G.rollerLog.push([+G.t.toFixed(1), +a.toFixed(2), +H.toFixed(1)]);
+}
+function spawnDebris() {
+  const b = G.boat;
+  for (let k = 0; k < 20; k++) {
+    const a = b.h + (R() * 2 - 1) * 1.2, d = 70 + R() * 90;
+    const x = b.x + Math.cos(a) * d, z = b.z + Math.sin(a) * d;
+    if (!freeSpot(x, z)) continue;
+    const crate = R() < 0.55;
+    G.debris.push({ x, z, yaw: R() * TAU, crate, r: crate ? 3.3 : 2.7, tint: [[0.6, 0.15, 0.1], [0.12, 0.3, 0.55], [0.5, 0.45, 0.12], [0.25, 0.4, 0.25]][Math.floor(R() * 4)], ph: R() * TAU });
+    return;
+  }
+}
+
+// ---- 1コマ(1/60秒)すすめる ----
+const keys = {};
+let touchRud = 0;
+function boatFwd(b) { return [Math.cos(b.h), Math.sin(b.h)]; }
+function step(dt) {
+  G.t += dt; G.vt += dt;
+  const b = G.boat, t = G.t, min = t / 60;
+  G.day = 1 - sstep(10, 200, t);
+  const sea = Math.min(2.5, 1 + t / 230);
+  if (Math.abs(sea - G.sea) > 0.004) { G.sea = sea; setWaves(G.windA, sea); }
+  // ---- 操作 ----
+  const steer = clamp((keys.right ? 1 : 0) - (keys.left ? 1 : 0) + touchRud, -1, 1);
+  b.rud += clamp(steer - b.rud, -4 * dt, 4 * dt);
+  if (keys.up) b.lever = Math.min(1, b.lever + 0.75 * dt);
+  if (keys.down) b.lever = Math.max(-0.4, b.lever - 0.75 * dt);
+  const vmax = 11.5 * (1 - 0.045 * b.aboard) * (1 - 0.3 * b.water / 100);
+  const target = b.lever >= 0 ? b.lever * vmax : b.lever * 7.5;
+  b.v += (target - b.v) * (1 - Math.exp(-dt / (Math.abs(target) < Math.abs(b.v) ? 1.1 : 1.7)));
+  if (b.air > 0) b.v *= 1;
+  const turnK = (0.28 + 0.72 * Math.min(1, Math.abs(b.v) / 4)) * (b.v < -0.2 ? -1 : 1);
+  b.yawV *= Math.exp(-dt * 2.2);
+  b.h += (b.rud * 0.82 * turnK + b.yawV) * dt;
+  const [fx, fz] = boatFwd(b), wx = Math.cos(G.windA), wz = Math.sin(G.windA);
+  b.x += fx * b.v * dt + wx * 0.35 * dt; b.z += fz * b.v * dt + wz * 0.35 * dt;
+  // ---- ぶつかる(島・桟橋・岩・漂流物) ----
+  const hitWall = (nx, nz, pen) => {
+    b.x += nx * pen; b.z += nz * pen;
+    const vn = fx * nx + fz * nz;
+    if (b.v * vn < 0) {
+      if (Math.abs(b.v) > 4.5) makeHole('岩');
+      b.v *= -0.25; FX.shake = Math.max(FX.shake, 0.5); sfx('thud');
+    }
+  };
+  const ri = Math.hypot(b.x, b.z), er = edgeAt(b.x, b.z) + 2.6;
+  if (ri < er) hitWall(b.x / ri, b.z / ri, er - ri);
+  if (b.z < -15.5 && b.z > -42.6 && Math.abs(b.x) < 3.6) { const s = b.x >= 0 ? 1 : -1; hitWall(s, 0, 3.6 - Math.abs(b.x)); }
+  for (const r of G.rocks) { const dx = b.x - r.x, dz = b.z - r.z, d = Math.hypot(dx, dz), rr = r.r + 2.4; if (d < rr) hitWall(dx / d, dz / d, rr - d); }
+  for (const o of G.debris) {
+    const dx = b.x - o.x, dz = b.z - o.z, d = Math.hypot(dx, dz), rr = o.r + 2.2;
+    if (d < rr) {
+      if (Math.abs(b.v) > 4.5 && !o.hitT) { makeHole(o.crate ? 'コンテナ' : '丸太'); o.hitT = 1.5; b.v *= -0.3; FX.shake = 0.8; burst(o.x, seaH(o.x, o.z, G.vt) + 0.5, o.z, 50, 5); }
+      else if (!o.hitT) b.v *= 0.6;
+      b.x += (dx / d) * (rr - d) * 0.6; b.z += (dz / d) * (rr - d) * 0.6; o.x -= (dx / d) * (rr - d) * 0.4; o.z -= (dz / d) * (rr - d) * 0.4;
+    }
+    if (o.hitT) o.hitT = Math.max(0, o.hitT - dt);
+  }
+  // ---- 波に乗る(4点の水面から高さ・縦ゆれ・横ゆれ) ----
+  const vt = G.vt;
+  const rx = -fz, rz = fx;
+  const hb = seaH(b.x + fx * 3, b.z + fz * 3, vt), hs = seaH(b.x - fx * 3, b.z - fz * 3, vt);
+  const hp = seaH(b.x - rx * 1.3, b.z - rz * 1.3, vt), hr = seaH(b.x + rx * 1.3, b.z + rz * 1.3, vt);
+  const sink = -0.12 * b.aboard / CAP - 0.5 * b.water / 100;
+  const hc = (hb + hs + hp + hr) / 4 + sink;
+  if (b.y <= hc + 0.15) { b.vy += (28 * (hc - b.y) - 7 * b.vy) * dt; b.air = 0; }
+  else { b.vy -= 9.81 * dt; b.air += dt; }
+  b.y += b.vy * dt;
+  if (b.y < hc - 1.2) { b.y = hc - 1.2; b.vy = Math.max(b.vy, 0); }
+  const pT = b.air > 0 ? b.pitch - 0.25 * dt : Math.atan2(hb - hs, 6), rT = Math.atan2(hp - hr, 2.6) * 0.8;
+  b.pitchV += ((pT - b.pitch) * 30 - b.pitchV * 6) * dt; b.pitch += b.pitchV * dt;
+  b.rollV += ((rT - b.roll) * 22 - b.rollV * 3.2 - b.rud * b.v * 0.012) * dt; b.roll += b.rollV * dt;
+  // ---- 大波 ----
+  if (t >= G.nextRoller && G.rollers.length < 4) {
+    spawnRoller();
+    const gap = Math.max(7, 19 - 1.25 * min) + R() * 6;
+    G.nextRoller = t + gap;
+    if (min > 3 && R() < Math.min(0.6, 0.2 + 0.08 * (min - 3))) G.nextRoller = t + 3.5 + R() * 2.5;   // 続けて来る(向きもちがう)
+  }
+  for (let i = G.rollers.length - 1; i >= 0; i--) {
+    const r = G.rollers[i];
+    r.pos += r.c * dt;
+    const s = r.dx * b.x + r.dz * b.z - r.pos;
+    if (!r.done && r.s > 0 && s <= 0) { r.done = true; rollerHits(r); }
+    r.s = s;
+    if (s < -280) G.rollers.splice(i, 1);
+  }
+  for (let i = 0; i < 4; i++) {
+    const r = G.rollers[i];
+    rv[i * 4] = r ? r.dx : 0; rv[i * 4 + 1] = r ? r.dz : 0; rv[i * 4 + 2] = r ? r.pos : 0; rv[i * 4 + 3] = r ? Math.min(1, (t - r.born) / 4) * r.H : 0;
+    rv2[i * 4] = r ? r.W : 1; rv2[i * 4 + 1] = r ? r.ph : 0;
+  }
+  // ---- 浸水 ----
+  const inHarbor = Math.hypot(b.x - HARBOR.x, b.z - HARBOR.z) < HARBOR.r;
+  const pump = inHarbor && Math.abs(b.v) < 3.5 ? 14 : Math.max(0.8, 1.7 - 0.12 * b.aboard);
+  const beam = Math.abs(Math.sin(b.h - G.windA));
+  b.water += (b.holes * 0.55 + Math.max(0, G.sea - 1.7) * 0.9 * beam * (1 + 0.1 * b.aboard) * shelter(b.x, b.z) - pump) * dt;
+  b.water = Math.max(0, b.water);
+  // ---- 引き上げる ----
+  let near = null, nd = 1e9;
+  for (const s of G.surv) {
+    if (s.st !== 0) continue;
+    s.x += wx * 0.25 * dt; s.z += wz * 0.25 * dt;
+    s.cold -= dt;
+    if (s.cold <= 0) { s.st = 3; G.lost++; G.events.push({ type: 'lost', t: +t.toFixed(1), id: s.id }); toast('1人、波間に消えた'); sfx('lost'); continue; }
+    const d = Math.hypot(s.x - b.x, s.z - b.z);
+    if (d < nd) { nd = d; near = s; }
+  }
+  if (near && nd < 5.4 && Math.abs(b.v) < 3.1 && b.aboard < CAP) {
+    if (b.haulId !== near.id) { b.haulId = near.id; b.haul = 0; }
+    b.haul += dt;
+    if (b.haul >= 0.9) {
+      near.st = 2; b.aboard++; G.picked++; b.haul = 0; b.haulId = -1;
+      G.events.push({ type: 'pick', t: +t.toFixed(1), id: near.id, aboard: b.aboard });
+      toast(`引き上げた(乗員 ${b.aboard}/${CAP})`); sfx('pick');
+      burst(near.x, b.y + 0.4, near.z, 30, 2.5);
+    }
+  } else { b.haul = Math.max(0, b.haul - dt * 2); if (b.haul === 0) b.haulId = -1; }
+  G.nearD = nd; G.near = near;
+  // ---- 船着き場で降ろす ----
+  if (inHarbor && Math.abs(b.v) < 3.5) {
+    b.unload += dt;
+    if (b.aboard > 0 && b.unload >= 0.55) {
+      b.unload = 0; b.aboard--; G.saved++;
+      G.events.push({ type: 'deliver', t: +t.toFixed(1), saved: G.saved });
+      if (b.aboard === 0) toast(`救助 ${G.saved}人`); sfx('bell');
+    }
+    if (b.holes > 0 && b.unload > 0.5) { b.holes = 0; toast('穴をふさいだ'); }
+  } else b.unload = 0;
+  // ---- 漂流者の群れ・漂流物 ----
+  const active = new Set(G.surv.filter((s) => s.st === 0).map((s) => s.cid)).size;
+  const want = Math.min(3, 2 + Math.floor(t / 200));
+  if (active < want && t >= G.nextCluster) { spawnCluster(); G.nextCluster = t + 9 + R() * 9; }
+  if (active === 0 && t >= G.nextCluster - 6) { spawnCluster(); G.nextCluster = t + 9 + R() * 9; }
+  G.surv = G.surv.filter((s) => s.st === 0 || s.st === 2);
+  if (t >= G.nextDebris) {
+    if (G.debris.length < Math.min(7, 1 + Math.floor((t - 100) / 35))) spawnDebris();
+    G.nextDebris = t + 9 + R() * 8;
+  }
+  for (let i = G.debris.length - 1; i >= 0; i--) { const o = G.debris[i]; o.x += wx * 0.6 * dt; o.z += wz * 0.6 * dt; if (Math.hypot(o.x - b.x, o.z - b.z) > 360) G.debris.splice(i, 1); }
+  // ---- 稲妻 ----
+  if (t >= G.nextBolt) { lightning(); G.nextBolt = t + Math.max(4, 15 - t / 45) + vr() * 7; }
+  // ---- 航跡 ----
+  G.wakeT += dt;
+  if (G.wakeT > 0.14) { G.wakeT = 0; G.wake.unshift({ x: b.x - fx * 3.2, z: b.z - fz * 3.2, age: 0, s: clamp(Math.abs(b.v) / 8, 0, 1) }); if (G.wake.length > 24) G.wake.pop(); }
+  for (const w of G.wake) w.age += dt;
+  // ---- 沈む ----
+  if (b.water >= 100) {
+    b.water = 100;
+    G.lostAboard = b.aboard;
+    G.cause = G.lastHit && t - G.lastHit.t < 3 ? G.lastHit.text : b.holes ? '船体の穴から水が入り、沈んだ' : '浸水が満杯になり、沈んだ';
+    G.events.push({ type: 'sink', t: +t.toFixed(1), aboard: b.aboard });
+    gstate = 'sink'; b.sinkT = 0; sfx('sink');
+    $('hud').classList.remove('on');
+  }
+}
+function makeHole(what) {
+  const b = G.boat;
+  if (b.holes >= 3) return;
+  b.holes++; G.holesTotal++;
+  G.events.push({ type: 'hole', t: +G.t.toFixed(1), what });
+  toast(`${what}にぶつかり、船体に穴があいた`); sfx('clank');
+}
+function rollerHits(r) {
+  const b = G.boat, [fx, fz] = boatFwd(b);
+  const Heff = r.H * shelter(b.x, b.z);
+  if (Heff < 1.0) return;
+  const cosA = fx * -r.dx + fz * -r.dz, sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+  // 嵐が長びくほど、同じ受け方でも入る水が増える(横腹・後ろで受けたときほど増え方が大きい)
+  const loadF = 1 + 0.21 * b.aboard, m = G.t / 60, worse = 1 + 0.13 * m;
+  let kind, add;
+  // 5m をこえる大波は 頂が崩れていて、舳先で越えても水をかぶる
+  const breaking = 1 + Math.max(0, Heff - 4.8) * 0.55;
+  if (cosA > 0.72 && b.v > 2.2 + 0.45 * Heff) { kind = 'bow'; add = Heff * (1 + 0.08 * m) * breaking * loadF; G.bowWaves++; b.vy += Math.min(7, b.v * 0.38 + Heff * 0.7); b.pitchV += 1.4; FX.shake = Math.max(FX.shake, 0.5); }
+  else if (cosA > 0.72) { kind = 'bowslow'; add = Heff * 3.2 * worse * loadF; b.pitchV += 1.0; FX.shake = 0.6; }
+  else if (cosA < -0.72) { kind = 'stern'; add = Heff * 4.2 * worse * loadF; b.yawV += (R() < 0.5 ? -1 : 1) * 0.9; b.pitchV -= 1.2; FX.shake = 0.8; }
+  else { kind = 'beam'; add = Heff * (5.5 + 3.5 * sinA) * worse * loadF; const side = (r.dx * -fz + r.dz * fx) > 0 ? 1 : -1; b.rollV += side * (1.2 + Heff * 0.25); FX.shake = 1.2; }
+  b.water += add;
+  G.hits[kind]++;
+  const side = kind === 'beam' ? ((r.dx * -fz + r.dz * fx) > 0 ? '左舷' : '右舷') : '';
+  G.lastHit = { t: G.t, text: kind === 'beam' ? `${side}の横腹に大波を受けて転覆した` : kind === 'stern' ? '後ろから大波をかぶって沈んだ' : '大波に突っ込み、水をかぶって沈んだ' };
+  G.events.push({ type: 'roller', t: +G.t.toFixed(1), kind, add: +add.toFixed(1), H: +Heff.toFixed(1), cos: +cosA.toFixed(2), aboard: b.aboard });
+  const msg = { bow: '大波を越えた', bowslow: '勢いが足りず、波をかぶった', stern: '後ろから波をかぶった', beam: '横腹に大波!' }[kind];
+  toast(`${msg} 浸水 +${Math.round(add)}%`);
+  sfx(kind === 'bow' ? 'crash' : 'slam');
+  burst(b.x + fx * 2.5, b.y + 1, b.z + fz * 2.5, kind === 'bow' ? 380 : 280, kind === 'bow' ? 10 : 7);
+}
+function burst(x, y, z, n, sp) {
+  for (let i = 0; i < n; i++) {
+    const a = vr() * TAU, u = vr(), s = sp * (0.3 + vr());
+    emit(P.alpha, x + (vr() - 0.5) * 2, y + vr(), z + (vr() - 0.5) * 2, Math.cos(a) * s * 0.6, s * (0.7 + u) * 0.9, Math.sin(a) * s * 0.6, 0.7 + vr() * 1.0, 0.22 + vr() * 0.6, 0);
+  }
+}
+function lightning() {
+  const a = vr() * TAU, d = 520 + vr() * 500;
+  const bx = cam.x + Math.cos(a) * d, bz = cam.z + Math.sin(a) * d;
+  let x = bx + (vr() - 0.5) * 60, y = 330, z = bz + (vr() - 0.5) * 60, n = 0;
+  const B = FX.bolt;
+  const seg = (x0, y0, z0, x1, y1, z1) => { if (n > 396) return; B.set([x0, y0, z0, x1, y1, z1], n * 3); n += 2; };
+  while (y > 0 && n < 360) {
+    const nx = x + (vr() - 0.5) * 28, ny = y - 12 - vr() * 18, nz = z + (vr() - 0.5) * 28;
+    seg(x, y, z, nx, Math.max(0, ny), nz);
+    if (vr() < 0.18) { let fx2 = nx, fy = ny, fz2 = nz; for (let k = 0; k < 4 && fy > 30; k++) { const gx = fx2 + (vr() - 0.5) * 34, gy = fy - 14 - vr() * 14, gz = fz2 + (vr() - 0.5) * 34; seg(fx2, fy, fz2, gx, gy, gz); fx2 = gx; fy = gy; fz2 = gz; } }
+    x = nx; y = ny; z = nz;
+  }
+  FX.boltN = n;
+  const l = Math.hypot(bx - cam.x, 250, bz - cam.z);
+  FX.boltDir = [(bx - cam.x) / l, 250 / l, (bz - cam.z) / l];
+  const s = 0.7 + vr() * 0.5;
+  FX.flashes = [[0, 1.0 * s], [0.09, 0.45 * s], [0.2, 0.85 * s], [0.42, 0.3 * s]];
+  FX.flashT = 0;
+  if (G.events) G.events.push({ type: 'flash', t: +G.t.toFixed(1) });
+  sfx('thunder', d / 340 * 0.35);
+}
+
+// =============================================================================
+//  光と空の色(日暮れ → 夜)
+// =============================================================================
+const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+function updLighting(dt) {
+  const d = G.day, n = 1 - d;
+  const el = lerp(-0.12, 0.068, d), az = G.windA + Math.PI + 0.38;
+  L.sunDir = [Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)];
+  const vis = sstep(-0.035, 0.03, el);
+  L.sunCol = [3.4 * vis, 1.75 * vis, 0.72 * vis];
+  L.ambSky = mixc([0.012, 0.016, 0.026], [0.19, 0.18, 0.2], d);
+  L.ambGnd = mixc([0.004, 0.006, 0.009], [0.06, 0.05, 0.045], d);
+  L.fog = mixc([0.009, 0.012, 0.019], [0.3, 0.22, 0.18], d);
+  L.zen = mixc([0.005, 0.007, 0.012], [0.1, 0.11, 0.14], d);
+  L.glow = [1.7 * d * d, 0.66 * d * d, 0.24 * d * d];
+  L.cloud = mixc([0.007, 0.008, 0.012], [0.075, 0.074, 0.084], d);
+  L.fogDen = 0.0017 + 0.0009 * n;
+  L.exp = lerp(3.0, 1.0, d);
+  L.wet = 0.85;
+  // 稲妻のまたたき
+  FX.flashT = (FX.flashT ?? 9) + dt;
+  let f = 0;
+  for (const [t0, a] of FX.flashes) { const k = FX.flashT - t0; if (k >= 0) f = Math.max(f, a * Math.exp(-k * 9)); }
+  FX.flash = f;
+  const moon = [0.018 * n, 0.024 * n, 0.04 * n];
+  L.keyDir = f > 0.02 ? FX.boltDir : [0.36, 0.8, -0.48];
+  L.keyCol = [moon[0] + 2.4 * f, moon[1] + 2.6 * f, moon[2] + 3.4 * f];
+  // 点の光
+  nLights = 0;
+  const add = (x, y, z, r, c) => { if (nLights >= 8) return; LP.set([x, y, z, r], nLights * 4); LC.set(c, nLights * 3); nLights++; };
+  const nk = 0.3 + 0.7 * n;
+  add(0, 3.4 + 18.4, 0, 70, [24 * nk, 20 * nk, 14 * nk]);
+  add(0.9, 4.5, -40.4, 45, [11 * nk, 6.6 * nk, 2.6 * nk]);
+  const fl = G.surv.filter((s) => s.st === 0 && s.flare).map((s) => ({ s, d: Math.hypot(s.x - cam.x, s.z - cam.z) })).sort((a, b) => a.d - b.d).slice(0, 4);
+  for (const { s } of fl) {
+    const k = (0.35 + 0.65 * s.cold / s.cold0) * (0.8 + 0.2 * Math.sin(G.vt * 23 + s.ph) * Math.sin(G.vt * 7.3));
+    const p = s.hand || [s.x, 1, s.z];
+    add(p[0], p[1] + 0.2, p[2], 60, [80 * k, 10 * k, 3.5 * k]);
+  }
+  const wf = 1 - G.wreck.sink;
+  if (wf > 0) add(G.wreck.x, 14, G.wreck.z, 900, [26000 * wf, 8500 * wf, 1800 * wf]);
+  // 探照灯(暗くなったら点く)
+  const b = G.boat, on = sstep(0.8, 0.35, d) * (gstate === 'sink' ? 0 : 1);
+  const Mb = boatMatrix();
+  FX.spP = M4.xf(Mb, 0.75, 2.42, 0);
+  const sd = M4.xn(Mb, 1, -0.13, 0);
+  FX.spD = sd;
+  FX.spC = [1100 * on, 1040 * on, 920 * on];
+  // 光の帯(灯台の2本・探照灯)
+  const la = G.vt * 0.5, lamp = [0, 3.4 + 18.4, 0];
+  for (let i = 0; i < 2; i++) {
+    const m = M4.trs(lamp[0], lamp[1], lamp[2], la + i * Math.PI, -0.035, 0);
+    scaleCols(m, 380, 30, 30);
+    FX.beams[i].M = m;
+    const I = 0.04 + 0.2 * n;
+    FX.beams[i].C = [I, I * 0.95, I * 0.82]; FX.beams[i].I = I;
+  }
+  const yaw = Math.atan2(sd[2], sd[0]), pit = Math.asin(clamp(sd[1], -1, 1));
+  const m2 = M4.trs(FX.spP[0], FX.spP[1], FX.spP[2], yaw, pit, 0);
+  scaleCols(m2, 70, 5.5, 5.5);
+  FX.beams[2].M = m2;
+  FX.beams[2].C = [0.32 * on, 0.31 * on, 0.28 * on]; FX.beams[2].I = on;
+  // 雨
+  FX.rain = 0.55 + 0.45 * Math.min(1, G.t / 120);
+  const wx = Math.cos(G.windA), wz = Math.sin(G.windA);
+  FX.rainV = [wx * 6, -17, wz * 6];
+  FX.rainC = [L.ambSky[0] * 0.5 + 0.9 * f + 0.004, L.ambSky[1] * 0.5 + 0.95 * f + 0.005, L.ambSky[2] * 0.5 + 1.1 * f + 0.007];
+  // 航跡
+  WAKE.fill(0);
+  G.wake.forEach((w, i) => { WAKE.set([w.x, w.z, 0.9 + w.age * 1.3, w.s * Math.max(0, 1 - w.age / 3.4)], i * 4); });
+}
+function scaleCols(m, sx, sy, sz) { for (let i = 0; i < 3; i++) { m[i] *= sx; m[4 + i] *= sy; m[8 + i] *= sz; } }
+function boatMatrix() { const b = G.boat; return M4.trs(b.x, b.y, b.z, b.h, b.pitch, b.roll); }
+
+// =============================================================================
+//  見た目の更新(しぶき・煙・カメラ)と描く物の一覧
+// =============================================================================
+function updVisual(dt) {
+  const b = G.boat, [fx, fz] = boatFwd(b), vt = G.vt;
+  // 舳先のしぶき
+  if (gstate === 'play' && Math.abs(b.v) > 3) {
+    const n = Math.min(6, Math.floor(Math.abs(b.v) * 0.35 + (b.pitchV < -0.3 ? 4 : 0)) * (vr() < 0.6 ? 1 : 0));
+    for (let i = 0; i < n; i++) {
+      const s = vr() < 0.5 ? 1 : -1, rx = -fz * s, rz = fx * s, sp = b.v * (0.25 + vr() * 0.3);
+      emit(P.alpha, b.x + fx * 2.6 + rx * 0.8, b.y + 0.2, b.z + fz * 2.6 + rz * 0.8, rx * sp + fx * b.v * 0.5, 1.5 + vr() * 2.5 + Math.max(0, -b.pitchV) * 2, rz * sp + fz * b.v * 0.5, 0.7 + vr() * 0.6, 0.35 + vr() * 0.5, 0);
+    }
+  }
+  // 波頭の霧(大波の頂を風が吹き飛ばす)
+  for (const r of G.rollers) {
+    const H = r.H * Math.min(1, (G.t - r.born) / 4);
+    if (H < 2.6) continue;
+    const k = Math.floor((H - 2.2) * 1.2 * (vr() < 0.7 ? 1 : 0));
+    for (let i = 0; i < k; i++) {
+      const al = (vr() - 0.5) * 140, base = r.pos + r.dx * 0 ;
+      const cx = cam.x * (1 - r.dx * r.dx) - r.dx * r.dz * cam.z, cz = cam.z * (1 - r.dz * r.dz) - r.dx * r.dz * cam.x;
+      const x = cx + r.dx * base - r.dz * al + r.dx * (LEAN * H - 1.5), z = cz + r.dz * base + r.dx * al + r.dz * (LEAN * H - 1.5);
+      const sh = shelter(x, z);
+      if (sh < 0.5) continue;
+      emit(P.alpha, x, H * sh * 0.95, z, r.dx * (r.c * 0.9), 1 + vr() * 2, r.dz * (r.c * 0.9), 1.2 + vr(), 2.2 + vr() * 2.5, 5);
+    }
+  }
+  // 漂流者の発炎筒
+  for (const s of G.surv) {
+    if (s.st !== 0) continue;
+    const y = seaH(s.x, s.z, vt);
+    s.y = y;
+    if (s.flare) {
+      const M = survMatrix(s);
+      s.hand = M4.xf(M, 0.27, 1.02, 0.12);
+      const k = 0.35 + 0.65 * s.cold / s.cold0;
+      if (vr() < 0.9 * k) emit(P.add, s.hand[0], s.hand[1] + 0.05, s.hand[2], (vr() - 0.5) * 0.6, 0.6 + vr(), (vr() - 0.5) * 0.6, 0.18 + vr() * 0.2, 0.22 + vr() * 0.15, 4);
+      if (vr() < 0.35) emit(P.alpha, s.hand[0], s.hand[1] + 0.25, s.hand[2], (vr() - 0.5) * 0.5, 1.2, (vr() - 0.5) * 0.5, 3 + vr() * 2, 0.5 + vr() * 0.4, 2);
+    }
+  }
+  // 沈みかけの船の火と煙
+  const w = G.wreck, wf = 1 - w.sink;
+  if (wf > 0.05) {
+    for (let i = 0; i < 2; i++) emit(P.add, w.x + (vr() - 0.5) * 30, 8 + vr() * 6, w.z + (vr() - 0.5) * 30, 0, 3 + vr() * 3, 0, 1 + vr(), 9 + vr() * 8, 3);
+    if (vr() < 0.5) emit(P.alpha, w.x + (vr() - 0.5) * 20, 18, w.z + (vr() - 0.5) * 20, 0, 6, 0, 9 + vr() * 5, 16 + vr() * 10, 1);
+  }
+  updPool(P.alpha, dt); updPool(P.add, dt);
+}
+function survMatrix(s) {
+  const vt = G.vt;
+  const bob = Math.sin(vt * 2.1 + s.ph) * 0.08;
+  return M4.trs(s.x, (s.y ?? 0) + bob - 0.05, s.z, s.yaw + Math.sin(vt * 0.4 + s.ph) * 0.4, Math.sin(vt * 1.3 + s.ph) * 0.12, Math.cos(vt * 1.1 + s.ph) * 0.1);
+}
+function updCam(dt) {
+  const b = G.boat, asp = cssW / cssH;
+  const portrait = asp < 0.85;
+  cam.fov = portrait ? 1.22 : 0.95;
+  if (gstate === 'title') {
+    const a = G.vt * 0.045 - 2.0;
+    cam.x = b.x + Math.cos(a) * 17; cam.z = b.z + Math.sin(a) * 17;
+    cam.y = Math.max(b.y + 3.2, seaH(cam.x, cam.z, G.vt) + 1.6);
+    cam.tx = b.x; cam.ty = b.y + 2.6; cam.tz = b.z;
+    cam.h = b.h;
+  } else {
+    cam.h += angDiff(cam.h, b.h) * Math.min(1, dt * 2.0);
+    const back = (portrait ? 14.5 : 12.5) + (gstate === 'sink' ? b.sinkT * 4 : 0), up = (portrait ? 5.2 : 4.3) + (gstate === 'sink' ? b.sinkT * 2.5 : 0);
+    const tx = b.x - Math.cos(cam.h) * back, tz = b.z - Math.sin(cam.h) * back;
+    const k = Math.min(1, dt * 5);
+    cam.x += (tx - cam.x) * k; cam.z += (tz - cam.z) * k;
+    const ty = b.y + up;
+    cam.y += (ty - cam.y) * Math.min(1, dt * 3);
+    cam.y = Math.max(cam.y, seaH(cam.x, cam.z, G.vt) + 1.7);
+    cam.tx = b.x + Math.cos(cam.h) * 7; cam.ty = b.y + 1.4; cam.tz = b.z + Math.sin(cam.h) * 7;
+  }
+  FX.shake = Math.max(0, FX.shake - dt * 1.6);
+  const s = FX.shake * FX.shake * 0.5;
+  const e = [cam.x + (vr() - 0.5) * s, cam.y + (vr() - 0.5) * s, cam.z + (vr() - 0.5) * s];
+  VIEW = M4.look(e, [cam.tx, cam.ty, cam.tz], [0, 1, 0]);
+  PROJ = M4.persp(cam.fov, asp, 0.3, 3200);
+  VP = M4.mul(PROJ, VIEW);
+}
+function drawList() {
+  const list = [];
+  const b = G.boat, vt = G.vt;
+  list.push({ mesh: meshes.island, M: M4.id() });
+  for (const r of G.rocks) list.push({ mesh: meshes.rocks[r.k], M: M4.trs(r.x, -1.5, r.z, r.yaw, 0, 0) });
+  const w = G.wreck;
+  list.push({ mesh: meshes.wreck, M: M4.trs(w.x, -2 - w.sink * 12, w.z, w.a, -0.16 - w.sink * 0.1, 0.12), cast: false });
+  if (gstate !== 'over' || b.sinkT < 6) list.push({ mesh: meshes.boat, M: boatMatrix(), em: 1 });
+  for (const s of G.surv) if (s.st === 0) list.push({ mesh: s.flare ? meshes.survF : meshes.surv, M: survMatrix(s), em: s.flare ? 0.35 + 0.65 * s.cold / s.cold0 : (Math.sin(vt * 9 + s.ph) > 0.85 ? 18 : 0.2) });
+  for (const o of G.debris) {
+    const y = seaH(o.x, o.z, vt);
+    list.push({ mesh: o.crate ? meshes.crate : meshes.log, M: M4.trs(o.x, y - (o.crate ? 0.75 : 0.12), o.z, o.yaw + Math.sin(vt * 0.3 + o.ph) * 0.2, Math.sin(vt * 1.2 + o.ph) * 0.08, Math.cos(vt + o.ph) * 0.1), tint: o.crate ? o.tint : [1, 1, 1] });
+  }
+  return list;
+}
+
+// =============================================================================
+//  音(Web Audio で合成)
+// =============================================================================
+let AC = null, master = null, sfxBus = null, ambBus = null, noiseBuf = null, eng = null, wind = null, rumble = null;
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 対応していないブラウザ */ }
+  try {
+    if (!AC) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      AC = new AudioCtx();
+      master = AC.createGain(); master.gain.value = save.sound ? 0.9 : 0; master.connect(AC.destination);
+      const comp = AC.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(master);
+      sfxBus = AC.createGain(); sfxBus.gain.value = 0.8; sfxBus.connect(comp);
+      ambBus = AC.createGain(); ambBus.gain.value = 0.7; ambBus.connect(comp);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < d.length; i++) { last = last * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = last * 6; }   // 低い音が中心の雑音
+      // 風(低い音だけを小さく、強弱をつける)
+      const ws = AC.createBufferSource(); ws.buffer = noiseBuf; ws.loop = true;
+      const wf = AC.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 260; wf.Q.value = 0.7;
+      const wg = AC.createGain(); wg.gain.value = 0;
+      ws.connect(wf); wf.connect(wg); wg.connect(ambBus); ws.start();
+      wind = { g: wg, f: wf };
+      // 機関(低いうなり)
+      const o1 = AC.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 42;
+      const o2 = AC.createOscillator(); o2.type = 'square'; o2.frequency.value = 21;
+      const ef = AC.createBiquadFilter(); ef.type = 'lowpass'; ef.frequency.value = 220;
+      const eg = AC.createGain(); eg.gain.value = 0;
+      o1.connect(ef); o2.connect(ef); ef.connect(eg); eg.connect(ambBus); o1.start(); o2.start();
+      eng = { o1, o2, f: ef, g: eg };
+      // 大波のうなり
+      const rs = AC.createBufferSource(); rs.buffer = noiseBuf; rs.loop = true; rs.playbackRate.value = 0.6;
+      const rf = AC.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.value = 140;
+      const rg = AC.createGain(); rg.gain.value = 0;
+      rs.connect(rf); rf.connect(rg); rg.connect(ambBus); rs.start();
+      rumble = { g: rg };
+    }
+    if (AC.state === 'suspended') AC.resume();
+    const b = AC.createBuffer(1, 1, 22050), src = AC.createBufferSource();
+    src.buffer = b; src.connect(AC.destination); src.start(0);
+  } catch (e) { /* 音が出せなくても遊べる */ }
+}
+for (const e of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(e, unlockAudio, { capture: true, passive: true });
+const canPlay = () => AC && save.sound && AC.state === 'running';
+function tone(f, dur, type, vol, f2, delay = 0) {
+  if (!canPlay() || !isFinite(f) || f <= 0) return;
+  try {
+    const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) { /* 鳴らせなくても続ける */ }
+}
+function noise(dur, freq, q, vol, delay = 0, type = 'bandpass', f2 = 0, attack = 0.01) {
+  if (!canPlay()) return;
+  try {
+    const t = AC.currentTime + delay, s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+    s.buffer = noiseBuf; s.playbackRate.value = 1;
+    f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t, vr() * 1.5); s.stop(t + dur + 0.05);
+  } catch (e) { /* 鳴らせなくても続ける */ }
+}
+let lastSfx = {};
+function sfx(name, delay = 0) {
+  const now = performance.now();
+  if (lastSfx[name] && now - lastSfx[name] < 60) return;
+  lastSfx[name] = now;
+  switch (name) {
+    case 'crash': noise(1.1, 900, 0.6, 0.7, 0, 'lowpass', 300, 0.005); noise(0.5, 2400, 0.8, 0.25, 0.02, 'bandpass', 900); tone(70, 0.4, 'sine', 0.5, 40); break;
+    case 'slam': noise(1.4, 700, 0.5, 0.85, 0, 'lowpass', 200, 0.005); tone(55, 0.7, 'sine', 0.7, 30); tone(110, 0.25, 'triangle', 0.25, 60); break;
+    case 'thud': tone(80, 0.25, 'sine', 0.5, 45); noise(0.25, 500, 0.8, 0.3, 0, 'lowpass', 200); break;
+    case 'clank': tone(320, 0.5, 'square', 0.12, 180); tone(480, 0.35, 'triangle', 0.12, 300, 0.03); noise(0.3, 1800, 2, 0.2); break;
+    case 'pick': noise(0.35, 600, 0.7, 0.25, 0, 'lowpass', 250); tone(523, 0.25, 'sine', 0.16, 0, 0.1); tone(784, 0.4, 'sine', 0.14, 0, 0.22); break;
+    case 'bell': tone(880, 1.6, 'sine', 0.16); tone(1320, 1.2, 'sine', 0.06); tone(2210, 0.7, 'sine', 0.03); break;
+    case 'lost': tone(220, 0.9, 'sine', 0.14, 140); tone(165, 1.1, 'sine', 0.1, 110, 0.2); break;
+    case 'sink': noise(3.5, 300, 0.5, 0.9, 0, 'lowpass', 60, 0.05); tone(60, 3, 'sine', 0.6, 25); break;
+    case 'thunder': noise(0.12, 3000, 0.7, 0.35, delay, 'highpass'); noise(4.5, 260, 0.6, 1.0, delay + 0.05, 'lowpass', 50, 0.08); noise(3, 120, 0.6, 0.7, delay + 0.4, 'lowpass', 40, 0.3); break;
+    case 'horn': tone(98, 2.2, 'sawtooth', 0.12); tone(73, 2.2, 'sawtooth', 0.1); break;
+    case 'warn': tone(660, 0.12, 'square', 0.06); tone(660, 0.12, 'square', 0.06, 0, 0.18); break;
+  }
+}
+function updAudio(dt) {
+  if (!AC || !wind) return;
+  try {
+    const t = AC.currentTime, b = G.boat, on = gstate === 'play' ? 1 : gstate === 'title' ? 0.5 : 0.3;
+    const gust = 0.5 + 0.5 * Math.sin(G.vt * 0.31) * Math.sin(G.vt * 0.17 + 1);
+    wind.g.gain.setTargetAtTime((0.05 + 0.08 * gust) * (0.7 + 0.3 * G.sea / 2.5), t, 0.3);
+    wind.f.frequency.setTargetAtTime(180 + 160 * gust, t, 0.5);
+    const th = gstate === 'play' ? Math.abs(b.lever) : 0.05;
+    eng.g.gain.setTargetAtTime((0.03 + 0.07 * th) * on, t, 0.15);
+    eng.o1.frequency.setTargetAtTime(38 + 34 * th + Math.abs(b.v) * 1.5, t, 0.2);
+    eng.o2.frequency.setTargetAtTime(19 + 17 * th, t, 0.2);
+    eng.f.frequency.setTargetAtTime(160 + 300 * th, t, 0.2);
+    let rmb = 0;
+    for (const r of G.rollers) { if (r.done) continue; const eta = r.s / r.c; if (eta < 14) rmb = Math.max(rmb, (1 - eta / 14) * r.H / 6); }
+    rumble.g.gain.setTargetAtTime(Math.min(0.6, rmb * 0.6) * (gstate === 'play' ? 1 : 0), t, 0.25);
+  } catch (e) { /* 音が出せなくても続ける */ }
+}
+
+// =============================================================================
+//  画面の表示(計器・方位・目じるし)
+// =============================================================================
+const hud2 = $('hud2d'), hx = hud2.getContext('2d');
+let toastT = 0, warnOn = false, lastWarnId = -1;
+function toast(s) { const e = $('toast'); e.textContent = s; e.classList.add('on'); toastT = 2.2; }
+function setHint(h) { const e = $('hint'); if (e.dataset.h !== h) { e.dataset.h = h; e.innerHTML = h; } e.classList.toggle('on', !!h); }
+const seatsEl = $('seats');
+for (let i = 0; i < CAP; i++) seatsEl.appendChild(document.createElement('s'));
+const fmtT = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+function nextRoller() {
+  let best = null;
+  for (const r of G.rollers) { if (r.done) continue; const eta = r.s / r.c; if (!best || eta < best.eta) best = { r, eta }; }
+  return best;
+}
+function sideOf(a) { const d = angDiff(G.boat.h, a); return Math.abs(d) < 0.7 ? '正面' : Math.abs(d) > 2.44 ? '後ろ' : d > 0 ? '右' : '左'; }
+function updHud(dt) {
+  const b = G.boat;
+  $('saved').textContent = G.saved;
+  $('clock').textContent = fmtT(G.t);
+  const wp = Math.round(b.water);
+  $('water-v').textContent = `${wp}%`;
+  const bi = $('bilge');
+  bi.querySelector('i').style.height = `${wp}%`;
+  bi.classList.toggle('warn', wp >= 60);
+  [...seatsEl.children].forEach((s, i) => s.classList.toggle('on', i < b.aboard));
+  $('speed').innerHTML = `${(Math.abs(b.v) * 1.944).toFixed(0)}<small> kn</small>`;
+  $('holes').textContent = b.holes ? `船体の穴 ${b.holes}` : '';
+  const kn = $('lever').querySelector('.knob'), h = $('lever').clientHeight;
+  const ly = (1 - (b.lever + 0.4) / 1.4) * h;
+  kn.style.top = `${ly}px`; kn.textContent = b.lever < -0.02 ? '後進' : `${Math.round(b.lever * 100)}%`;
+  $('lb0').style.top = `${(1 - 0.4 / 1.4) * h - 7}px`;
+  $('lever').querySelector('.zero').style.top = `${(1 - 0.4 / 1.4) * h}px`;
+  toastT -= dt; if (toastT <= 0) $('toast').classList.remove('on');
+  // 大波の警告
+  const nr = nextRoller();
+  const W = $('warn');
+  if (nr && nr.eta < 9 && nr.r.H * shelter(b.x, b.z) > 1.4 && gstate === 'play') {
+    const from = Math.atan2(-nr.r.dz, -nr.r.dx), side = sideOf(from);
+    W.textContent = `大波 ${side === '正面' ? '正面' : side === '後ろ' ? '後ろ' : side + '舷'}から ${Math.max(0, nr.eta).toFixed(0)}秒`;
+    W.classList.add('on');
+    if (lastWarnId !== nr.r.id) { lastWarnId = nr.r.id; sfx('warn'); }
+  } else W.classList.remove('on');
+  // 説明
+  let hint = '';
+  const touch = isTouch;
+  if (gstate === 'play') {
+    if (nr && nr.eta < 9 && !G.seen.roller && nr.r.H > 1.4) hint = '大波だ — <em>舳先を波に向けて、速度を上げろ</em>。横腹で受けると水が入る';
+    else if (G.boat.haul > 0) hint = '引き上げ中… そのまま';
+    else if (G.near && G.nearD < 22 && Math.abs(b.v) >= 3.1 && b.aboard < CAP) hint = `速度を落とせ — <em>6ノット以下</em>で近づくと引き上げる`;
+    else if (b.aboard >= CAP) hint = '満員だ。<em>灯台の船着き場</em>へ戻れ';
+    else if (b.aboard > 0 && !G.seen.aboard) hint = '灯台の<em>船着き場(黄色い灯)</em>まで連れて帰れば救助。まだ乗せてもいい';
+    else if (G.t < 14 && G.saved === 0 && b.aboard === 0) hint = touch ? '右の<em>レバーを上げて</em>、画面を左右になぞって舵 — <em>赤い発炎筒</em>へ' : '<em>↑ / W</em> でスロットル、<em>← →</em> で舵 — <em>赤い発炎筒</em>へ向かえ';
+    else if (b.water > 60) hint = '浸水が多い。<em>船着き場</em>でポンプを回せ';
+  }
+  if (nr && nr.eta < 0.2) G.seen.roller = true;
+  if (b.aboard > 0 && G.t > 0 && Math.hypot(b.x - HARBOR.x, b.z - HARBOR.z) < 30) G.seen.aboard = true;
+  setHint(hint);
+  drawHud2d(nr);
+}
+function drawHud2d(nr) {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (hud2.width !== Math.round(cssW * dpr) || hud2.height !== Math.round(cssH * dpr)) { hud2.width = Math.round(cssW * dpr); hud2.height = Math.round(cssH * dpr); }
+  hx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  hx.clearRect(0, 0, cssW, cssH);
+  if (gstate !== 'play' && gstate !== 'pause') return;
+  const b = G.boat;
+  // ---- 方位の帯 ----
+  const W = Math.min(560, cssW - 230 > 200 ? cssW - 230 : cssW - 120), cx = cssW / 2, top = cssW < 640 ? 64 : 14, Hh = 30, span = 1.35;
+  const tx = (a) => cx + (angDiff(b.h, a) / span) * (W / 2);
+  const g = hx.createLinearGradient(cx - W / 2, 0, cx + W / 2, 0);
+  g.addColorStop(0, 'rgba(4,10,16,0)'); g.addColorStop(0.15, 'rgba(4,10,16,.55)'); g.addColorStop(0.85, 'rgba(4,10,16,.55)'); g.addColorStop(1, 'rgba(4,10,16,0)');
+  hx.fillStyle = g; hx.fillRect(cx - W / 2, top, W, Hh);
+  hx.save(); hx.beginPath(); hx.rect(cx - W / 2, top - 30, W, Hh + 60); hx.clip();
+  hx.font = '11px Consolas, monospace'; hx.textAlign = 'center'; hx.textBaseline = 'middle';
+  for (let d = 0; d < 360; d += 10) {
+    const a = (d / 180) * Math.PI, x = tx(a);
+    if (Math.abs(x - cx) > W / 2) continue;
+    const big = d % 90 === 0;
+    hx.strokeStyle = big ? 'rgba(255,216,154,.9)' : 'rgba(233,238,242,.35)'; hx.lineWidth = 1;
+    hx.beginPath(); hx.moveTo(x, top + Hh); hx.lineTo(x, top + Hh - (big ? 10 : d % 30 === 0 ? 7 : 4)); hx.stroke();
+    if (big) { hx.fillStyle = 'rgba(255,216,154,.9)'; hx.fillText(['東', '南', '西', '北'][d / 90], x, top + 9); }
+  }
+  // 船着き場
+  const ha = Math.atan2(HARBOR.z - b.z, HARBOR.x - b.x), hd = Math.hypot(HARBOR.x - b.x, HARBOR.z - b.z);
+  const hX = clamp(tx(ha), cx - W / 2 + 8, cx + W / 2 - 8);
+  hx.fillStyle = b.aboard > 0 ? '#ffd27a' : 'rgba(255,210,122,.55)';
+  hx.beginPath(); hx.moveTo(hX, top + 13); hx.lineTo(hX - 5, top + 24); hx.lineTo(hX + 5, top + 24); hx.closePath(); hx.fill();
+  // 漂流者
+  for (const s of G.surv) {
+    if (s.st !== 0) continue;
+    const a = Math.atan2(s.z - b.z, s.x - b.x), x = clamp(tx(a), cx - W / 2 + 6, cx + W / 2 - 6), k = s.cold / s.cold0;
+    hx.fillStyle = `rgba(255,${Math.round(60 + 60 * k)},50,${0.35 + 0.65 * k})`;
+    hx.beginPath(); hx.arc(x, top + 19, k < 0.3 && (G.vt * 4) % 1 < 0.5 ? 2 : 3.5, 0, TAU); hx.fill();
+  }
+  // 大波の来る向き
+  for (const r of G.rollers) {
+    if (r.done) continue;
+    const eta = r.s / r.c, x = tx(Math.atan2(-r.dz, -r.dx));
+    if (Math.abs(x - cx) > W / 2 + 4) continue;
+    hx.strokeStyle = eta < 9 ? '#ffffff' : 'rgba(255,255,255,.5)'; hx.lineWidth = 1.6;
+    hx.beginPath(); for (let i = 0; i <= 12; i++) { const u = i / 12; hx.lineTo(x - 9 + u * 18, top + Hh + 6 + Math.sin(u * TAU * 1.5) * 2); } hx.stroke();
+    hx.fillStyle = eta < 9 ? '#fff' : 'rgba(255,255,255,.6)'; hx.fillText(`${Math.max(0, eta).toFixed(0)}s`, x, top + Hh + 17);
+  }
+  hx.restore();
+  hx.strokeStyle = '#ffb547'; hx.lineWidth = 2; hx.beginPath(); hx.moveTo(cx, top - 2); hx.lineTo(cx, top + Hh + 2); hx.stroke();
+  // ---- 漂流者の目じるし(体温の輪) ----
+  hx.font = '11px Consolas, monospace';
+  for (const s of G.surv) {
+    if (s.st !== 0) continue;
+    const p = toScreen(s.x, (s.y ?? 0) + 2.3, s.z);
+    if (!p || p.x < -20 || p.x > cssW + 20 || p.y < -20 || p.y > cssH + 20) continue;
+    const d = Math.hypot(s.x - b.x, s.z - b.z), k = s.cold / s.cold0, r = clamp(240 / p.w, 5, 11);
+    hx.strokeStyle = 'rgba(0,0,0,.45)'; hx.lineWidth = 3; hx.beginPath(); hx.arc(p.x, p.y, r, 0, TAU); hx.stroke();
+    hx.strokeStyle = k < 0.3 ? '#ff5a3c' : '#ffd0a0'; hx.lineWidth = 2; hx.beginPath(); hx.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + TAU * k); hx.stroke();
+    if (b.haulId === s.id) { hx.strokeStyle = '#7fffb0'; hx.beginPath(); hx.arc(p.x, p.y, r + 4, -Math.PI / 2, -Math.PI / 2 + TAU * b.haul / 0.9); hx.stroke(); }
+    if (d > 35) { hx.fillStyle = 'rgba(255,230,200,.85)'; hx.fillText(`${Math.round(d)}m`, p.x, p.y - r - 8); }
+  }
+  if (b.aboard > 0) {
+    const p = toScreen(HARBOR.x, 3, HARBOR.z);
+    if (p && p.x > 0 && p.x < cssW && p.y > 0 && p.y < cssH) { hx.fillStyle = '#ffd27a'; hx.fillText(`船着き場 ${Math.round(hd)}m`, p.x, p.y - 10); hx.strokeStyle = '#ffd27a'; hx.lineWidth = 1.5; hx.strokeRect(p.x - 7, p.y - 3, 14, 14); }
+  }
+  void nr;
+}
+
+// =============================================================================
+//  操作
+// =============================================================================
+const KEYMAP = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
+addEventListener('keydown', (e) => {
+  const k = KEYMAP[e.code];
+  if (k) { keys[k] = true; e.preventDefault(); }
+  if (e.repeat) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (gstate === 'play') { const b = G.boat; b.lever = b.lever > 0.35 ? 0.15 : 1; }
+    else if (gstate === 'title') startGame();
+  }
+  if (e.code === 'Enter' && (gstate === 'title' || (gstate === 'over' && overReady()))) startGame();
+  if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'KeyM') toggleSound();
+});
+addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; touchRud = 0; });
+let drag = null;
+const leverEl = $('lever');
+function leverFromY(y) { const r = leverEl.getBoundingClientRect(); return clamp(1 - ((y - r.top) / r.height) * 1.4, -0.4, 1); }
+addEventListener('pointerdown', (e) => {
+  if (gstate !== 'play') return;
+  if (e.target.closest('button')) return;
+  if (e.target.closest('#lever')) { drag = { id: e.pointerId, lever: true }; G.boat.lever = leverFromY(e.clientY); return; }
+  drag = { id: e.pointerId, x0: e.clientX, lever: false };
+});
+addEventListener('pointermove', (e) => {
+  if (!drag || drag.id !== e.pointerId || gstate !== 'play') return;
+  if (drag.lever) G.boat.lever = leverFromY(e.clientY);
+  else touchRud = clamp((e.clientX - drag.x0) / Math.max(60, cssW * 0.14), -1, 1);
+});
+const endDrag = (e) => { if (drag && drag.id === e.pointerId) { if (!drag.lever) touchRud = 0; drag = null; } };
+addEventListener('pointerup', endDrag); addEventListener('pointercancel', endDrag);
+$('b-start').addEventListener('click', () => startGame());
+$('b-again').addEventListener('click', () => { if (overReady()) startGame(); });
+$('b-pause').addEventListener('click', () => togglePause());
+$('pause').addEventListener('click', () => togglePause());
+$('b-snd').addEventListener('click', () => toggleSound());
+function toggleSound() {
+  save.sound = !save.sound; writeSave();
+  $('b-snd').textContent = save.sound ? '♪' : '×';
+  try { if (master) master.gain.value = save.sound ? 0.9 : 0; } catch (e) { /* なし */ }
+}
+$('b-snd').textContent = save.sound ? '♪' : '×';
+function togglePause() {
+  if (gstate === 'play') { gstate = 'pause'; $('pause').classList.remove('hidden'); }
+  else if (gstate === 'pause') { gstate = 'play'; $('pause').classList.add('hidden'); }
+}
+let overAt = 0;
+const overReady = () => performance.now() - overAt > 900;
+function startGame() {
+  unlockAudio();
+  newRun();
+  gstate = 'play';
+  save.plays = (save.plays || 0) + 1; writeSave();
+  document.body.classList.add('playing');
+  $('title').classList.add('hidden'); $('over').classList.add('hidden');
+  $('hud').classList.add('on');
+  cam.h = G.boat.h;
+  const b = G.boat;
+  cam.x = b.x - Math.cos(b.h) * 12; cam.z = b.z - Math.sin(b.h) * 12; cam.y = 5;
+  sfx('horn');
+}
+function showOver() {
+  gstate = 'over'; overAt = performance.now();
+  const best = save.best, nb = G.saved > best.saved || (G.saved === best.saved && G.t > best.t);
+  if (nb) save.best = { saved: G.saved, t: Math.round(G.t) };
+  writeSave();
+  $('o-saved').textContent = `${G.saved} 人`;
+  $('o-lost').textContent = `${G.lost} 人`;
+  $('o-aboard').textContent = `${G.lostAboard} 人`;
+  $('o-time').textContent = `${Math.floor(G.t / 60)}:${String(Math.floor(G.t % 60)).padStart(2, '0')}`;
+  $('o-waves').textContent = `${G.bowWaves} 回`;
+  $('o-cause').textContent = G.cause + (G.lostAboard ? `。乗せていた ${G.lostAboard}人も海へ。` : '。');
+  $('o-rec').textContent = nb ? 'これまでで いちばんの救助です。' : `これまでの最高: ${best.saved}人(${Math.floor(best.t / 60)}分${best.t % 60}秒)`;
+  $('o-date').textContent = `荒天救助 第${save.plays}航海`;
+  $('over').classList.remove('hidden');
+  document.body.classList.remove('playing');
+  showBest();
+}
+function showBest() { $('best').textContent = save.best.saved || save.best.t ? `これまでの最高: ${save.best.saved}人を救助` : ''; }
+showBest();
+if (isTouch) $('ctl').textContent = '操作: 画面を左右になぞって舵 ・ 右のレバーを上下してスロットル(指を離してもそのまま)';
+
+// =============================================================================
+//  タイトルの場面
+// =============================================================================
+function titleScene(dt) {
+  G.vt += dt;
+  G.day = 1;
+  const b = G.boat;
+  const hc = seaH(b.x, b.z, G.vt);
+  b.y += (hc - 0.05 - b.y) * Math.min(1, dt * 4);
+  b.pitch = Math.atan2(seaH(b.x + Math.cos(b.h) * 3, b.z + Math.sin(b.h) * 3, G.vt) - seaH(b.x - Math.cos(b.h) * 3, b.z - Math.sin(b.h) * 3, G.vt), 6);
+  b.roll = Math.sin(G.vt * 0.9) * 0.05;
+  if (G.vt > 6 && G.rollers.length === 0) { G.t = 0; }
+}
+function sinkScene(dt) {
+  G.vt += dt;
+  const b = G.boat;
+  b.sinkT += dt;
+  b.roll += (1.9 - b.roll) * Math.min(1, dt * 0.9);
+  b.y -= dt * (0.25 + b.sinkT * 0.35);
+  b.v *= Math.exp(-dt);
+  for (const r of G.rollers) r.pos += r.c * dt;
+  for (let i = 0; i < 4; i++) { const r = G.rollers[i]; if (r) rv[i * 4 + 2] = r.pos; }
+  if (b.sinkT < 1.5 && vr() < 0.6) burst(b.x, b.y + 1.2, b.z, 6, 3);
+  if (b.sinkT > 3.2 && gstate === 'sink') showOver();
+}
+
+// =============================================================================
+//  まわす
+// =============================================================================
+let acc = 0, lastT = performance.now(), fpsAcc = 0, fpsN = 0, goodT = 0, badN = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  try {
+    const sp = window.__simSpeed || 1;
+    if (gstate === 'play') {
+      acc += rdt * sp;
+      let n = 0;
+      const maxN = Math.ceil(sp * 7) + 2;
+      while (acc >= DT && n < maxN && gstate === 'play') {
+        if (window.__autoStep) window.__autoStep();
+        if (gstate !== 'play') break;
+        step(DT); acc -= DT; n++;
+      }
+      if (acc > DT * maxN) acc = 0;
+    } else if (gstate === 'title') titleScene(rdt);
+    else if (gstate === 'sink' || gstate === 'over') sinkScene(rdt);
+    if (gl) {
+      updCam(rdt);
+      updLighting(rdt);
+      if (gstate !== 'pause') updVisual(rdt);
+      render(drawList());
+    }
+    updAudio(rdt);
+    if (gstate === 'play' || gstate === 'pause') updHud(rdt); else drawHud2d(null);
+  } catch (e) {
+    console.error(e);
+  }
+  // 重いときは 描く細かさを下げる(軽くなったら戻す)
+  fpsAcc += rdt; fpsN++;
+  if (window.__lockQ != null && window.__lockQ !== quality) { quality = window.__lockQ; resize(); }   // 見直し用の撮影だけで使う
+  if (fpsAcc > 0.5 && window.__lockQ == null) {
+    const ms = (fpsAcc / fpsN) * 1000;
+    if (ms > 25 && quality < QSTEPS.length - 1) { badN++; if (badN >= (quality === 0 ? 2 : 1)) { quality++; resize(); pLimit = Math.max(0.35, pLimit - 0.12); badN = 0; } goodT = 0; }
+    else if (ms < 14.5) { badN = 0; goodT += fpsAcc; if (goodT > 4 && quality > 0) { quality--; resize(); pLimit = Math.min(1, pLimit + 0.12); goodT = 0; } }
+    else { goodT = 0; badN = 0; }
+    fpsAcc = 0; fpsN = 0;
+  }
+}
+addEventListener('resize', () => { if (gl) resize(); });
+
+// =============================================================================
+//  テスト用の窓口(読み取りだけ)
+// =============================================================================
+window.gameTest = {
+  state: () => gstate,
+  score: () => G.saved,
+  webgl: () => !!gl,
+  hdr: () => HDR,
+  boat: () => { const b = G.boat; return { x: b.x, z: b.z, h: b.h, v: b.v, lever: b.lever, rud: b.rud, water: b.water, holes: b.holes, aboard: b.aboard, y: b.y, pitch: b.pitch, roll: b.roll, haul: b.haul, air: b.air }; },
+  survivors: () => G.surv.filter((s) => s.st === 0).map((s) => ({ id: s.id, cid: s.cid, x: s.x, z: s.z, cold: s.cold, cold0: s.cold0, flare: s.flare })),
+  rollers: () => G.rollers.filter((r) => !r.done).map((r) => ({ id: r.id, dx: r.dx, dz: r.dz, pos: r.pos, H: r.H, c: r.c, s: r.s, eta: r.s / r.c })),
+  debris: () => G.debris.map((o) => ({ x: o.x, z: o.z, r: o.r })),
+  rocks: () => G.rocks.map((o) => ({ x: o.x, z: o.z, r: o.r })),
+  island: (x, z) => edgeAt(x, z),
+  harbor: () => Object.assign({}, HARBOR),
+  wind: () => G.windA,
+  seaH: (x, z) => seaH(x, z, G.vt),
+  stats: () => ({ t: G.t, saved: G.saved, lost: G.lost, lostAboard: G.lostAboard, picked: G.picked, bowWaves: G.bowWaves, hits: Object.assign({}, G.hits), holes: G.holesTotal, cause: G.cause, day: G.day, sea: G.sea, best: Object.assign({}, save.best), plays: save.plays }),
+  events: () => G.events.slice(),
+  rollerLog: () => G.rollerLog.map((r) => r.slice()),
+  clusterLog: () => G.clusterLog.map((r) => r.slice()),
+  toScreen: (x, y, z) => toScreen(x, y, z),
+  cam: () => ({ x: cam.x, y: cam.y, z: cam.z }),
+  particles: () => P.alpha.n + P.add.n,
+  quality: () => quality,
+  sound: () => !!save.sound,
+  flash: () => FX.flash,
+};
+
+// =============================================================================
+//  はじめる
+// =============================================================================
+initIslandEdge();
+newRun();
+if (gl) {
+  try { initGL(); } catch (e) { console.error(e); gl = null; }
+}
+if (!gl) $('nogl').classList.remove('hidden');
+if (isTouch) { quality = 1; if (gl) resize(); }
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

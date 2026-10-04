@@ -97,5 +97,16 @@
     "structure": "ひとつの大きな出来事",
     "fun": "爽快感・収集・育成",
     "status": "success"
+  },
+  {
+    "post_date": "2026-10-08",
+    "title": "荒海の救命艇",
+    "dir": "games/2026-10-08-storm-lifeboat/",
+    "genre": "3D操船・救助(リアル調)",
+    "theme": "日暮れの嵐の海・灯台の島と沈みゆく貨物船",
+    "controls": "← → / A D で舵・↑ ↓ / W S でスロットル / 画面を左右になぞって舵・右のレバー",
+    "structure": "エンドレス",
+    "fun": "判断・腕前",
+    "status": "success"
   }
 ]
