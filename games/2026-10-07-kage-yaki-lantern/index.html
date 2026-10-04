@@ -906,7 +906,7 @@ function hints() {
 // =============================================================================
 //  音(Web Audio で合成)
 // =============================================================================
-let AC = null, master = null, sfxBus = null, ambG = null, crackG = null, noiseBuf = null, ambOn = false;
+let AC = null, master = null, sfxBus = null, ambG = null, nextCrack = 0, noiseBuf = null, ambOn = false;
 function unlockAudio() {
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 対応していないブラウザ */ }
   try {
@@ -997,14 +997,13 @@ function startAmbient() {
       const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f + det;
       const g = AC.createGain(); g.gain.value = 0.05; o.connect(g); g.connect(ambG); o.start();
     }
-    const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true;
-    const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 420; f.Q.value = 0.7;
-    const lfo = AC.createOscillator(); lfo.frequency.value = 0.07; const lg = AC.createGain(); lg.gain.value = 220; lfo.connect(lg); lg.connect(f.frequency); lfo.start();
-    const g = AC.createGain(); g.gain.value = 0.18; n.connect(f); f.connect(g); g.connect(ambG); n.start();
-    // ランタンの炎のぱちぱち(油の量で大きさが変わる)
-    const n2 = AC.createBufferSource(); n2.buffer = noiseBuf; n2.loop = true; n2.playbackRate.value = 0.6;
-    const f2 = AC.createBiquadFilter(); f2.type = 'highpass'; f2.frequency.value = 2400;
-    crackG = AC.createGain(); crackG.gain.value = 0; n2.connect(f2); f2.connect(crackG); crackG.connect(sfxBus); n2.start();
+    // 風: 低い音だけを小さく流し、ゆっくり強弱(突風)をつける。
+    // 中くらいの高さの雑音をそのまま大きく流すと、砂嵐の「ザー」に聞こえてしまうため
+    const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true; n.playbackRate.value = 0.5;
+    const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 320; f.Q.value = 0.5;
+    const fl = AC.createOscillator(); fl.frequency.value = 0.11; const flg = AC.createGain(); flg.gain.value = 120; fl.connect(flg); flg.connect(f.frequency); fl.start();
+    const g = AC.createGain(); g.gain.value = 0.025; n.connect(f); f.connect(g); g.connect(ambG); n.start();
+    const gust = AC.createOscillator(); gust.frequency.value = 0.06; const gg = AC.createGain(); gg.gain.value = 0.015; gust.connect(gg); gg.connect(g.gain); gust.start();
     ambG.gain.setTargetAtTime(0.5, AC.currentTime, 1.5);
   } catch (e) { /* 環境音なしでも遊べる */ }
 }
@@ -1830,7 +1829,11 @@ function updHud() {
   b.classList.toggle('wait', G.flareCd > 0);
   b.classList.toggle('nooil', G.flareCd <= 0 && G.oil < flareCost());
   hudSet('vign', 'opacity', (0.32 + 0.6 * clamp(1 - G.oil / 35, 0, 1)).toFixed(2));
-  if (crackG && AC) crackG.gain.setTargetAtTime(gstate === 'play' ? 0.012 + 0.03 * G.oil / OIL_MAX : 0, AC.currentTime, 0.2);
+  // ランタンの炎のぱちぱち: 短いパチッをランダムな間隔で鳴らす(油が多いほど多い)。雑音を流し続けると「シャー」に聞こえるため
+  if (AC && gstate === 'play' && performance.now() >= nextCrack) {
+    nextCrack = performance.now() + 150 + vr() * (1100 - 700 * G.oil / OIL_MAX);
+    noise(0.015 + vr() * 0.03, 2200 + vr() * 2600, 1.4, 0.03 + vr() * 0.04, 0, 'bandpass');
+  }
   // 連鎖の数
   const now = performance.now();
   for (let i = popPool.length - 1; i >= 0; i--) {
