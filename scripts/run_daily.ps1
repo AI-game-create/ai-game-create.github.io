@@ -156,4 +156,32 @@ if ($code -eq 0) {
     Write-Log "=== 終了コード $code で終わりました(ログを確認してください) ==="
 }
 
+# 5. YouTube ショート用の縦長動画を作り、リポジトリの外の youtube_short フォルダに置く(アップロードはオーナーが手で行う)。
+#    夜の Claude が書いた「投稿用のプレイ動画を撮る」テストを、ショート用モード(SHORT_VIDEO=1)でもう一度走らせる。
+#    動画は shorts\ にでき(コミットしない)、まだ置いていないものだけをコピーする。失敗しても制作は止めない
+if ($code -eq 0) {
+    try {
+        $latest = Get-ChildItem (Join-Path $repo 'games') -Directory | Sort-Object Name | Select-Object -Last 1
+        $date = $latest.Name.Substring(0, 10)
+        $shortsDir = Join-Path $repo 'shorts'
+        $outDir = Join-Path (Split-Path -Parent $repo) 'youtube_short'
+        if (-not (Get-ChildItem $shortsDir -Filter "${date}_*.webm" -ErrorAction SilentlyContinue)) {
+            Write-Log "ショート用の動画を撮ります: $($latest.Name)"
+            $env:SHORT_VIDEO = '1'
+            & npx playwright test tests/play.spec.ts -g '動画' --project=desktop 2>&1 |
+                ForEach-Object { Add-Content -Path $logFile -Value $_ -Encoding utf8 }
+            Remove-Item Env:SHORT_VIDEO -ErrorAction SilentlyContinue
+        }
+        New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+        Get-ChildItem $shortsDir -Filter '*.webm' -ErrorAction SilentlyContinue |
+            Where-Object { -not (Test-Path (Join-Path $outDir $_.Name)) } |
+            ForEach-Object {
+                Copy-Item $_.FullName $outDir
+                Write-Log "ショートを置きました: $($_.Name)"
+            }
+    } catch {
+        Write-Log "ショート用の動画を作れませんでした: $($_.Exception.Message)"
+    }
+}
+
 exit $code

@@ -22,6 +22,14 @@ import path from 'node:path';
 // 音: Playwright の録画には音が入らないので、ゲームが Web Audio でスピーカー(destination)に
 // つないだ音を、同じだけ録音用の出口にも流して MediaRecorder で録り、動画に重ねる。
 // ゲーム側は何もしなくてよい(Web Audio 以外で鳴らした音は入らない)。
+//
+// ショート用モード(環境変数 SHORT_VIDEO=1): 同じ setup / play で、YouTube ショート用に
+// 縦長 1080x1920・スマホの設定・20秒で撮り、上下にテロップを重ねて shorts/投稿日_N日目_タイトル.webm に保存する。
+// 夜の制作が終わったあとで、scripts/run_daily.ps1 がこのモードで「投稿用のプレイ動画を撮る」テストをもう一度走らせる。
+const SHORT = process.env.SHORT_VIDEO === '1';
+const REPO = path.join(__dirname, '..');
+const DAY_ONE = Date.UTC(2026, 8, 29); // 2026-09-29 が1日目
+
 export type Clip = { readonly until: number; mark: () => void };
 
 export async function recordPlayVideo(
@@ -38,9 +46,9 @@ export async function recordPlayVideo(
     height?: number;
   },
 ): Promise<void> {
-  const seconds = opts.seconds ?? 10;
-  const width = opts.width ?? 1280;
-  const height = opts.height ?? 720;
+  const seconds = SHORT ? 20 : opts.seconds ?? 10;
+  const width = SHORT ? 1080 : opts.width ?? 1280;
+  const height = SHORT ? 1920 : opts.height ?? 720;
   const ffmpeg = findFfmpeg();
   if (!ffmpeg) throw new Error('Playwright の ffmpeg が見つかりません(npx playwright install ffmpeg で入ります)');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'play-video-'));
@@ -48,15 +56,18 @@ export async function recordPlayVideo(
   const context = await browser.newContext({
     viewport: { width, height },
     recordVideo: { dir: tmp, size: { width, height } },
+    ...(SHORT ? { isMobile: true, hasTouch: true, deviceScaleFactor: 1 } : {}),
   });
   await context.addInitScript(tapAudio);
   const page = await context.newPage();
   const t0 = Date.now();
 
   await opts.setup(page);
+  const short = SHORT ? shortInfo(opts.dir) : null;
+  if (short) await page.evaluate(addTelop, [short.top1, short.top2, short.bottom]);
 
   let crop = '';
-  if (opts.focus) {
+  if (opts.focus && !SHORT) {
     const box = await page.locator(opts.focus).first().boundingBox();
     if (box) {
       // 画面からはみ出した部分を除き、動画にできるよう偶数にそろえる
@@ -83,7 +94,11 @@ export async function recordPlayVideo(
       markAt = Date.now();
       restarting = page.evaluate(restartAudio).catch(() => {});
     },
-  };
+    // 古い書き方(play の2つ目を「終わりの時刻」の数値として使う)でも動くように
+    valueOf() {
+      return this.until;
+    },
+  } as Clip;
   await opts.play(page, clip);
   const end = markAt ? clip.until : Math.max(Date.now(), playAt + seconds * 1000);
   if (end > Date.now()) await page.waitForTimeout(end - Date.now());
@@ -96,7 +111,8 @@ export async function recordPlayVideo(
   await context.close();
   if (!video) throw new Error('動画が録画されていません');
 
-  const out = path.join(opts.dir, 'play.webm');
+  if (short) fs.mkdirSync(path.dirname(short.out), { recursive: true });
+  const out = short ? short.out : path.join(opts.dir, 'play.webm');
   const rawPath = await video.path();
   const audioPath = path.join(tmp, 'audio.webm');
   // 録音は play の始まり(mark したらその瞬間)から。切り出しの始まりとの差だけ、音を後ろにずらす
@@ -109,7 +125,7 @@ export async function recordPlayVideo(
       ...(withAudio ? [...audioIn, '-i', audioPath] : []),
       '-t', String(seconds),
       ...(crop ? ['-vf', crop] : []),
-      '-map', '0:v:0', '-c:v', 'libvpx', '-b:v', '1200k', '-crf', '6', '-deadline', 'good', '-cpu-used', '2', '-auto-alt-ref', '0',
+      '-map', '0:v:0', '-c:v', 'libvpx', '-b:v', short ? '5M' : '1200k', '-crf', '6', '-deadline', 'good', '-cpu-used', '2', '-auto-alt-ref', '0',
       ...(withAudio ? ['-map', '1:a:0', '-c:a', 'copy'] : ['-an']),
       out,
     ]);
@@ -125,10 +141,75 @@ export async function recordPlayVideo(
   const mb = fs.statSync(out).size / 1024 / 1024;
   const sound = audio ? '音つき' : '音なし';
   const how = markAt ? '見せ場の0.5秒前から' : '見せ場の印(mark)がないので play の始まりから';
-  console.log(`  動画: ${path.basename(opts.dir)}/play.webm(${how}${seconds}秒、${sound}、${mb.toFixed(1)}MB)`);
+  const name = short ? `shorts/${path.basename(out)}` : `${path.basename(opts.dir)}/play.webm`;
+  console.log(`  動画: ${name}(${how}${seconds}秒、${sound}、${mb.toFixed(1)}MB)`);
+}
+
+// ショートのテロップの文字と保存先。タイトルは投稿キュー(なければ作品一覧)から読む
+function shortInfo(dir: string) {
+  const name = path.basename(dir);
+  const date = name.slice(0, 10);
+  const read = (p: string) => {
+    try {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    } catch {
+      return null;
+    }
+  };
+  const queue = read(path.join(REPO, 'data', 'queue', `${date}.json`));
+  const history = (read(path.join(REPO, 'data', 'history.json')) || []) as { post_date?: string; title?: string }[];
+  const title: string = queue?.title || history.find((g) => g.post_date === date)?.title || name.slice(11);
+  const day = Math.round((Date.parse(`${date}T00:00:00Z`) - DAY_ONE) / 86400000) + 1;
+  const file = `${date}_${day}日目_${title}`.replace(/[\\/:*?"<>|\s]+/g, '_');
+  return {
+    top1: '1日1本ゲーム制作',
+    top2: `${day}日目『${title}』`,
+    bottom: 'プロフィールのリンクから遊べます',
+    out: path.join(REPO, 'shorts', `${file}.webm`),
+  };
 }
 
 // ---- ここから下はブラウザの中で動く ----
+
+// ショートのテロップ(20秒ずっと出す)。上は半透明の黒い帯、下はショートの画面の下2割に隠れない高さに置く
+function addTelop([top1, top2, bottom]: string[]) {
+  const css = document.createElement('style');
+  css.textContent = `
+    .tp{position:fixed;left:0;right:0;z-index:2147483647;text-align:center;pointer-events:none;
+      font-family:"Yu Gothic UI","Yu Gothic","Hiragino Sans","Meiryo",sans-serif;font-weight:900;letter-spacing:.02em;white-space:nowrap}
+    #tp-top{top:6%;background:rgba(0,0,0,.55);padding:30px 0 34px}
+    #tp-top div{display:table;margin:0 auto;paint-order:stroke fill;-webkit-text-stroke:20px #000;filter:drop-shadow(0 9px 0 rgba(0,0,0,.6))}
+    #tp-top .l1{color:#fff;font-size:124px;line-height:1.2}
+    #tp-top .l2{color:#ffe14a;font-size:116px;line-height:1.3;margin-top:12px}
+    #tp-bot{bottom:24%}
+    #tp-bot span{display:inline-block;color:#fff;font-size:86px;padding:26px 50px;background:rgba(0,0,0,.55);border-radius:30px}`;
+  document.head.appendChild(css);
+  const top = document.createElement('div');
+  top.id = 'tp-top';
+  top.className = 'tp';
+  const l1 = document.createElement('div');
+  l1.className = 'l1';
+  l1.textContent = top1;
+  const l2 = document.createElement('div');
+  l2.className = 'l2';
+  l2.textContent = top2;
+  top.append(l1, l2);
+  const bot = document.createElement('div');
+  bot.id = 'tp-bot';
+  bot.className = 'tp';
+  const span = document.createElement('span');
+  span.textContent = bottom;
+  bot.append(span);
+  document.body.append(top, bot);
+  // 画面の幅(94%)に収まるまで小さくする。タイトルの長さは日によって違うため
+  for (const el of [l1, l2, span]) {
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.getBoundingClientRect().width > innerWidth * 0.94 && size > 40) {
+      size -= 2;
+      el.style.fontSize = `${size}px`;
+    }
+  }
+}
 
 // ページが読み込まれる前に仕込む。destination につながれた音を、録音用の出口にも流す
 function tapAudio() {
