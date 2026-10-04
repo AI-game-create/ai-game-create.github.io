@@ -168,8 +168,12 @@ if ($code -eq 0) {
         if (-not (Get-ChildItem $shortsDir -Filter "${date}_*.webm" -ErrorAction SilentlyContinue)) {
             Write-Log "ショート用の動画を撮ります: $($latest.Name)"
             $env:SHORT_VIDEO = '1'
+            # Windows PowerShell 5.1 は、外部コマンドの標準エラー(node の警告など)を 2>&1 で受けると
+            # エラーとして扱い、'Stop' だとそこで止まってしまう(2026-10-04 に発生)。ここだけ 'Continue' にする
+            $ErrorActionPreference = 'Continue'
             & npx playwright test tests/play.spec.ts -g '動画' --project=desktop 2>&1 |
-                ForEach-Object { Add-Content -Path $logFile -Value $_ -Encoding utf8 }
+                ForEach-Object { Add-Content -Path $logFile -Value "$_" -Encoding utf8 }
+            $ErrorActionPreference = 'Stop'
             Remove-Item Env:SHORT_VIDEO -ErrorAction SilentlyContinue
         }
         New-Item -ItemType Directory -Force -Path $outDir | Out-Null
