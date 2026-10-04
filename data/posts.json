@@ -96,5 +96,16 @@
     },
     "media": "video",
     "link": "body"
+  },
+  {
+    "date": "2026-10-04",
+    "slot": "release",
+    "tweet_id": "2106711400806494259",
+    "title": "なきまね虫の合唱団",
+    "text": "【6日目】今日のゲームは「なきまね虫の合唱団」です🦗 AIの指揮者が鳴いたお手本のすぐあとに、スズムシやコオロギを同じリズムで鳴かせるリズムゲーム。4ひきそろうと大合唱に。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-04-nakimane-chorus/",
+    "posted_at": "2026-10-04T20:41:53+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
