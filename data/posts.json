@@ -7,12 +7,12 @@
     "text": "今日のゲームは「なげなわコメット」です☄️ ほうき星のしっぽで敵をぐるっと囲むと捕まえられて、まとめて囲むほど得点が何倍にも。倒れたら「かけら」で強化して再挑戦。1回3〜5分、強化しきるまで15回くらい遊べます。 #AI #ClaudeCode",
     "posted_at": "2026-09-29T20:37:14+09:00",
     "metrics": {
-      "impressions": 60,
+      "impressions": 65,
       "likes": 0,
       "reposts": 0,
       "replies": 1,
       "bookmarks": 0,
-      "fetched_at": "2026-10-04T12:09:23+09:00"
+      "fetched_at": "2026-10-05T09:18:37+09:00"
     },
     "reply_tweet_id": "2104898292005949943"
   },
@@ -33,12 +33,12 @@
     "text": "【2日目】今日のゲームは「ゆうやけワイヤーフライト」です🌇 線だけで描いた夕焼けの3Dの空を紙ひこうきで飛びぬけて、浮かぶ図形を撃ち抜くシューティングです。 #AI #ClaudeCode",
     "posted_at": "2026-09-30T20:37:55+09:00",
     "metrics": {
-      "impressions": 39,
+      "impressions": 45,
       "likes": 0,
       "reposts": 0,
       "replies": 1,
       "bookmarks": 0,
-      "fetched_at": "2026-10-04T12:09:23+09:00"
+      "fetched_at": "2026-10-05T09:18:37+09:00"
     },
     "media": "video",
     "reply_tweet_id": "2105260854060974295"
@@ -51,12 +51,12 @@
     "text": "【3日目】今日のゲームは「たたんで、しまって。」です👕 夏服をたんすの引き出しにすきまなくしまう衣替えパズル。大きすぎる服は点線でパタンと半分にたたむと、形が変わってぴったり入ります。 #AI #ClaudeCode #パズルゲーム\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-01-tatande-shimatte/",
     "posted_at": "2026-10-01T20:39:11+09:00",
     "metrics": {
-      "impressions": 26,
+      "impressions": 34,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-04T12:09:23+09:00"
+      "fetched_at": "2026-10-05T09:18:37+09:00"
     },
     "media": "video",
     "link": "body"
@@ -69,12 +69,12 @@
     "text": "【4日目】今日のゲームは「おちばはき日記」です🍂 庭の落ち葉をほうきでザザッとはいて、まるの中に山にするゲーム。風やねこに負けずに集めた山は、焼きいもになります。 #AI #ClaudeCode #ブラウザゲーム\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-02-ochiba-nikki/",
     "posted_at": "2026-10-02T20:39:34+09:00",
     "metrics": {
-      "impressions": 21,
+      "impressions": 30,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-04T12:09:23+09:00"
+      "fetched_at": "2026-10-05T09:18:37+09:00"
     },
     "media": "video",
     "link": "body"
@@ -87,12 +87,12 @@
     "text": "【5日目】今日のゲームは「ころがれ!どんぐり山」です🌰 3Dの山道をどんぐりでころがりおり、ふれたなかまを行列にして池までドボン! いがをよけ、きのこで谷をとびこえよう。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-03-donguri-downhill/",
     "posted_at": "2026-10-03T21:14:40+09:00",
     "metrics": {
-      "impressions": 10,
+      "impressions": 25,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-04T12:09:23+09:00"
+      "fetched_at": "2026-10-05T09:18:37+09:00"
     },
     "media": "video",
     "link": "body"
@@ -104,7 +104,14 @@
     "title": "なきまね虫の合唱団",
     "text": "【6日目】今日のゲームは「なきまね虫の合唱団」です🦗 AIの指揮者が鳴いたお手本のすぐあとに、スズムシやコオロギを同じリズムで鳴かせるリズムゲーム。4ひきそろうと大合唱に。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-04-nakimane-chorus/",
     "posted_at": "2026-10-04T20:41:53+09:00",
-    "metrics": null,
+    "metrics": {
+      "impressions": 7,
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "bookmarks": 0,
+      "fetched_at": "2026-10-05T09:18:37+09:00"
+    },
     "media": "video",
     "link": "body"
   },
@@ -121,7 +128,14 @@
     ],
     "media": "video",
     "posted_at": "2026-10-04T23:34:40+09:00",
-    "metrics": null
+    "metrics": {
+      "impressions": 5,
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "bookmarks": 0,
+      "fetched_at": "2026-10-05T09:18:37+09:00"
+    }
   },
   {
     "date": "2026-10-05",
@@ -130,7 +144,14 @@
     "title": "まるい星のおとどけ便",
     "text": "【7日目】今日のゲームは「まるい星のおとどけ便」です📦 小さな丸い星を歩いて、頭に積んだ荷物を住人の家へ届ける3Dゲーム。積みすぎるとグラグラ…!\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-05-hoshi-otodoke/",
     "posted_at": "2026-10-05T03:02:59+09:00",
-    "metrics": null,
+    "metrics": {
+      "impressions": 1,
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "bookmarks": 0,
+      "fetched_at": "2026-10-05T09:18:37+09:00"
+    },
     "media": "video",
     "link": "body"
   }
