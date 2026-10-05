@@ -94,6 +94,8 @@ jobs:
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           GAME_BASE_URL: ${{ vars.GAME_BASE_URL }}
           DRY_RUN: ${{ inputs.dry_run && '1' || vars.DRY_RUN }}
+          # 定時実行のときだけ、決まった時間帯の外では投稿しない(遅れて深夜に動いた回で次の日の分を出さないため)
+          SCHEDULED: ${{ github.event_name == 'schedule' && '1' || '' }}
           POST_DATE: ${{ inputs.date }}
           SLOT: ${{ steps.slot.outputs.slot }}
         run: python scripts/post_to_x.py --slot "$SLOT" ${POST_DATE:+--date "$POST_DATE"}

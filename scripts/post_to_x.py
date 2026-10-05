@@ -297,6 +297,9 @@ def record(entry: dict) -> None:
     log(f"data/posts.json に記録しました({len(posts)}件目)。")
 
 
+# 定時実行で投稿してよい時間帯(日本時間の時。開始以上・終了未満)
+POST_WINDOWS = {"release": (20, 24), "poll": (12, 18), "weekly": (21, 24)}
+
 POLL_MINUTES = 3 * 24 * 60  # 月曜12:30に出して、木曜12:30に締め切る(金曜の夜に大作の題にする)
 
 
@@ -483,6 +486,14 @@ def main() -> None:
     dry_run = os.environ.get("DRY_RUN", "1") != "0"
 
     log(f"投稿枠: {slot} / 日付: {date_str} / 試運転: {'はい' if dry_run else 'いいえ'}")
+    # 定時実行は、決まった時間帯の中でだけ投稿する。GitHub の定時実行は何時間も遅れることがあり、
+    # 前の日の 20:30 の回が深夜に動いて、次の日の分を 3:02 に出してしまった(2026-10-05)。手動の実行はいつでも出せる
+    if os.environ.get("SCHEDULED") == "1" and not args.date:
+        lo, hi = POST_WINDOWS[slot]
+        hour = datetime.now(JST).hour
+        if not lo <= hour < hi:
+            log(f"定時実行が遅れて {hour} 時台に動いたので、何もしません({slot} は {lo}〜{hi} 時の間だけ投稿する)。")
+            return
     # 同じ日の同じ枠がすでに投稿済みなら出さない(定時実行が遅れて、手動の実行と重なったときの二重投稿を防ぐ)
     posted = read_json(POSTS_FILE, [])
     if any(isinstance(p, dict) and p.get("date") == date_str and p.get("slot") == slot for p in posted):
