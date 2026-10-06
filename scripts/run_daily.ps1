@@ -173,12 +173,15 @@ if ($code -eq 0) {
             $ErrorActionPreference = 'Continue'
             & npx playwright test tests/play.spec.ts -g '動画' --project=desktop 2>&1 |
                 ForEach-Object { Add-Content -Path $logFile -Value "$_" -Encoding utf8 }
-            $ErrorActionPreference = 'Stop'
             Remove-Item Env:SHORT_VIDEO -ErrorAction SilentlyContinue
+            # 場面ごとに撮った動画(shorts\parts\名前-1.webm, 名前-2.webm, …)を1本の mp4 につなぐ
+            & python scripts/concat_video.py shorts/parts shorts 2>&1 |
+                ForEach-Object { Write-Log "$_" }
+            $ErrorActionPreference = 'Stop'
         }
         New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-        Get-ChildItem $shortsDir -Filter '*.webm' -ErrorAction SilentlyContinue |
-            Where-Object { -not (Test-Path (Join-Path $outDir $_.Name)) } |
+        Get-ChildItem $shortsDir -File -ErrorAction SilentlyContinue |
+            Where-Object { ($_.Extension -in @('.mp4', '.webm')) -and -not (Test-Path (Join-Path $outDir $_.Name)) } |
             ForEach-Object {
                 Copy-Item $_.FullName $outDir
                 Write-Log "ショートを置きました: $($_.Name)"

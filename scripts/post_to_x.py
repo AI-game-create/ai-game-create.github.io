@@ -37,6 +37,8 @@ import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from concat_video import concat_parts, part_number
+
 # Windows のコンソールでも日本語が読めるようにする
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -353,6 +355,12 @@ def find_cjk_font() -> str | None:
     return None
 
 
+def first_clip(game_dir: Path) -> Path:
+    """その作品の週のまとめに使う動画。場面ごとに撮っていれば1本目(つかみ)、そうでなければ play.webm。"""
+    parts = sorted(game_dir.glob("play-*.webm"), key=part_number)
+    return parts[0] if parts else game_dir / "play.webm"
+
+
 def make_weekly_video(games: list[dict], date_str: str) -> Path | None:
     """その週の play.webm の頭を少しずつつなぎ、「N日目 タイトル」の字幕を付けた mp4 を作る。"""
     ffmpeg = shutil.which("ffmpeg")
@@ -367,7 +375,7 @@ def make_weekly_video(games: list[dict], date_str: str) -> Path | None:
     inputs: list[str] = []
     parts: list[str] = []
     for i, g in enumerate(games):
-        src = ROOT / g["dir"] / "play.webm"
+        src = first_clip(ROOT / g["dir"])
         inputs += ["-i", str(src)]
         label = tmp / f"label{i}.txt"
         label.write_text(f"{day_number(g['post_date'])}日目  {g['title']}", encoding="utf-8")
@@ -384,7 +392,7 @@ def make_weekly_video(games: list[dict], date_str: str) -> Path | None:
     # 音: 動画に音があればそれを、なければ無音を使う
     n = len(games)
     for i, g in enumerate(games):
-        if has_audio(ROOT / g["dir"] / "play.webm"):
+        if has_audio(first_clip(ROOT / g["dir"])):
             parts.append(
                 f"[{i}:a]atrim=0:{d},asetpts=PTS-STARTPTS,aresample=44100:async=1,"
                 f"aformat=channel_layouts=stereo,apad=whole_dur={d},afade=t=out:st={d - 0.12}:d=0.12[a{i}]"
@@ -433,7 +441,7 @@ def post_weekly(date_str: str, dry_run: bool) -> None:
         and since <= g.get("post_date", "") <= date_str
     ]
     week.sort(key=lambda g: g["post_date"])
-    games = [g for g in week if (ROOT / g["dir"] / "play.webm").exists()]
+    games = [g for g in week if first_clip(ROOT / g["dir"]).exists()]
     log(f"今週の作品: {len(week)}本(動画があるもの {len(games)}本)")
 
     if len(games) < 3:
@@ -467,10 +475,9 @@ def post_weekly(date_str: str, dry_run: bool) -> None:
     # 投稿済みの作品の動画を消して、リポジトリと公開サイトを軽く保つ(まとめを出せなかった週も消す)
     for g in history:
         if isinstance(g, dict) and g.get("dir") and g.get("post_date", "") <= date_str:
-            clip = ROOT / g["dir"] / "play.webm"
-            if clip.exists():
+            for clip in sorted((ROOT / g["dir"]).glob("play*.webm")):
                 clip.unlink()
-                log(f"動画を消しました({g['dir']}play.webm)。")
+                log(f"動画を消しました({g['dir']}{clip.name})。")
 
 
 def main() -> None:
@@ -542,7 +549,12 @@ def main() -> None:
     video = (queue.get("video") or "").strip()
     mp4 = None
     if slot == "release" and video:
-        if (ROOT / video).exists():
+        parts = sorted((ROOT / video).parent.glob("play-*.webm"), key=part_number)
+        if parts:
+            # 試運転でもつなぐところまでは行い、動くことを確かめる
+            mp4 = concat_parts(parts, Path(tempfile.gettempdir()) / f"{(ROOT / video).parent.name}.mp4", max_width=1280)
+            log(f"{len(parts)}つの場面を1本の動画につなぎました。" if mp4 else "::warning::場面の動画をつなげなかったので、画像で投稿します。")
+        elif (ROOT / video).exists():
             mp4 = webm_to_mp4(ROOT / video)  # 試運転でも変換までは行い、動くことを確かめる
         else:
             log(f"動画が見つかりません({video})。画像で投稿します。")

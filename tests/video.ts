@@ -32,6 +32,36 @@ const DAY_ONE = Date.UTC(2026, 8, 29); // 2026-09-29 が1日目
 
 export type Clip = { readonly until: number; mark: () => void };
 
+// 場面ごとに撮る(オーナーの方針: 盛り上がる場面だけでは何のゲームか分からない。つかみで目を引き、後半で基本を見せる)。
+// 場面ごとに play-1.webm, play-2.webm, … を作る(ショート用モードでは shorts/parts/ に)。
+// つなぐのは、X 用は投稿のとき(GitHub Actions)、ショート用は夜の制作のあと(run_daily.ps1)。どちらも scripts/concat_video.py
+//   各場面: setup / play / seconds(X 用の長さ)/ shortSeconds(ショートでの長さ。省略すると seconds の1.5倍)/ focus / sound
+export type Scene = {
+  setup: (page: Page) => Promise<void>;
+  play: (page: Page, clip: Clip) => Promise<void>;
+  seconds: number;
+  shortSeconds?: number;
+  focus?: string;
+  sound?: boolean;
+  maxSeconds?: number;
+};
+
+export async function recordScenes(browser: Browser, dir: string, scenes: Scene[]): Promise<void> {
+  // 前に撮った場面の動画を消してから撮る(場面の数が減ったときに古いものが混ざらないように)
+  if (SHORT) {
+    const base = path.basename(shortInfo(dir).out, '.webm');
+    const partsDir = path.join(REPO, 'shorts', 'parts');
+    if (fs.existsSync(partsDir)) {
+      for (const f of fs.readdirSync(partsDir)) if (f.startsWith(`${base}-`)) fs.rmSync(path.join(partsDir, f));
+    }
+  } else {
+    for (const f of fs.readdirSync(dir)) if (/^play(-\d+)?\.webm$/.test(f)) fs.rmSync(path.join(dir, f));
+  }
+  for (const [i, sc] of scenes.entries()) {
+    await recordPlayVideo(browser, { ...sc, dir, part: i + 1 });
+  }
+}
+
 export async function recordPlayVideo(
   browser: Browser,
   opts: {
@@ -39,6 +69,8 @@ export async function recordPlayVideo(
     setup: (page: Page) => Promise<void>;
     play: (page: Page, clip: Clip) => Promise<void>;
     seconds?: number;
+    shortSeconds?: number;
+    part?: number;
     maxSeconds?: number;
     focus?: string;
     sound?: boolean;
@@ -46,7 +78,9 @@ export async function recordPlayVideo(
     height?: number;
   },
 ): Promise<void> {
-  const seconds = SHORT ? 20 : opts.seconds ?? 10;
+  const seconds = SHORT
+    ? opts.shortSeconds ?? (opts.part ? Math.round((opts.seconds ?? 10) * 1.5) : 20)
+    : opts.seconds ?? 10;
   const ffmpeg = findFfmpeg();
   if (!ffmpeg) throw new Error('Playwright の ffmpeg が見つかりません(npx playwright install ffmpeg で入ります)');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'play-video-'));
@@ -139,8 +173,10 @@ export async function recordPlayVideo(
   if (own) await own.close();
   if (!video) throw new Error('動画が録画されていません');
 
-  if (short) fs.mkdirSync(path.dirname(short.out), { recursive: true });
-  const out = short ? short.out : path.join(opts.dir, 'play.webm');
+  const out = short
+    ? opts.part ? path.join(REPO, 'shorts', 'parts', `${path.basename(short.out, '.webm')}-${opts.part}.webm`) : short.out
+    : path.join(opts.dir, opts.part ? `play-${opts.part}.webm` : 'play.webm');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
   const rawPath = await video.path();
   const audioPath = path.join(tmp, 'audio.webm');
   // 録音は play の始まり(mark したらその瞬間)から。切り出しの始まりとの差だけ、音を後ろにずらす
@@ -169,7 +205,7 @@ export async function recordPlayVideo(
   const mb = fs.statSync(out).size / 1024 / 1024;
   const sound = audio ? '音つき' : '音なし';
   const how = markAt ? '見せ場の0.5秒前から' : '見せ場の印(mark)がないので play の始まりから';
-  const name = short ? `shorts/${path.basename(out)}` : `${path.basename(opts.dir)}/play.webm`;
+  const name = path.relative(REPO, out).replace(/\\/g, '/');
   const smooth = fps ? `、描画 ${fps.avg}fps・p95 ${fps.p95}ms` : '';
   console.log(`  動画: ${name}(${how}${seconds}秒、${sound}、${mb.toFixed(1)}MB${smooth})`);
 }
