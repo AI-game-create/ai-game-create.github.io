@@ -196,5 +196,16 @@
         }
       ]
     }
+  },
+  {
+    "date": "2026-10-06",
+    "slot": "release",
+    "tweet_id": "2107435579247878516",
+    "title": "ぱたぱたドミノ夜",
+    "text": "【8日目】今日のゲームは「ぱたぱたドミノ夜」です🎃 夜の机を指でなぞってドミノをならべ、ちょんと押すと、パタパタ進む波がかぼちゃを灯して花火を上げる3Dのおもちゃです。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-06-patapata-domino/",
+    "posted_at": "2026-10-06T20:39:31+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
