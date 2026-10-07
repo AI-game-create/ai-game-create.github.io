@@ -108,5 +108,16 @@
     "structure": "エンドレス",
     "fun": "判断・腕前",
     "status": "success"
+  },
+  {
+    "post_date": "2026-10-09",
+    "title": "夜盗の一手",
+    "dir": "games/2026-10-09-yato-no-itte/",
+    "genre": "3D潜入パズル(一手ずつ進む・屋敷を自動生成)",
+    "theme": "夜の屋敷・見張りのランタンと宝石泥棒",
+    "controls": "矢印キー / WASD・Space で待つ・Z で戻す / なぞる・となりのマスをタップ",
+    "structure": "毎回生まれ変わる",
+    "fun": "ひらめき",
+    "status": "success"
   }
 ]
