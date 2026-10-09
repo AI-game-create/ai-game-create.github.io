@@ -250,5 +250,16 @@
     },
     "media": "video",
     "link": "body"
+  },
+  {
+    "date": "2026-10-09",
+    "slot": "release",
+    "tweet_id": "2108522605003305222",
+    "title": "夜盗の一手",
+    "text": "【11日目】今日のゲームは『夜盗の一手』です。こちらが一歩動くと見張りも一手動く、3Dの潜入パズル。床に落ちる灯りの帯と次の手の点線を読み、見張りを眠らせ、宝石を盗んで窓から逃げます。屋敷は毎回新しく作られます。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-09-yato-no-itte/",
+    "posted_at": "2026-10-09T20:38:58+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
