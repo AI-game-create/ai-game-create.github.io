@@ -119,5 +119,16 @@
     "structure": "毎回生まれ変わる",
     "fun": "ひらめき",
     "status": "success"
+  },
+  {
+    "post_date": "2026-10-10",
+    "title": "沈没船の底へ",
+    "dir": "games/2026-10-10-chinbotsusen/",
+    "genre": "3D一人称の潜水探索・回収(リアル調・土曜の大作)",
+    "theme": "晴れた朝の海底・二つに折れた沈没貨客船",
+    "controls": "WASD で泳ぐ・ドラッグ / 矢印キーで見回す・Space / Shift で上下・E で拾う / 左の指で泳ぎ・右の指で見回し・▲▼・拾うボタン",
+    "structure": "自由に歩き回る世界",
+    "fun": "発見・収集・育成",
+    "status": "success"
   }
 ]
