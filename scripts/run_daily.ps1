@@ -13,6 +13,7 @@
 
   起動のきっかけは「毎日20:00」と「ログオンの3分後」の2つ(register_tasks.ps1)。
   直近の20:00以降に制作が最後まで終わった記録があれば、何もせずに終わる(ログオンのたびに作らないため)。
+  昼間(5:00〜19:30)のログオンでは、今日の投稿ぶんがまだ無いときだけ作る(ストックがあれば20:00まで待つ)。
   途中で止まった回は記録が残らないので、次のログオンでやり直す。必ず動かしたいときは -Force を付ける。
 #>
 
@@ -53,6 +54,15 @@ if (-not $Force) {
         Select-String -Pattern '\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\] === 制作が終わりました ===' |
         Where-Object { [datetime]$_.Matches[0].Groups[1].Value -ge $slot }
     if ($done) { exit 0 }
+
+    # 昼間(5:00〜19:30)にログオンで起動したときは、今日の投稿ぶん(data\queue\今日.json)が無いときだけ作る。
+    # ストックがあるのに昼間に作ると、オーナーが Claude を使う時間帯の使用量を食い、
+    # テスト用のブラウザがマウスカーソルを閉じこめることもあった(2026-10-10)。続きは20:00の回で作る
+    $now = Get-Date
+    if ($now.Hour -ge 5 -and $now -lt $now.Date.AddHours(19).AddMinutes(30)) {
+        $todayQueue = Join-Path $repo ('data\queue\' + $now.ToString('yyyy-MM-dd') + '.json')
+        if (Test-Path $todayQueue) { exit 0 }
+    }
 }
 $logFile = Join-Path $logDir ("run-" + (Get-Date -Format 'yyyy-MM-dd') + ".log")
 
