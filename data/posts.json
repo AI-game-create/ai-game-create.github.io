@@ -12,7 +12,7 @@
       "reposts": 0,
       "replies": 1,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "reply_tweet_id": "2104898292005949943"
   },
@@ -38,7 +38,7 @@
       "reposts": 0,
       "replies": 1,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "reply_tweet_id": "2105260854060974295"
@@ -56,7 +56,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -74,7 +74,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -92,7 +92,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -110,7 +110,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -129,12 +129,12 @@
     "media": "video",
     "posted_at": "2026-10-04T23:34:40+09:00",
     "metrics": {
-      "impressions": 15,
+      "impressions": 16,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     }
   },
   {
@@ -145,12 +145,12 @@
     "text": "【7日目】今日のゲームは「まるい星のおとどけ便」です📦 小さな丸い星を歩いて、頭に積んだ荷物を住人の家へ届ける3Dゲーム。積みすぎるとグラグラ…!\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-05-hoshi-otodoke/",
     "posted_at": "2026-10-05T03:02:59+09:00",
     "metrics": {
-      "impressions": 11,
+      "impressions": 12,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -168,12 +168,12 @@
     ],
     "posted_at": "2026-10-05T12:44:12+09:00",
     "metrics": {
-      "impressions": 10,
+      "impressions": 12,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "poll_result": {
       "status": "closed",
@@ -205,12 +205,12 @@
     "text": "【8日目】今日のゲームは「ぱたぱたドミノ夜」です🎃 夜の机を指でなぞってドミノをならべ、ちょんと押すと、パタパタ進む波がかぼちゃを灯して花火を上げる3Dのおもちゃです。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-06-patapata-domino/",
     "posted_at": "2026-10-06T20:39:31+09:00",
     "metrics": {
-      "impressions": 7,
+      "impressions": 9,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -223,12 +223,12 @@
     "text": "【9日目】今日のゲームは「影焼きランタン」です🏮 夜の墓地でランタンをかかげ、群がる影を光で焼く3Dサバイバル。群れを引きつけてから火をつければ、炎が連鎖して一気に吹き飛ぶ。夜明けまで生きのびろ。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-07-kage-yaki-lantern/",
     "posted_at": "2026-10-07T20:40:14+09:00",
     "metrics": {
-      "impressions": 8,
+      "impressions": 13,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -241,12 +241,12 @@
     "text": "【10日目】今日のゲームは「荒海の救命艇」です🌊 日暮れの嵐の海で救命艇を操り、発炎筒を掲げて漂う人を引き上げて灯台まで連れ帰る3D。押し寄せる大波には舳先を向けて乗り越えろ。乗せすぎると沈む。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-08-storm-lifeboat/",
     "posted_at": "2026-10-08T20:40:50+09:00",
     "metrics": {
-      "impressions": 3,
+      "impressions": 9,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-09T09:21:01+09:00"
+      "fetched_at": "2026-10-10T09:19:26+09:00"
     },
     "media": "video",
     "link": "body"
@@ -258,7 +258,14 @@
     "title": "夜盗の一手",
     "text": "【11日目】今日のゲームは『夜盗の一手』です。こちらが一歩動くと見張りも一手動く、3Dの潜入パズル。床に落ちる灯りの帯と次の手の点線を読み、見張りを眠らせ、宝石を盗んで窓から逃げます。屋敷は毎回新しく作られます。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-09-yato-no-itte/",
     "posted_at": "2026-10-09T20:38:58+09:00",
-    "metrics": null,
+    "metrics": {
+      "impressions": 2,
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "bookmarks": 0,
+      "fetched_at": "2026-10-10T09:19:26+09:00"
+    },
     "media": "video",
     "link": "body"
   }
