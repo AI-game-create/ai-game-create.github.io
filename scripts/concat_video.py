@@ -66,7 +66,8 @@ def concat_parts(parts: list[Path], out: Path, max_width: int = 1920) -> Path | 
     for i, (dur, _, _, audio) in enumerate(infos):
         chains.append(
             f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,"
-            f"setsar=1,fps=30,format=yuv420p,setpts=PTS-STARTPTS[v{i}]"
+            # 録画は毎秒25コマ。30コマにすると5コマごとに同じ絵が2回続いてカクつくので、25のままにする
+            f"setsar=1,fps=25,format=yuv420p,setpts=PTS-STARTPTS[v{i}]"
         )
         if audio:
             chains.append(f"[{i}:a]aresample=44100:async=1,aformat=channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}]")

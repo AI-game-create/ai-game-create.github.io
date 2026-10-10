@@ -158,6 +158,9 @@ export async function recordPlayVideo(
   await opts.play(page, clip);
   const end = markAt ? clip.until : Math.max(Date.now(), playAt + seconds * 1000);
   if (end > Date.now()) await page.waitForTimeout(end - Date.now());
+  // 録画のコマは少し遅れて書きこまれる。終わってすぐ閉じると最後の0.7〜0.9秒が届かず、止まった絵で埋まる(2026-10-11)。
+  // 切り出す範囲のあとも少し動かし続けてから閉じる(この部分は切り出さない)
+  await page.waitForTimeout(1500);
   await restarting;
   const audio = await page.evaluate(stopAudio);
   const fps = await page.evaluate((ms) => {

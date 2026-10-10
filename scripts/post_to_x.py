@@ -179,7 +179,8 @@ def webm_to_mp4(src: Path) -> Path | None:
         ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(src), *extra_input,
         "-map", "0:v:0", *audio, "-shortest", "-t", "60",
-        "-vf", r"scale=trunc(min(1280\,iw)/2)*2:-2,fps=30,format=yuv420p",
+        # 録画は毎秒25コマ。30にすると5コマごとに同じ絵が続いてカクつくので、25のままにする
+        "-vf", r"scale=trunc(min(1280\,iw)/2)*2:-2,fps=25,format=yuv420p",
         "-c:v", "libx264", "-profile:v", "high", "-preset", "medium", "-crf", "20",
         "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-movflags", "+faststart",
         str(out),
@@ -387,7 +388,7 @@ def make_weekly_video(games: list[dict], date_str: str) -> Path | None:
         parts.append(
             f"[{i}:v]trim=0:{d},setpts=PTS-STARTPTS,"
             "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,"
-            f"fps=30,format=yuv420p{text},fade=t=in:st=0:d=0.12,fade=t=out:st={d - 0.12}:d=0.12[v{i}]"
+            f"fps=25,format=yuv420p{text},fade=t=in:st=0:d=0.12,fade=t=out:st={d - 0.12}:d=0.12[v{i}]"
         )
     # 音: 動画に音があればそれを、なければ無音を使う
     n = len(games)
