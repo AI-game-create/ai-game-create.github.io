@@ -47,6 +47,12 @@ test.describe('今日のゲーム', () => {
       );
     }
 
+    // テスト中はポインターロックを使わない。テスト用のブラウザ(見えない 1280×720 の窓)でロックすると、
+    // Windows が PC の本物のマウスカーソルをその範囲に閉じこめてしまう(2026-10-10 に発生)
+    if (/requestPointerLock/.test(src)) {
+      expect(src, 'テスト中にポインターロックを使わないための navigator.webdriver の確認がありません').toMatch(/navigator\.webdriver/);
+    }
+
     // スマホ対応(viewport 指定)
     expect(src, 'viewport の meta タグがありません(スマホで崩れます)').toMatch(
       /<meta[^>]+name\s*=\s*["']?viewport/i,
