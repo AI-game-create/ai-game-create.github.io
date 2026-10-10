@@ -1,0 +1,2638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>凍原の犬ぞり便</title>
+<style>
+:root{--paper:#ece2cb;--paper2:#e2d4b4;--ink:#2a2018;--ink2:#5a4a38;--red:#a3241c;--blue:#2c4a63;--mincho:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Hiragino Mincho Pro","Noto Serif JP","BIZ UDPMincho",serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#07090d;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-family:var(--mincho);color:var(--ink)}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+.paper{background:linear-gradient(170deg,var(--paper),var(--paper2));box-shadow:0 3px 14px rgba(0,0,0,.45),inset 0 0 0 1px rgba(90,70,40,.25)}
+/* ---- 旅程の帯(右の地図) ---- */
+#mapw{position:fixed;right:max(10px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));width:96px;padding:6px 5px 5px;transform:rotate(.7deg);border-radius:2px;pointer-events:none}
+#mapw .t{font-size:11px;letter-spacing:.2em;text-align:center;border-bottom:1px solid rgba(60,40,20,.35);padding-bottom:3px;margin-bottom:3px}
+#map{display:block;width:86px;height:min(46vh,360px)}
+#clock{font-size:12px;text-align:center;margin-top:3px;font-variant-numeric:tabular-nums}
+/* ---- 帳面(左下) ---- */
+#panel{position:fixed;left:max(10px,env(safe-area-inset-left));bottom:max(10px,env(safe-area-inset-bottom));width:252px;padding:9px 11px 8px;border-radius:3px;transform:rotate(-.6deg);pointer-events:none;font-size:13px}
+#panel .row{display:flex;align-items:center;gap:7px;margin:3px 0}
+#panel b{font-weight:700;width:30px;flex:none;letter-spacing:.05em}
+.bar{flex:1;height:9px;border:1px solid var(--ink2);background:rgba(255,255,255,.35);position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink2);transition:width .25s}
+#bar-e i{background:#6b5a2c}#bar-w i{background:#8a3a26}
+.num{width:46px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
+#crates{letter-spacing:2px;font-size:13px;flex:1}
+#crates span{display:inline-block;width:11px;height:10px;border:1.5px solid var(--ink);margin-right:2px;background:#b58b52;vertical-align:-1px}
+#crates span.gone{background:none;border-style:dotted;opacity:.45}
+#fish{font-variant-numeric:tabular-nums}
+#pace{display:flex;margin-top:6px;border:1.5px solid var(--ink);border-radius:2px;overflow:hidden}
+#pace span{flex:1;text-align:center;font-size:12px;padding:3px 0;border-left:1px solid rgba(42,32,24,.4);color:var(--ink2)}
+#pace span:first-child{border-left:none}
+#pace span.on{background:var(--ink);color:var(--paper);font-weight:700}
+#pace span.on.hot{background:var(--red)}
+/* ---- 知らせ ---- */
+#toast{position:fixed;left:50%;top:12%;transform:translate(-50%,-6px) rotate(-.8deg);padding:7px 18px 8px;font-size:clamp(15px,2.4vw,21px);font-weight:700;letter-spacing:.06em;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
+#toast.on{opacity:1;transform:translate(-50%,0) rotate(-.8deg)}
+#warn{position:fixed;left:50%;top:24%;transform:translateX(-50%) rotate(2deg);color:#fff4e8;border:3px solid #e2483c;background:rgba(150,24,16,.78);padding:4px 16px;font-size:clamp(17px,3vw,26px);font-weight:800;letter-spacing:.12em;opacity:0;transition:opacity .15s;pointer-events:none;white-space:nowrap}
+#warn.on{opacity:1}
+#fork{position:fixed;left:50%;top:34%;transform:translateX(-50%);display:flex;gap:10px;opacity:0;transition:opacity .3s;pointer-events:none}
+#fork.on{opacity:1}
+#fork div{padding:6px 12px;font-size:14px;line-height:1.35;min-width:140px;max-width:42vw}
+#fork div small{display:block;font-size:11.5px;color:var(--ink2)}
+#fork div.pick{outline:3px solid var(--red)}
+#hint{position:fixed;left:50%;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 4px);transform:translateX(-50%);max-width:min(520px,60vw);padding:6px 12px;font-size:13px;line-height:1.5;opacity:0;transition:opacity .3s;pointer-events:none;text-align:center}
+#hint.on{opacity:.96}
+/* ---- 札のボタン ---- */
+.tag{position:fixed;top:max(10px,env(safe-area-inset-top));width:46px;height:46px;border:none;border-radius:3px;font-family:var(--mincho);font-size:13px;font-weight:700;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.tag::after{content:"";position:absolute;top:5px;left:50%;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#3b2c1e;box-shadow:inset 0 1px 1px rgba(255,255,255,.3)}
+.tag span{margin-top:8px}
+#b-snd{left:max(10px,env(safe-area-inset-left))}
+#b-pause{left:calc(max(10px,env(safe-area-inset-left)) + 54px)}
+/* ---- スマホの操作 ---- */
+#touch{display:none}
+body.touch #touch{display:block}
+.tb{position:fixed;width:64px;height:64px;border-radius:4px;border:none;font-family:var(--mincho);font-weight:800;font-size:14px;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:0}
+.tb:active,.tb.down{filter:brightness(.82)}
+.tb small{font-size:10px;font-weight:600;color:var(--ink2)}
+#b-up{right:max(12px,env(safe-area-inset-right));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 76px)}
+#b-dn{right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom))}
+#b-fish{right:calc(max(12px,env(safe-area-inset-right)) + 76px);bottom:max(12px,env(safe-area-inset-bottom))}
+#steerhint{position:fixed;left:50%;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 150px);transform:translateX(-50%);color:rgba(255,255,255,.75);font-size:12px;pointer-events:none;text-shadow:0 1px 3px #000;white-space:nowrap}
+#steerdot{position:fixed;width:54px;height:54px;margin:-27px 0 0 -27px;border:2px solid rgba(255,248,230,.75);border-radius:50%;pointer-events:none;display:none}
+#steerdot i{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px;border-radius:50%;background:rgba(255,248,230,.85)}
+/* ---- 伝票(題名と結果) ---- */
+.ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:14px;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 30%,rgba(0,0,0,.55));z-index:5}
+.hidden{display:none!important}
+.slip{position:relative;width:min(460px,94vw);max-height:94vh;overflow:auto;padding:16px 20px 16px;border-radius:2px;transform:rotate(-1deg)}
+.slip::before{content:"";position:absolute;inset:6px;border:1px solid rgba(70,50,30,.45);pointer-events:none}
+.slip .hd{display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:8px}
+.slip h1{margin:0;font-size:clamp(24px,6.4vw,32px);letter-spacing:.08em;font-weight:800}
+.slip .no{font-size:11px;color:var(--ink2);letter-spacing:.1em}
+.slip table{width:100%;border-collapse:collapse;font-size:14px;margin-bottom:8px}
+.slip td{border-bottom:1px dotted rgba(60,40,20,.5);padding:4px 2px;vertical-align:top}
+.slip td:first-child{width:5.6em;color:var(--ink2);font-size:12px;letter-spacing:.1em;white-space:nowrap}
+.how{font-size:12.5px;line-height:1.65;background:rgba(255,255,255,.28);padding:6px 9px;border-left:3px solid var(--ink2);margin:6px 0 10px}
+.how kbd{font-family:inherit;border:1px solid var(--ink2);border-bottom-width:2px;border-radius:2px;padding:0 4px;font-size:11.5px;background:rgba(255,255,255,.5)}
+body.touch .how.keys{display:none}
+body:not(.touch) .how.tch{display:none}
+.go{display:block;margin:4px auto 2px;padding:10px 34px 11px;font-family:var(--mincho);font-size:19px;font-weight:800;letter-spacing:.3em;color:#fff6ea;background:var(--red);border:none;border-radius:3px;box-shadow:0 3px 0 #5e140f,0 5px 12px rgba(0,0,0,.35);cursor:pointer;min-height:48px}
+.go:active{transform:translateY(2px);box-shadow:0 1px 0 #5e140f}
+#rec,#res-rec{font-size:12px;color:var(--ink2);text-align:center;margin-top:8px;line-height:1.6}
+#rec table{font-size:11.5px;margin:4px auto 0;width:auto}
+#rec td{border:none;padding:1px 6px;width:auto!important;letter-spacing:0!important}
+#stamp{position:absolute;right:18px;top:46px;transform:rotate(-14deg);border:4px double var(--red);color:var(--red);font-size:30px;font-weight:900;letter-spacing:.2em;padding:2px 10px 4px 16px;border-radius:6px;opacity:.88;mix-blend-mode:multiply;pointer-events:none}
+#stamp.fail{color:#3a4f66;border-color:#3a4f66}
+#res-lines td:last-child{font-variant-numeric:tabular-nums}
+#res-score{font-size:22px;font-weight:800;text-align:center;margin:6px 0 2px;letter-spacing:.05em}
+#pause{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:6;color:var(--paper);font-size:26px;letter-spacing:.3em}
+#pause small{display:block;font-size:13px;letter-spacing:.1em;text-align:center;margin-top:6px}
+body.intro #panel,body.intro #mapw,body.intro #touch,body.intro #b-pause{display:none}
+#nogl{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#eee;padding:20px;line-height:1.8;z-index:9;background:#111}
+/* 縦長のスマホ */
+@media (max-aspect-ratio:3/4){
+  #mapw{width:70px;padding:4px 4px 4px}
+  #map{width:62px;height:min(34vh,300px)}
+  #mapw .t{font-size:10px;letter-spacing:.05em}
+  #clock{font-size:11px}
+  #panel{width:min(212px,calc(100vw - 170px));font-size:12px;padding:7px 9px 7px}
+  #panel b{width:26px}
+  .num{width:40px;font-size:11px}
+  #pace span{font-size:11px}
+  #fork{top:30%;flex-direction:column;align-items:center}
+  #fork div{max-width:80vw}
+  #hint{bottom:calc(max(10px,env(safe-area-inset-bottom)) + 160px);max-width:84vw}
+}
+/* 低い横長(スマホを横にした) */
+@media (max-height:460px){
+  #map{height:52vh}
+  #panel{font-size:11.5px;padding:5px 8px;width:220px}
+  #panel .row{margin:1px 0}
+  #toast{top:6%}
+  #fork{top:20%}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="mapw" class="paper"><div class="t">旅程</div><canvas id="map" width="86" height="300"></canvas><div id="clock">0:00</div></div>
+<div id="panel" class="paper">
+  <div class="row"><b>犬</b><div class="bar" id="bar-e"><i></i></div><span class="num" id="v-e">100</span></div>
+  <div class="row"><b>体温</b><div class="bar" id="bar-w"><i></i></div><span class="num" id="v-w">36.8℃</span></div>
+  <div class="row"><b>荷</b><span id="crates"></span><b style="width:auto">干魚</b><span id="fish">2</span></div>
+  <div id="pace"><span>止まれ</span><span>トロット</span><span>駆け足</span><span>全力</span></div>
+</div>
+<div id="toast" class="paper"></div>
+<div id="warn"></div>
+<div id="fork"><div class="paper" id="fork-l"></div><div class="paper" id="fork-r"></div></div>
+<div id="hint" class="paper"></div>
+<button class="tag paper" id="b-snd" aria-label="音"><span>音</span></button>
+<button class="tag paper" id="b-pause" aria-label="一時停止"><span>休止</span></button>
+<div id="touch">
+  <button class="tb paper" id="b-up" aria-label="ペースを上げる">▲<small>ハイク</small></button>
+  <button class="tb paper" id="b-dn" aria-label="ペースを下げる">▼<small>ウォー</small></button>
+  <button class="tb paper" id="b-fish" aria-label="干し魚をやる">干魚<small>体力+</small></button>
+  <div id="steerhint">画面を左右になぞって舵</div>
+  <div id="steerdot"><i></i></div>
+</div>
+<div id="title" class="ov">
+  <div class="slip paper" id="slip">
+    <div class="hd"><h1>凍原の犬ぞり便</h1><span class="no">配達伝票 No.1011</span></div>
+    <table>
+      <tr><td>宛先</td><td>北の鉱山村(峠の向こう)</td></tr>
+      <tr><td>品目</td><td>薬・郵便・灯油 ── 6箱</td></tr>
+      <tr><td>条件</td><td>嵐が来る前に。荷は落とすと戻らない</td></tr>
+      <tr><td>犬</td><td>6頭。全力は速いが、体力をみるみる使う</td></tr>
+    </table>
+    <div class="how keys"><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 舵(犬を左右へ。そりは犬の通ったあとを通る)<br>
+      <kbd>↑</kbd><kbd>↓</kbd> / <kbd>W</kbd><kbd>S</kbd> ペース(止まれ・トロット・駆け足・全力)<br>
+      <kbd>F</kbd> 干し魚(体力が戻る) ・ 小屋の前で止まると休める<br>
+      上りはトロット、下りはブレーキ。分かれ道は、行きたい側へ舵を切る</div>
+    <div class="how tch">画面を左右になぞって舵(そりは犬の通ったあとを通る)<br>
+      ▲ ▼ でペース(止まれ・トロット・駆け足・全力)・干魚で体力<br>
+      小屋の前で止まると休める。上りはトロット、下りはブレーキ<br>
+      分かれ道は、行きたい側へ舵を切る</div>
+    <button class="go" id="b-start">出発する</button>
+    <div id="rec"></div>
+  </div>
+</div>
+<div id="result" class="ov hidden">
+  <div class="slip paper">
+    <div class="hd"><h1 id="res-h">凍原の犬ぞり便</h1><span class="no" id="res-no">配達伝票</span></div>
+    <div id="stamp">配達済</div>
+    <table id="res-lines"></table>
+    <div id="res-score"></div>
+    <button class="go" id="b-again">もう一度走る</button>
+    <div id="res-rec"></div>
+  </div>
+</div>
+<div id="pause" class="hidden"><div>一時停止<small>P / タップで再開</small></div></div>
+<div id="nogl" class="hidden">この端末では 3D(WebGL2)が使えないため、遊べません。<br>別のブラウザか端末でお試しください。</div>
+<script>
+'use strict';
+// =============================================================================
+//  凍原の犬ぞり便 — 6頭の犬ぞりで、嵐が来る前に峠の向こうの村へ荷を届ける(WebGL2・すべてコードで生成)
+// =============================================================================
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const TAU = Math.PI * 2;
+const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+const R = () => Math.random();                       // 遊びの乱数(テストで種つきに差しかえられる)
+let vs = 20261011;                                   // 見た目だけの乱数(遊びの展開を変えない)
+const vr = () => ((vs = (vs * 1664525 + 1013904223) >>> 0) / 4294967296);
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (isTouch) document.body.classList.add('touch');
+
+// ---- 保存 ----
+const SKEY = 'inuzori-bin-v1';
+let save = { sound: true, runs: 0, arrived: 0, best: {}, bestScore: 0 };
+try { const s = JSON.parse(localStorage.getItem(SKEY) || 'null'); if (s) save = Object.assign(save, s, { best: Object.assign({}, s.best || {}) }); } catch (e) { /* 保存なし */ }
+const writeSave = () => { try { localStorage.setItem(SKEY, JSON.stringify(save)); } catch (e) { /* 保存できない */ } };
+
+// =============================================================================
+//  行列(列優先)
+// =============================================================================
+const M4 = {
+  id: () => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; },
+  mul(a, b, o = new Float32Array(16)) {
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    }
+    return o;
+  },
+  persp(fy, asp, n, f) {
+    const m = new Float32Array(16), t = 1 / Math.tan(fy / 2);
+    m[0] = t / asp; m[5] = t; m[10] = (f + n) / (n - f); m[11] = -1; m[14] = (2 * f * n) / (n - f);
+    return m;
+  },
+  ortho(l, r, b, t, n, f) {
+    const m = M4.id();
+    m[0] = 2 / (r - l); m[5] = 2 / (t - b); m[10] = -2 / (f - n);
+    m[12] = -(r + l) / (r - l); m[13] = -(t + b) / (t - b); m[14] = -(f + n) / (f - n);
+    return m;
+  },
+  look(e, c, u) {
+    let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2];
+    let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx;
+    l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    const m = new Float32Array(16);
+    m[0] = xx; m[4] = xy; m[8] = xz; m[1] = yx; m[5] = yy; m[9] = yz; m[2] = zx; m[6] = zy; m[10] = zz;
+    m[12] = -(xx * e[0] + xy * e[1] + xz * e[2]); m[13] = -(yx * e[0] + yy * e[1] + yz * e[2]); m[14] = -(zx * e[0] + zy * e[1] + zz * e[2]); m[15] = 1;
+    return m;
+  },
+  inv(m) {
+    const o = new Float32Array(16);
+    const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3], a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+    const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11], a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
+    const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
+    const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    let d = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+    if (!d) return M4.id();
+    d = 1 / d;
+    o[0] = (a11 * b11 - a12 * b10 + a13 * b09) * d; o[1] = (a02 * b10 - a01 * b11 - a03 * b09) * d;
+    o[2] = (a31 * b05 - a32 * b04 + a33 * b03) * d; o[3] = (a22 * b04 - a21 * b05 - a23 * b03) * d;
+    o[4] = (a12 * b08 - a10 * b11 - a13 * b07) * d; o[5] = (a00 * b11 - a02 * b08 + a03 * b07) * d;
+    o[6] = (a32 * b02 - a30 * b05 - a33 * b01) * d; o[7] = (a20 * b05 - a22 * b02 + a23 * b01) * d;
+    o[8] = (a10 * b10 - a11 * b08 + a13 * b06) * d; o[9] = (a01 * b08 - a00 * b10 - a03 * b06) * d;
+    o[10] = (a30 * b04 - a31 * b02 + a33 * b00) * d; o[11] = (a21 * b02 - a20 * b04 - a23 * b00) * d;
+    o[12] = (a11 * b07 - a10 * b09 - a12 * b06) * d; o[13] = (a00 * b09 - a01 * b07 + a02 * b06) * d;
+    o[14] = (a31 * b01 - a30 * b03 - a32 * b00) * d; o[15] = (a20 * b03 - a21 * b01 + a22 * b00) * d;
+    return o;
+  },
+  // 平行移動・向き(yaw: +x が前、+z が右)・縦の傾き(pitch: 前が上)・横の傾き(roll: 右が下)・拡大
+  trs(x, y, z, yaw, pitch, roll, s = 1) {
+    const cy = Math.cos(-yaw), sy = Math.sin(-yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+    const Ry = [cy, 0, -sy, 0, 0, 1, 0, 0, sy, 0, cy, 0, 0, 0, 0, 1];
+    const Rz = [cp, sp, 0, 0, -sp, cp, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const Rx = [1, 0, 0, 0, 0, cr, -sr, 0, 0, sr, cr, 0, 0, 0, 0, 1];
+    const m = M4.mul(M4.mul(Ry, Rz), Rx);
+    for (let i = 0; i < 12; i++) m[i] *= (i % 4 === 3 ? 1 : s);
+    m[12] = x; m[13] = y; m[14] = z; m[15] = 1;
+    return m;
+  },
+  rz(a) { const c = Math.cos(a), s = Math.sin(a); return [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]; },
+  rx(a) { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]; },
+  ry(a) { const c = Math.cos(a), s = Math.sin(a); return [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]; },
+  tr(x, y, z) { const m = M4.id(); m[12] = x; m[13] = y; m[14] = z; return m; },
+  // 点 j を中心に回す(列優先の行列 r を、j へ移してから戻す)
+  about(j, r) { return M4.mul(M4.mul(M4.tr(j[0], j[1], j[2]), r), M4.tr(-j[0], -j[1], -j[2])); },
+  xf(m, x, y, z) { return [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]]; },
+  xn(m, x, y, z) { const a = m[0] * x + m[4] * y + m[8] * z, b = m[1] * x + m[5] * y + m[9] * z, c = m[2] * x + m[6] * y + m[10] * z, l = Math.hypot(a, b, c) || 1; return [a / l, b / l, c / l]; },
+};
+
+// =============================================================================
+//  ノイズ
+// =============================================================================
+function hash2(x, y, s) { let h = (x * 374761393 + y * 668265263 + s * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y, s = 0, per = 0) {
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const w = (a, b) => (per ? hash2(((a % per) + per) % per, ((b % per) + per) % per, s) : hash2(a, b, s));
+  return lerp(lerp(w(xi, yi), w(xi + 1, yi), ux), lerp(w(xi, yi + 1), w(xi + 1, yi + 1), ux), uy);
+}
+function fbm(x, y, oct, s = 0, per = 0) {
+  let a = 0.5, f = 1, v = 0, n = 0;
+  for (let i = 0; i < oct; i++) { v += a * vnoise(x * f, y * f, s + i * 17, per ? per * f : 0); n += a; a *= 0.5; f *= 2; }
+  return v / n;
+}
+function ridged(x, y, oct, s) {
+  let a = 0.5, f = 1, v = 0, n = 0;
+  for (let i = 0; i < oct; i++) { const r = 1 - Math.abs(vnoise(x * f, y * f, s + i * 31) * 2 - 1); v += a * r * r; n += a; a *= 0.5; f *= 2.1; }
+  return v / n;
+}
+
+// =============================================================================
+//  形を組み立てる道具(位置・法線・色・材質[ざらつき, 金属, 遮蔽, 種類]・骨)
+// =============================================================================
+// 材質の種類: 0 ふつう / 1 岩 / 3 木 / 5 光るもの(金属の欄が明るさ) / 7 金属 / 9 毛 / 10 地面(雪・道・氷) / 11 薄い氷
+//            12 水 / 13 針葉樹 / 14 布 / 15 雪のかたまり / 16 遠い山 / 17 反射テープ
+class Mesh {
+  constructor(skin = false) { this.v = []; this.idx = []; this.stack = [M4.id()]; this.skin = skin; this.bone = 0; }
+  get m() { return this.stack[this.stack.length - 1]; }
+  push(m) { this.stack.push(M4.mul(this.m, m)); return this; }
+  pop() { this.stack.pop(); return this; }
+  vert(p, n, c, mt) {
+    const m = this.m, w = M4.xf(m, p[0], p[1], p[2]), wn = M4.xn(m, n[0], n[1], n[2]);
+    this.v.push(w[0], w[1], w[2], wn[0], wn[1], wn[2], c[0], c[1], c[2], mt[0], mt[1], mt[2], mt[3]);
+    if (this.skin) this.v.push(this.bone);
+    return this.v.length / (this.skin ? 14 : 13) - 1;
+  }
+  tri(a, b, c) { this.idx.push(a, b, c); }
+  quad(a, b, c, d, col, mt) {
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], w = [d[0] - a[0], d[1] - a[1], d[2] - a[2]];
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    const i0 = this.vert(a, n, col, mt), i1 = this.vert(b, n, col, mt), i2 = this.vert(c, n, col, mt), i3 = this.vert(d, n, col, mt);
+    this.tri(i0, i1, i2); this.tri(i0, i2, i3);
+  }
+  box(cx, cy, cz, sx, sy, sz, col, mt) {
+    const x0 = cx - sx / 2, x1 = cx + sx / 2, y0 = cy - sy / 2, y1 = cy + sy / 2, z0 = cz - sz / 2, z1 = cz + sz / 2;
+    this.quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], col, mt);
+    this.quad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], col, mt);
+    this.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], col, mt);
+    this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], col, mt);
+    this.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], col, mt);
+    this.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], col, mt);
+  }
+  // y 軸まわりの回転体。prof = [[半径, 高さ], ...]
+  lathe(prof, seg, col, mt, a0 = 0, a1 = TAU) {
+    const rows = [];
+    for (let i = 0; i < prof.length; i++) {
+      const [r, y] = prof[i];
+      const p = prof[Math.max(0, i - 1)], q = prof[Math.min(prof.length - 1, i + 1)];
+      let dr = q[0] - p[0], dy = q[1] - p[1];
+      const l = Math.hypot(dr, dy) || 1; dr /= l; dy /= l;
+      const row = [];
+      for (let j = 0; j <= seg; j++) {
+        const a = a0 + (a1 - a0) * (j / seg), ca = Math.cos(a), sa = Math.sin(a);
+        const c = typeof col === 'function' ? col(y, a, r) : col;
+        row.push(this.vert([r * ca, y, r * sa], [dy * ca, -dr, dy * sa], c, mt));
+      }
+      rows.push(row);
+    }
+    for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < seg; j++) {
+      const a = rows[i][j], b = rows[i][j + 1], c = rows[i + 1][j + 1], d = rows[i + 1][j];
+      this.tri(a, c, b); this.tri(a, d, c);
+    }
+  }
+  cyl(r0, r1, y0, y1, seg, col, mt, caps = true) {
+    this.lathe([[r0, y0], [r1, y1]], seg, col, mt);
+    if (caps) {
+      for (const [r, y, s] of [[r0, y0, -1], [r1, y1, 1]]) {
+        const c = this.vert([0, y, 0], [0, s, 0], col, mt), ring = [];
+        for (let j = 0; j <= seg; j++) { const a = (j / seg) * TAU; ring.push(this.vert([r * Math.cos(a), y, r * Math.sin(a)], [0, s, 0], col, mt)); }
+        for (let j = 0; j < seg; j++) s > 0 ? this.tri(c, ring[j + 1], ring[j]) : this.tri(c, ring[j], ring[j + 1]);
+      }
+    }
+  }
+  sphere(r, seg, col, mt) {
+    const prof = [];
+    for (let i = 0; i <= seg; i++) { const a = -Math.PI / 2 + (i / seg) * Math.PI; prof.push([Math.cos(a) * r + 1e-4, Math.sin(a) * r]); }
+    this.lathe(prof, seg * 2, col, mt);
+  }
+  // 楕円体(法線は正しく)。col は (位置, 法線) => 色 でもよい
+  ellipsoid(c, r, seg, col, mt) {
+    const rows = [];
+    for (let i = 0; i <= seg; i++) {
+      const ph = -Math.PI / 2 + (Math.PI * i) / seg, cp = Math.cos(ph), sp = Math.sin(ph), row = [];
+      for (let j = 0; j <= seg * 2; j++) {
+        const th = (TAU * j) / (seg * 2), ux = cp * Math.cos(th), uy = sp, uz = cp * Math.sin(th);
+        const p = [c[0] + r[0] * ux, c[1] + r[1] * uy, c[2] + r[2] * uz];
+        let nx = ux / r[0], ny = uy / r[1], nz = uz / r[2]; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+        row.push(this.vert(p, [nx, ny, nz], typeof col === 'function' ? col(p, [nx, ny, nz]) : col, mt));
+      }
+      rows.push(row);
+    }
+    for (let i = 0; i < seg; i++) for (let j = 0; j < seg * 2; j++) {
+      const a = rows[i][j], b = rows[i][j + 1], cc = rows[i + 1][j + 1], d = rows[i + 1][j];
+      this.tri(a, b, cc); this.tri(a, cc, d);
+    }
+  }
+  // 2点を結ぶ棒(太さを変えられる)
+  rod(a, b, r0, seg, col, mt, r1 = r0) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.hypot(dx, dy, dz);
+    if (L < 1e-5) return;
+    const yaw = Math.atan2(dz, dx), pitch = Math.asin(clamp(dy / L, -1, 1));
+    const m = M4.mul(M4.trs(a[0], a[1], a[2], yaw, pitch, 0), [0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    this.push(m); this.cyl(r0, r1, 0, L, seg, col, mt, false); this.pop();
+  }
+  // 丸い端の棒(脚など)
+  limb(a, b, r0, r1, seg, col, mt) {
+    this.rod(a, b, r0, seg, col, mt, r1);
+    this.ellipsoid(a, [r0, r0, r0], Math.max(3, seg >> 1), col, mt);
+    this.ellipsoid(b, [r1, r1, r1], Math.max(3, seg >> 1), col, mt);
+  }
+  // なめらかな格子(f(i,j) => {p, c, mt})
+  grid(nu, nv, f) {
+    const P = [], C = [], T = [];
+    for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) { const o = f(i, j); P.push(o.p); C.push(o.c); T.push(o.mt); }
+    const at = (i, j) => P[clamp(i, 0, nu) * (nv + 1) + clamp(j, 0, nv)];
+    const base = [];
+    for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) {
+      const a = at(i + 1, j), b = at(i - 1, j), c = at(i, j + 1), d = at(i, j - 1);
+      const u = [a[0] - b[0], a[1] - b[1], a[2] - b[2]], w = [c[0] - d[0], c[1] - d[1], c[2] - d[2]];
+      const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+      const k = i * (nv + 1) + j;
+      base.push(this.vert(P[k], n, C[k], T[k]));
+    }
+    for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+      const a = base[i * (nv + 1) + j], b = base[(i + 1) * (nv + 1) + j], c = base[(i + 1) * (nv + 1) + j + 1], d = base[i * (nv + 1) + j + 1];
+      this.tri(a, b, c); this.tri(a, c, d);
+    }
+  }
+}
+const MT = (rough, metal, ao, id) => [rough, metal, ao, id];
+
+// =============================================================================
+//  道(区間ごとの制御点。+z が北)
+// =============================================================================
+//  A 森 → 分かれ道1 → L 湖(近道)/ S 岸(遠回り)→ B 夜の森(小屋)→ 分かれ道2 → P 峠(近道)/ V 川(遠回り)→ C 村
+const LAKE = { x: -52, z: 800, rx: 98, rz: 212, y: -3.5 };
+const lakeR = (x, z) => Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
+const SEGDEF = {
+  A: { pts: [[0, -70], [0, 0], [12, 90], [-18, 190], [14, 290], [-4, 390], [6, 480], [0, 560]], hk: [[0, 4], [0.25, 2], [0.55, 6], [0.8, 3], [1, 0]] },
+  L: { pts: [[0, 560], [-26, 612], [-58, 690], [-70, 790], [-56, 890], [-24, 975], [0, 1040]], hk: [[0, 0], [1, 1]], lake: true, prev: 'A', next: 'B' },
+  S: { pts: [[0, 560], [48, 600], [128, 662], [188, 762], [202, 880], [162, 984], [70, 1034], [0, 1040]], hk: [[0, 0], [0.25, 5], [0.5, 2], [0.75, 7], [1, 1]], prev: 'A', next: 'B' },
+  B: { pts: [[0, 1040], [-22, 1120], [8, 1210], [42, 1300], [26, 1400], [30, 1480]], hk: [[0, 1], [0.5, 4], [1, 6]] },
+  P: { pts: [[30, 1480], [4, 1560], [-24, 1650], [-36, 1740], [-28, 1830], [-4, 1920], [24, 1990], [34, 2050]], hk: [[0, 6], [0.47, 44], [0.53, 45], [1, 4]], prev: 'B', next: 'C' },
+  V: { pts: [[30, 1480], [92, 1530], [172, 1612], [230, 1735], [246, 1862], [210, 1984], [122, 2046], [34, 2050]], hk: [[0, 6], [0.1, 1.5], [0.9, -1], [1, 4]], river: [0.1, 0.9], prev: 'B', next: 'C' },
+  C: { pts: [[34, 2050], [16, 2140], [-14, 2230], [0, 2320], [0, 2392]], hk: [[0, 4], [0.6, 0], [1, -2]] },
+};
+const SEGNAMES = ['A', 'L', 'S', 'B', 'P', 'V', 'C'];
+const SEGJP = { A: '森', L: '湖', S: '岸', B: '夜の森', P: '峠', V: '川', C: '村への道' };
+const SEG = {};
+function buildSeg(name) {
+  const d = SEGDEF[name], P = d.pts, n = P.length;
+  const ex = (a, b) => [2 * a[0] - b[0], 2 * a[1] - b[1]];
+  const prev = d.prev ? SEGDEF[d.prev].pts[SEGDEF[d.prev].pts.length - 2] : ex(P[0], P[1]);
+  const next = d.next ? SEGDEF[d.next].pts[1] : ex(P[n - 1], P[n - 2]);
+  const C = [prev, ...P, next], dense = [];
+  for (let i = 1; i < C.length - 2; i++) {
+    const p0 = C[i - 1], p1 = C[i], p2 = C[i + 1], p3 = C[i + 2];
+    const N = Math.max(4, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 0.25));
+    for (let k = 0; k < N; k++) {
+      const t = k / N, t2 = t * t, t3 = t2 * t;
+      const f = (j) => 0.5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3);
+      dense.push([f(0), f(1)]);
+    }
+  }
+  dense.push(P[n - 1].slice());
+  const cum = [0];
+  for (let i = 1; i < dense.length; i++) cum.push(cum[i - 1] + Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]));
+  const total = cum[cum.length - 1], N = Math.round(total), sp = total / N;
+  const X = new Float32Array(N + 1), Z = new Float32Array(N + 1), Y = new Float32Array(N + 1), RV = new Uint8Array(N + 1), LK = new Uint8Array(N + 1);
+  let j = 0;
+  for (let k = 0; k <= N; k++) {
+    const s = k * sp;
+    while (j < cum.length - 2 && cum[j + 1] < s) j++;
+    const f = clamp((s - cum[j]) / Math.max(1e-6, cum[j + 1] - cum[j]), 0, 1);
+    X[k] = lerp(dense[j][0], dense[j + 1][0], f); Z[k] = lerp(dense[j][1], dense[j + 1][1], f);
+  }
+  const raw = new Float32Array(N + 1), hk = d.hk;
+  for (let k = 0; k <= N; k++) {
+    const f = k / N;
+    let i = 0;
+    while (i < hk.length - 2 && hk[i + 1][0] < f) i++;
+    const a = hk[i], b = hk[i + 1];
+    raw[k] = lerp(a[1], b[1], sstep(0, 1, (f - a[0]) / (b[0] - a[0])));
+    if (d.lake && lakeR(X[k], Z[k]) < 1) { raw[k] = LAKE.y; LK[k] = 1; }
+    if (d.river && f >= d.river[0] && f <= d.river[1]) { RV[k] = 1; raw[k] = lerp(1.5, -1, (f - d.river[0]) / (d.river[1] - d.river[0])); }
+  }
+  const W = 14;
+  for (let k = 0; k <= N; k++) {
+    let a = 0, c = 0;
+    for (let q = Math.max(0, k - W); q <= Math.min(N, k + W); q++) { a += raw[q]; c++; }
+    Y[k] = lerp(raw[k], a / c, Math.min(1, Math.min(k, N - k) / W));
+    if (LK[k]) Y[k] = LAKE.y;
+  }
+  SEG[name] = { name, n: N + 1, len: N, X, Z, Y, RV, LK };
+}
+for (const nm of SEGNAMES) buildSeg(nm);
+
+// ---- 道の組み合わせ(湖/岸 × 峠/川)。s はそりが走った距離(m) ----
+const ROUTES = {};
+const HUT_F = 0.52;
+function buildRoute(b1, b2) {
+  const order = ['A', b1, 'B', b2, 'C'], segStart = {};
+  let n = 0;
+  for (const nm of order) { segStart[nm] = n; n += SEG[nm].len; }
+  const T = n + 1;
+  const X = new Float32Array(T), Z = new Float32Array(T), Y = new Float32Array(T), H = new Float32Array(T), G = new Float32Array(T);
+  const SG = new Uint8Array(T), LK = new Uint8Array(T), RV = new Uint8Array(T);
+  for (const nm of order) {
+    const sg = SEG[nm], o = segStart[nm], last = nm === 'C';
+    for (let k = 0; k < sg.len + (last ? 1 : 0); k++) { X[o + k] = sg.X[k]; Z[o + k] = sg.Z[k]; Y[o + k] = sg.Y[k]; SG[o + k] = SEGNAMES.indexOf(nm); LK[o + k] = sg.LK[k]; RV[o + k] = sg.RV[k]; }
+  }
+  for (let k = 0; k < T; k++) {
+    const a = Math.max(0, k - 3), b = Math.min(T - 1, k + 3);
+    H[k] = Math.atan2(Z[b] - Z[a], X[b] - X[a]);
+    const c = Math.max(0, k - 5), e = Math.min(T - 1, k + 5);
+    G[k] = (Y[e] - Y[c]) / Math.max(1, e - c);
+  }
+  let lakeIn = -1, lakeOut = -1;
+  for (let k = 0; k < T; k++) if (LK[k]) { if (lakeIn < 0) lakeIn = k; lakeOut = k; }
+  return { key: b1 + b2, b1, b2, order, n: T, len: n, X, Z, Y, H, G, SG, LK, RV, segStart, forks: [segStart[b1], segStart[b2]], hutS: segStart.B + Math.round(HUT_F * SEG.B.len), lakeIn, lakeOut, finishS: n - 22 };
+}
+for (const a of ['L', 'S']) for (const b of ['P', 'V']) ROUTES[a + b] = buildRoute(a, b);
+function routeAt(r, s, o = {}) {
+  const k = clamp(Math.floor(s), 0, r.n - 2), f = clamp(s - k, 0, 1);
+  o.x = lerp(r.X[k], r.X[k + 1], f); o.z = lerp(r.Z[k], r.Z[k + 1], f); o.y = lerp(r.Y[k], r.Y[k + 1], f);
+  o.h = r.H[k] + angDiff(r.H[k], r.H[k + 1]) * f; o.g = lerp(r.G[k], r.G[k + 1], f);
+  o.seg = SEGNAMES[r.SG[k]]; o.lake = r.LK[k]; o.river = r.RV[k];
+  return o;
+}
+// 道の上の点(s, 横 u)。u は右が +
+function worldAt(r, s, u, o = {}) {
+  routeAt(r, s, o);
+  o.wx = o.x - Math.sin(o.h) * u; o.wz = o.z + Math.cos(o.h) * u;
+  return o;
+}
+// 区間の中の点(区間名, 区間の中の距離, 横)
+function segPoint(nm, ls, u = 0) {
+  const sg = SEG[nm], k = clamp(Math.floor(ls), 0, sg.n - 2), f = clamp(ls - k, 0, 1);
+  const k0 = Math.max(0, k - 2), k1 = Math.min(sg.n - 1, k + 3);
+  const h = Math.atan2(sg.Z[k1] - sg.Z[k0], sg.X[k1] - sg.X[k0]);
+  const x = lerp(sg.X[k], sg.X[k + 1], f), z = lerp(sg.Z[k], sg.Z[k + 1], f), y = lerp(sg.Y[k], sg.Y[k + 1], f);
+  return { x: x - Math.sin(h) * u, z: z + Math.cos(h) * u, y, h };
+}
+
+// =============================================================================
+//  土地(4m 格子の高さ)。道の近くは道の高さにならし、離れるほど山になる
+// =============================================================================
+const TX0 = -360, TZ0 = -200, CELL = 4, NX = 180, NZ = 710, VW = NX + 1;
+const NV_ALL = VW * (NZ + 1);
+const HF = new Float32Array(NV_ALL), DF = new Float32Array(NV_ALL).fill(99), UF = new Float32Array(NV_ALL), TY = new Float32Array(NV_ALL);
+const FS = new Uint8Array(NV_ALL), RVF = new Uint8Array(NV_ALL), ICEF = new Float32Array(NV_ALL);
+const CC = 24, CNX = 30, CNZ = 119, CB = new Float32Array((CNX + 1) * (CNZ + 1)), CD = new Float32Array((CNX + 1) * (CNZ + 1));
+function cbil(arr, x, z) {
+  const fx = clamp((x - TX0) / CC, 0, CNX - 1e-3), fz = clamp((z - TZ0) / CC, 0, CNZ - 1e-3);
+  const ix = Math.floor(fx), iz = Math.floor(fz), tx = fx - ix, tz = fz - iz, i = iz * (CNX + 1) + ix;
+  return lerp(lerp(arr[i], arr[i + 1], tx), lerp(arr[i + CNX + 1], arr[i + CNX + 2], tx), tz);
+}
+function buildField() {
+  // 1) 道からの距離(近く)
+  for (const nm of SEGNAMES) {
+    const sg = SEG[nm], si = SEGNAMES.indexOf(nm) + 1;
+    for (let k = 0; k < sg.n; k++) {
+      const x = sg.X[k], z = sg.Z[k], k0 = Math.max(0, k - 1), k1 = Math.min(sg.n - 1, k + 1);
+      let fx = sg.X[k1] - sg.X[k0], fz = sg.Z[k1] - sg.Z[k0];
+      const l = Math.hypot(fx, fz) || 1; fx /= l; fz /= l;
+      const rx = -fz, rz = fx;
+      const ix0 = Math.max(0, Math.floor((x - 30 - TX0) / CELL)), ix1 = Math.min(NX, Math.ceil((x + 30 - TX0) / CELL));
+      const iz0 = Math.max(0, Math.floor((z - 30 - TZ0) / CELL)), iz1 = Math.min(NZ, Math.ceil((z + 30 - TZ0) / CELL));
+      for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+        const dx = TX0 + ix * CELL - x, dz = TZ0 + iz * CELL - z, al = dx * fx + dz * fz, u = dx * rx + dz * rz;
+        const d = Math.abs(al) <= 0.55 ? Math.abs(u) : Math.hypot(dx, dz);
+        const i = iz * VW + ix;
+        if (d < DF[i]) { DF[i] = d; UF[i] = u; TY[i] = sg.Y[k]; FS[i] = si; RVF[i] = sg.RV[k]; }
+      }
+    }
+  }
+  // 2) 粗い格子: 道の高さのなめらかな平均と、道からの距離
+  for (let iz = 0; iz <= CNZ; iz++) for (let ix = 0; ix <= CNX; ix++) {
+    const x = TX0 + ix * CC, z = TZ0 + iz * CC;
+    let sw = 0, sy = 0, md = 1e12, ny = 0;
+    for (const nm of SEGNAMES) {
+      const sg = SEG[nm];
+      for (let k = 0; k < sg.n; k += 4) {
+        const dx = sg.X[k] - x, dz = sg.Z[k] - z, d2 = dx * dx + dz * dz;
+        if (d2 < md) { md = d2; ny = sg.Y[k]; }
+        const w = Math.exp(-d2 / (2 * 65 * 65)); sw += w; sy += w * sg.Y[k];
+      }
+    }
+    const i = iz * (CNX + 1) + ix;
+    CB[i] = sw > 1e-4 ? sy / sw : ny; CD[i] = Math.sqrt(md);
+  }
+  // 3) 高さ
+  for (let iz = 0; iz <= NZ; iz++) for (let ix = 0; ix <= NX; ix++) {
+    const x = TX0 + ix * CELL, z = TZ0 + iz * CELL, i = iz * VW + ix;
+    const b = cbil(CB, x, z), dc = cbil(CD, x, z), dn = DF[i];
+    const d = dn < 30 ? dn : Math.max(30, dc);
+    let nat = b + (fbm(x / 55, z / 55, 3, 21) - 0.5) * 10 * sstep(5, 30, d) + 2.2 * sstep(8, 25, d);
+    nat += Math.max(0, dc - 32) * 0.42 * (0.55 + 0.9 * fbm(x / 170, z / 170, 3, 22));
+    nat += ridged(x / 240, z / 240, 4, 23) * 190 * sstep(110, 330, dc);
+    const lr = lakeR(x, z);
+    if (lr < 1.25) nat = lr < 1 ? LAKE.y : lerp(LAKE.y, Math.max(nat, LAKE.y + 0.6), sstep(1.0, 1.25, lr));
+    let h = nat;
+    if (dn < 30) {
+      const riv = RVF[i];
+      const a0 = riv ? 6.5 : 3.0, a1 = riv ? 18 : 15;
+      const n2 = riv ? Math.max(nat, TY[i] + 2.4 * sstep(6, 15, dn)) : nat;
+      h = lerp(TY[i], n2, sstep(a0, a1, dn));
+      if (lr < 1) h = LAKE.y;
+    }
+    HF[i] = h;
+    ICEF[i] = lr < 1.05 ? 1 - sstep(0.97, 1.03, lr) : (RVF[i] && dn < 8 ? 1 - sstep(6, 8, dn) : 0);
+  }
+}
+function terrH(x, z) {
+  const fx = (x - TX0) / CELL, fz = (z - TZ0) / CELL;
+  const ix = clamp(Math.floor(fx), 0, NX - 1), iz = clamp(Math.floor(fz), 0, NZ - 1);
+  const tx = clamp(fx - ix, 0, 1), tz = clamp(fz - iz, 0, 1), i = iz * VW + ix;
+  return lerp(lerp(HF[i], HF[i + 1], tx), lerp(HF[i + VW], HF[i + VW + 1], tx), tz);
+}
+const nearIdx = (x, z) => clamp(Math.round((z - TZ0) / CELL), 0, NZ) * VW + clamp(Math.round((x - TX0) / CELL), 0, NX);
+buildField();
+
+// =============================================================================
+//  モデル
+// =============================================================================
+const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const WOOD = [0.42, 0.28, 0.16], BARK = [0.15, 0.11, 0.08], DARK = [0.05, 0.05, 0.06];
+function addSpruce(m, x, y, z, s, rot, v) {
+  m.push(M4.trs(x, y - 0.3, z, rot, (vr() - 0.5) * 0.05, (vr() - 0.5) * 0.05, s));
+  const g = [[0.04, 0.07, 0.045], [0.05, 0.066, 0.04], [0.035, 0.062, 0.055]][v];
+  m.cyl(0.22, 0.08, 0, 2.6, 6, BARK, MT(0.9, 0, 0.8, 3), false);
+  const L = v === 2 ? 5 : 6;
+  for (let i = 0; i < L; i++) {
+    const f = i / L, y0 = 0.9 + i * (v === 1 ? 1.45 : 1.3), h = 2.5 - f * 0.9, rb = 2.5 * (1 - f * 0.8) * (v === 1 ? 0.82 : 1);
+    const tone = 0.85 + vr() * 0.3, c = [g[0] * tone, g[1] * tone, g[2] * tone];
+    m.lathe([[rb * 0.96, y0 - 0.2], [rb, y0], [rb * 0.45, y0 + h * 0.55], [0.03, y0 + h]], 7, c, MT(0.8, 0, 0.85, 13), vr() * TAU, vr() * TAU + TAU);
+  }
+  m.pop();
+}
+function addRock(m, x, y, z, r, rot, seed, flat = 0.7, col = [0.3, 0.29, 0.28]) {
+  m.push(M4.trs(x, y, z, rot, 0, 0, r));
+  const NU = 10, NV = 6;
+  m.grid(NU, NV, (i, j) => {
+    const a = (i / NU) * TAU, b = -0.3 + (j / NV) * (Math.PI / 2 + 0.3);
+    const n = 0.72 + 0.56 * fbm(Math.cos(a) * 1.4 + seed, Math.sin(a) * 1.4 + b * 1.2, 3, seed | 0);
+    const cb = Math.cos(b);
+    return { p: [Math.cos(a) * cb * n, Math.sin(b) * n * flat, Math.sin(a) * cb * n], c: col, mt: MT(0.85, 0, 0.9, 1) };
+  });
+  m.pop();
+}
+function addStake(m, x, y, z) {
+  m.rod([x, y - 0.3, z], [x, y + 1.45, z], 0.028, 5, [0.36, 0.25, 0.14], MT(0.8, 0, 0.9, 3));
+  m.push(M4.tr(x, y + 1.18, z)); m.cyl(0.034, 0.034, 0, 0.22, 6, [1.0, 0.32, 0.06], MT(0.4, 0, 1, 17), false); m.pop();
+}
+// 丸太小屋(前 = +z)。win は窓の明かりの色
+function addCabin(m, x, y, z, yaw, W, D, H, logCol, roofSnow = true) {
+  m.push(M4.trs(x, y, z, yaw, 0, 0));
+  const LM = MT(0.85, 0, 0.85, 18);
+  m.box(0, H / 2, 0, W - 0.2, H, D - 0.2, mixc(logCol, DARK, 0.4), MT(0.9, 0, 0.7, 3));
+  const nL = Math.round(H / 0.27);
+  for (let k = 0; k < nL; k++) {
+    const yy = 0.14 + k * 0.27, c = mixc(logCol, [0.25, 0.17, 0.1], vr() * 0.4);
+    m.rod([-W / 2 - 0.25, yy, -D / 2], [W / 2 + 0.25, yy, -D / 2], 0.14, 6, c, LM);
+    m.rod([-W / 2 - 0.25, yy, D / 2], [W / 2 + 0.25, yy, D / 2], 0.14, 6, c, LM);
+    m.rod([-W / 2, yy + 0.13, -D / 2 - 0.25], [-W / 2, yy + 0.13, D / 2 + 0.25], 0.14, 6, c, LM);
+    m.rod([W / 2, yy + 0.13, -D / 2 - 0.25], [W / 2, yy + 0.13, D / 2 + 0.25], 0.14, 6, c, LM);
+  }
+  // 切妻の屋根(雪が厚く積もる)
+  const ry = H + 1.5, ex = W / 2 + 0.45, ez = D / 2 + 0.7;
+  const tri = (zs) => { m.quad([-W / 2, H, zs], [W / 2, H, zs], [W / 2 * 0.02, ry - 0.1, zs], [-W / 2 * 0.02, ry - 0.1, zs], mixc(logCol, DARK, 0.3), MT(0.9, 0, 0.8, 3)); };
+  tri(-D / 2); tri(D / 2);
+  for (const sz of [-1, 1]) {
+    m.quad([-ex, H - 0.05, sz * ez], [ex, H - 0.05, sz * ez], [ex, ry, 0], [-ex, ry, 0], [0.18, 0.13, 0.09], MT(0.9, 0, 0.8, 3));
+    if (roofSnow) m.quad([-ex - 0.05, H + 0.22, sz * (ez + 0.05)], [ex + 0.05, H + 0.22, sz * (ez + 0.05)], [ex + 0.05, ry + 0.3, 0], [-ex - 0.05, ry + 0.3, 0], [0.86, 0.88, 0.92], MT(0.6, 0, 1, 15));
+  }
+  // 窓(明かり)と戸
+  m.box(W * 0.22, H * 0.55, D / 2 + 0.16, 0.8, 0.62, 0.04, [1.0, 0.62, 0.3], MT(0.5, 2.6, 1, 5));
+  m.box(W * 0.22, H * 0.55, D / 2 + 0.19, 0.06, 0.66, 0.04, DARK, MT(0.8, 0, 1, 3));
+  m.box(-W * 0.2, H * 0.42, D / 2 + 0.17, 0.9, H * 0.82, 0.06, [0.24, 0.16, 0.09], MT(0.8, 0, 0.9, 3));
+  // 煙突
+  m.box(W * 0.3, H + 1.3, -0.4, 0.5, 2.0, 0.5, [0.3, 0.29, 0.28], MT(0.9, 0, 0.9, 1));
+  m.pop();
+}
+function buildRing() {
+  const m = new Mesh(), NU = 180, NV = 7, cx = 0, cz = 1220;
+  m.grid(NU, NV, (i, j) => {
+    const a = (i / NU) * TAU, t = j / NV;
+    const rx = lerp(400, 2700, t), rz = lerp(1480, 3500, t);
+    const n = ridged(Math.cos(a) * 3.3 + 7, Math.sin(a) * 3.3 + t * 1.9, 5, 41);
+    const h = (40 + 560 * Math.sin(Math.min(1, t * 1.5) * Math.PI * 0.5) * (0.3 + 0.95 * n)) * (t > 0.8 ? 1 - ((t - 0.8) / 0.2) * 0.55 : 1);
+    return { p: [cx + Math.cos(a) * rx, h - 5, cz + Math.sin(a) * rz], c: [0.8, 0.82, 0.86], mt: MT(0.7, 0, 1, 16) };
+  });
+  return m;
+}
+// そり(+x が前。長さ 2.9m。y=0 がランナーの下)
+function buildSled() {
+  const m = new Mesh(), W = MT(0.55, 0, 0.9, 3), PL = MT(0.35, 0, 0.9, 0);
+  for (const zs of [-0.3, 0.3]) {
+    const pts = [[-1.55, 0.04], [0.9, 0.04], [1.15, 0.1], [1.32, 0.28], [1.36, 0.46]];
+    for (let i = 0; i < pts.length - 1; i++) m.rod([pts[i][0], pts[i][1], zs], [pts[i + 1][0], pts[i + 1][1], zs], 0.028, 5, WOOD, W);
+    m.box(-0.33, 0.012, zs, 2.44, 0.022, 0.075, DARK, PL);
+    for (const x of [-1.05, -0.35, 0.35, 0.9]) m.rod([x, 0.04, zs], [x, 0.37, zs], 0.022, 5, WOOD, W);
+    m.rod([-1.12, 0.56, zs], [0.95, 0.42, zs * 0.95], 0.02, 5, WOOD, W);
+    m.rod([-1.32, 0.05, zs], [-1.4, 1.02, zs * 1.06], 0.023, 5, WOOD, W);
+    m.rod([-1.12, 0.56, zs], [-1.36, 0.8, zs * 1.04], 0.018, 5, WOOD, W);
+  }
+  m.rod([-1.4, 1.02, -0.33], [-1.4, 1.02, 0.33], 0.026, 6, [0.2, 0.13, 0.08], W);
+  for (let k = 0; k < 7; k++) m.box(-1.0 + k * 0.32, 0.38, 0, 0.26, 0.026, 0.64, WOOD, W);
+  m.rod([1.36, 0.46, -0.3], [1.5, 0.43, 0], 0.022, 5, WOOD, W); m.rod([1.5, 0.43, 0], [1.36, 0.46, 0.3], 0.022, 5, WOOD, W);
+  m.box(-0.12, 0.64, 0, 1.78, 0.48, 0.58, [0.1, 0.17, 0.3], MT(0.85, 0, 0.85, 14));
+  m.box(-0.12, 0.885, 0, 1.8, 0.03, 0.6, [0.08, 0.13, 0.22], MT(0.85, 0, 0.85, 14));
+  m.box(-1.27, 0.07, 0, 0.12, 0.04, 0.5, DARK, MT(0.5, 0.6, 0.8, 7));
+  return m;
+}
+function buildCrate() {
+  const m = new Mesh(), c = [0.6, 0.45, 0.28];
+  m.box(0, 0, 0, 0.32, 0.22, 0.25, c, MT(0.7, 0, 0.9, 3));
+  m.box(0, 0, 0, 0.04, 0.23, 0.26, [0.15, 0.1, 0.06], MT(0.7, 0, 0.9, 3));
+  m.box(0, 0.112, 0, 0.33, 0.004, 0.06, [0.75, 0.7, 0.62], MT(0.9, 0, 1, 14));
+  return m;
+}
+// 人(後ろ姿。ランナーの上に立つ。+x が前)
+function buildMusher() {
+  const m = new Mesh(), P = MT(0.85, 0, 0.9, 14), F = MT(0.9, 0, 0.9, 9);
+  const parka = [0.34, 0.07, 0.045], pants = [0.05, 0.055, 0.07], boot = [0.07, 0.055, 0.045], fur = [0.5, 0.42, 0.33];
+  for (const z of [-0.3, 0.3]) {
+    m.ellipsoid([0.05, 0.1, z], [0.17, 0.095, 0.085], 5, boot, P);
+    m.limb([0.0, 0.17, z], [0.1, 0.55, z * 0.92], 0.08, 0.085, 6, pants, P);
+    m.limb([0.1, 0.55, z * 0.92], [-0.06, 0.96, z * 0.55], 0.09, 0.115, 6, pants, P);
+  }
+  m.ellipsoid([-0.03, 1.26, 0], [0.21, 0.37, 0.25], 7, parka, P);
+  m.ellipsoid([-0.04, 0.98, 0], [0.2, 0.13, 0.25], 6, parka, P);
+  for (const z of [-0.25, 0.25]) {
+    m.limb([0.0, 1.46, z], [0.12, 1.2, z * 1.18], 0.075, 0.068, 6, parka, P);
+    m.limb([0.12, 1.2, z * 1.18], [0.22, 1.04, z * 1.28], 0.068, 0.052, 6, parka, P);
+    m.ellipsoid([0.24, 1.03, z * 1.3], [0.06, 0.05, 0.055], 4, boot, P);
+  }
+  m.ellipsoid([0.01, 1.73, 0], [0.14, 0.16, 0.14], 7, parka, P);
+  m.ellipsoid([0.1, 1.71, 0], [0.04, 0.1, 0.085], 5, [0.18, 0.12, 0.1], MT(0.8, 0, 0.6, 0));
+  for (let k = 0; k < 12; k++) { const a = (k / 12) * TAU; m.ellipsoid([0.12, 1.71 + Math.sin(a) * 0.125, Math.cos(a) * 0.115], [0.045, 0.05, 0.05], 3, fur, F); }
+  m.ellipsoid([0.12, 1.85, 0], [0.025, 0.026, 0.036], 3, [1, 0.95, 0.85], MT(0.3, 4.0, 1, 5));
+  return m;
+}
+// ---- 犬(骨つき。苦手に挑戦) ----
+const DOG_J = [
+  [0, 0.56, 0], [0.02, 0.57, 0], [0.33, 0.68, 0], [-0.40, 0.63, 0],
+  [0.24, 0.52, -0.105], [0.24, 0.52, 0.105], [-0.29, 0.53, -0.1], [-0.29, 0.53, 0.1],
+  [0.22, 0.31, -0.105], [0.22, 0.31, 0.105], [-0.22, 0.31, -0.1], [-0.22, 0.31, 0.1],
+];
+const DOG_PARENT = [-1, 0, 1, 0, 1, 1, 0, 0, 4, 5, 6, 7];
+const COATS = [
+  { top: [0.07, 0.065, 0.06], side: [0.3, 0.29, 0.28], belly: [0.8, 0.78, 0.74], boot: [0.62, 0.07, 0.05], harness: [0.08, 0.2, 0.52], eye: [0.25, 0.45, 0.62] },
+  { top: [0.3, 0.14, 0.06], side: [0.52, 0.3, 0.16], belly: [0.84, 0.78, 0.7], boot: [0.1, 0.22, 0.58], harness: [0.6, 0.1, 0.06], eye: [0.12, 0.07, 0.03] },
+  { top: [0.25, 0.25, 0.26], side: [0.52, 0.52, 0.52], belly: [0.86, 0.85, 0.83], boot: [0.62, 0.07, 0.05], harness: [0.1, 0.36, 0.16], eye: [0.12, 0.07, 0.03] },
+  { top: [0.55, 0.47, 0.37], side: [0.72, 0.65, 0.55], belly: [0.88, 0.86, 0.82], boot: [0.1, 0.22, 0.58], harness: [0.6, 0.1, 0.06], eye: [0.25, 0.45, 0.62] },
+];
+function buildDog(coat) {
+  const m = new Mesh(true), C = COATS[coat], F = MT(0.85, 0, 0.9, 9);
+  const fur = (p, n) => (n[1] > 0.2 ? mixc(C.side, C.top, sstep(0.2, 0.7, n[1])) : n[1] < -0.1 ? mixc(C.side, C.belly, sstep(-0.1, -0.5, n[1])) : C.side);
+  m.bone = 0; m.ellipsoid([-0.17, 0.585, 0], [0.3, 0.165, 0.145], 9, fur, F);
+  m.bone = 1;
+  m.ellipsoid([0.14, 0.595, 0], [0.27, 0.205, 0.165], 9, (p, n) => {
+    if (Math.abs(p[0] - 0.04) < 0.03 || (n[1] > 0.8 && p[0] < 0.12 && p[0] > -0.12)) return C.harness;
+    if (p[0] > 0.3 && n[0] > 0.25 && n[1] < 0.45) return C.belly;
+    return fur(p, n);
+  }, F);
+  m.bone = 2;
+  m.push(M4.mul(M4.tr(0.41, 0.72, 0), M4.rz(0.8))); m.ellipsoid([0, 0, 0], [0.155, 0.105, 0.1], 7, (p, n) => (n[0] > 0.3 ? C.belly : fur(p, [n[0], n[1] + n[0] * 0.5, n[2]])), F); m.pop();
+  m.ellipsoid([0.52, 0.81, 0], [0.125, 0.1, 0.092], 8, (p, n) => (n[1] > 0.4 && p[0] < 0.6 ? C.top : n[1] < -0.05 || p[0] > 0.6 ? C.belly : mixc(C.side, C.belly, 0.35)), F);
+  m.ellipsoid([0.635, 0.775, 0], [0.098, 0.053, 0.054], 7, (p, n) => (n[1] > 0.55 ? C.side : C.belly), F);
+  m.ellipsoid([0.728, 0.792, 0], [0.022, 0.019, 0.026], 4, [0.02, 0.02, 0.02], MT(0.25, 0, 1, 0));
+  m.ellipsoid([0.66, 0.744, 0], [0.05, 0.012, 0.026], 4, [0.7, 0.28, 0.3], MT(0.35, 0, 1, 0));
+  for (const z of [-0.052, 0.052]) {
+    m.ellipsoid([0.588, 0.836, z], [0.014, 0.016, 0.016], 4, C.eye, MT(0.08, 0, 1, 0));
+    m.push(M4.mul(M4.tr(0.475, 0.875, z * 1.05), M4.rx(z < 0 ? 0.28 : -0.28)));
+    m.push([0.55, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); m.lathe([[0.045, 0], [0.025, 0.06], [0.002, 0.11]], 5, C.top, F); m.pop();
+    m.pop();
+  }
+  m.bone = 3;
+  const tp = [[-0.44, 0.64], [-0.52, 0.72], [-0.535, 0.83], [-0.48, 0.905], [-0.39, 0.91], [-0.33, 0.855]], tr = [0.055, 0.066, 0.07, 0.066, 0.056, 0.042];
+  tp.forEach((p, k) => m.ellipsoid([p[0], p[1], 0], [tr[k] * 1.05, tr[k], tr[k] * 0.95], 5, (q, n) => (k >= 4 ? C.belly : n[1] > 0 || n[0] < 0 ? C.top : C.side), F));
+  for (const s of [-1, 1]) {
+    const z = 0.105 * s, zi = s < 0 ? 0 : 1;
+    m.bone = 4 + zi;
+    m.ellipsoid([0.22, 0.5, z * 1.08], [0.085, 0.12, 0.06], 6, fur, F);
+    m.limb([0.24, 0.52, z], [0.22, 0.31, z], 0.06, 0.044, 6, C.side, F);
+    m.bone = 8 + zi;
+    m.limb([0.22, 0.31, z], [0.235, 0.08, z], 0.036, 0.03, 6, C.belly, F);
+    m.ellipsoid([0.258, 0.04, z], [0.052, 0.034, 0.04], 5, C.boot, MT(0.7, 0, 0.9, 14));
+    m.bone = 6 + zi;
+    m.ellipsoid([-0.27, 0.47, z * 1.12], [0.115, 0.135, 0.07], 6, fur, F);
+    m.limb([-0.29, 0.5, z], [-0.22, 0.31, z], 0.068, 0.05, 6, C.side, F);
+    m.bone = 10 + zi;
+    m.limb([-0.22, 0.31, z], [-0.31, 0.16, z], 0.04, 0.032, 6, C.belly, F);
+    m.limb([-0.31, 0.16, z], [-0.29, 0.07, z], 0.032, 0.03, 5, C.belly, F);
+    m.ellipsoid([-0.27, 0.04, z], [0.052, 0.034, 0.04], 5, C.boot, MT(0.7, 0, 0.9, 14));
+  }
+  return m;
+}
+// 骨の行列(12本)を作る。pose = {bob, pitch, flex, head, tail, wag, u:[4], l:[4], roll}
+const _bones = new Float32Array(12 * 16);
+function dogBones(pose) {
+  const B = [];
+  B[0] = M4.mul(M4.tr(0, pose.bob, 0), M4.mul(M4.about(DOG_J[0], M4.rz(pose.pitch)), M4.about(DOG_J[0], M4.rx(pose.roll))));
+  B[1] = M4.mul(B[0], M4.about(DOG_J[1], M4.rz(pose.flex)));
+  B[2] = M4.mul(B[1], M4.about(DOG_J[2], M4.mul(M4.rz(pose.head), M4.ry(pose.look))));
+  B[3] = M4.mul(B[0], M4.about(DOG_J[3], M4.mul(M4.ry(pose.wag), M4.rz(pose.tail))));
+  for (let k = 0; k < 4; k++) B[4 + k] = M4.mul(B[DOG_PARENT[4 + k]], M4.about(DOG_J[4 + k], M4.rz(pose.u[k])));
+  for (let k = 0; k < 4; k++) B[8 + k] = M4.mul(B[4 + k], M4.about(DOG_J[8 + k], M4.rz(pose.l[k])));
+  for (let i = 0; i < 12; i++) _bones.set(B[i], i * 16);
+  return _bones;
+}
+function buildIcePlate() {
+  const m = new Mesh();
+  m.box(0, 0, 0, 1.6, 0.16, 1.2, [0.5, 0.66, 0.76], MT(0.12, 0, 1, 19));
+  m.box(0, 0.09, 0, 1.55, 0.03, 1.15, [0.86, 0.9, 0.95], MT(0.6, 0, 1, 15));
+  return m;
+}
+
+// =============================================================================
+//  WebGL2
+// =============================================================================
+const cvs = $('gl');
+let gl = null;
+try { gl = cvs.getContext('webgl2', { antialias: false, alpha: false, depth: true, stencil: false, powerPreference: 'high-performance' }); } catch (e) { gl = null; }
+let HDR = false;
+const SH_HEAD = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2DShadow;\n';
+const COMMON = `
+uniform vec3 uCam; uniform float uT;
+uniform vec3 uMainDir, uMainCol, uFillDir, uFillCol, uAmbSky, uAmbGnd, uFogCol, uZen, uHorz, uGlowCol, uSunSky, uMoonDir, uCloudCol;
+uniform float uFogDen, uSunVis, uNight, uAur, uCloud, uOS;
+uniform vec4 uLP[8]; uniform vec3 uLC[8]; uniform int uNL;
+uniform vec3 uSpP, uSpD, uSpC;
+uniform sampler2D uEnv, uNoise;
+uniform sampler2DShadow uShadow;
+uniform mat4 uShM; uniform float uShOn;
+const float PI = 3.14159265;
+vec2 eqUV(vec3 d) { return vec2(atan(d.z, d.x) / (2.0 * PI) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / PI); }
+vec3 env(vec3 d, float lod) { return textureLod(uEnv, eqUV(d), lod).rgb; }
+float D_GGX(float NdH, float r) { float a = r * r; float a2 = a * a; float d = NdH * NdH * (a2 - 1.0) + 1.0; return a2 / (PI * d * d + 1e-6); }
+vec3 brdf(vec3 N, vec3 V, vec3 L, vec3 alb, float r, float m) {
+  float NdL = max(dot(N, L), 0.0);
+  if (NdL <= 0.0) return vec3(0.0);
+  vec3 H = normalize(V + L);
+  float NdV = max(dot(N, V), 1e-3), NdH = max(dot(N, H), 0.0), VdH = max(dot(V, H), 0.0);
+  float k = (r + 1.0) * (r + 1.0) / 8.0;
+  float G = NdV / (NdV * (1.0 - k) + k) * NdL / (NdL * (1.0 - k) + k);
+  vec3 F0 = mix(vec3(0.04), alb, m);
+  vec3 F = F0 + (1.0 - F0) * pow(1.0 - VdH, 5.0);
+  vec3 spec = D_GGX(NdH, r) * G * F / (4.0 * NdV * NdL + 1e-4);
+  return ((1.0 - F) * (1.0 - m) * alb / PI + spec) * NdL;
+}
+float shadowAt(vec3 w) {
+  if (uShOn < 0.5) return 1.0;
+  vec4 s = uShM * vec4(w, 1.0);
+  vec3 p = s.xyz / s.w * 0.5 + 0.5;
+  if (p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0 || p.z > 1.0) return 1.0;
+  float tx = 1.0 / float(textureSize(uShadow, 0).x), b = 0.0011;
+  float v = texture(uShadow, vec3(p.xy + vec2(-tx, -tx) * 0.7, p.z - b)) + texture(uShadow, vec3(p.xy + vec2(tx, -tx) * 0.7, p.z - b))
+          + texture(uShadow, vec3(p.xy + vec2(-tx, tx) * 0.7, p.z - b)) + texture(uShadow, vec3(p.xy + vec2(tx, tx) * 0.7, p.z - b));
+  float e = smoothstep(0.0, 0.08, min(min(p.x, 1.0 - p.x), min(p.y, 1.0 - p.y)));
+  return mix(1.0, v * 0.25, uShOn * e);
+}
+vec3 spotAt(vec3 w, out vec3 Ld) {
+  vec3 Ls = uSpP - w; float d2 = dot(Ls, Ls); Ld = Ls * inversesqrt(d2 + 1e-4);
+  float cone = smoothstep(0.9, 0.975, dot(-Ld, uSpD));
+  return uSpC * cone / (d2 + 1.0);
+}
+vec3 localLights(vec3 w, vec3 N, vec3 V, vec3 alb, float r, float m) {
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (i >= uNL) break;
+    vec3 Lv = uLP[i].xyz - w; float d2 = dot(Lv, Lv); float rr = uLP[i].w * uLP[i].w;
+    if (d2 > rr) continue;
+    float att = 1.0 - d2 / rr; att = att * att / (d2 + 1.0);
+    acc += brdf(N, V, Lv * inversesqrt(d2), alb, r, m) * uLC[i] * att;
+  }
+  vec3 Ld; vec3 sp = spotAt(w, Ld);
+  if (dot(sp, sp) > 0.0) acc += brdf(N, V, Ld, alb, r, m) * sp;
+  return acc;
+}
+float h13(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+vec3 h33(vec3 p) { p = fract(p * vec3(0.1031, 0.103, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
+vec3 aurora(vec3 d) {
+  if (d.y < 0.02) return vec3(0.0);
+  float az = atan(d.x, d.z);
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    float base = 0.14 + fi * 0.06 + 0.06 * sin(az * 2.1 + uT * 0.025 + fi * 2.3) + 0.07 * (texture(uNoise, vec2(az * 0.21 + fi * 0.37, uT * 0.0035 + fi)).r - 0.5);
+    float rays = texture(uNoise, vec2(az * (2.6 + fi * 1.3) + uT * 0.006 * (1.0 + fi), 0.31 + fi * 0.27 + uT * 0.002)).b;
+    rays = rays * rays * 2.6 + 0.15;
+    float hgt = d.y - base;
+    float body = smoothstep(-0.012, 0.012, hgt) * exp(-max(hgt, 0.0) / (0.05 + 0.12 * rays));
+    float edge = exp(-pow(hgt / 0.01, 2.0));
+    vec3 col = mix(vec3(0.12, 1.0, 0.42), vec3(0.6, 0.16, 0.7), smoothstep(0.03, 0.22, hgt));
+    acc += col * (body * rays * 0.7 + edge * rays * 0.9) * smoothstep(-0.5, 0.4, d.z) * (1.0 - fi * 0.45);
+  }
+  return acc;
+}
+vec3 skyRad(vec3 d) {
+  float y = d.y, yy = max(y, 0.0);
+  vec3 c = mix(uHorz, uZen, pow(yy, 0.5));
+  float sd = max(dot(d, uSunSky), 0.0);
+  c += uGlowCol * (pow(sd, 5.0) * 0.45 + pow(sd, 40.0) * 0.9) * (1.0 - uCloud * 0.75);
+  c += vec3(1.0, 0.78, 0.5) * 70.0 * smoothstep(0.99955, 0.9997, sd) * uSunVis * (1.0 - uCloud);
+  float clr = 1.0 - uCloud;
+  if (uNight > 0.01) {
+    vec3 p = d * 230.0; vec3 id = floor(p); vec3 f = fract(p) - 0.5;
+    float hh = h13(id);
+    if (hh > 0.9955) { vec3 o = (h33(id) - 0.5) * 0.6; float dd = length(f - o); c += vec3(0.85, 0.9, 1.0) * smoothstep(0.13, 0.0, dd) * (0.5 + 3.0 * fract(hh * 173.0)) * uNight * smoothstep(0.02, 0.25, y) * clr * 1.6; }
+    float mw = exp(-pow(dot(d, normalize(vec3(0.6, 0.35, 0.72))) / 0.18, 2.0)) * texture(uNoise, eqUV(d) * vec2(6.0, 3.0)).g;
+    c += vec3(0.05, 0.06, 0.09) * mw * uNight * clr;
+    c += aurora(d) * uAur * clr;
+    float md = dot(d, uMoonDir);
+    c += vec3(1.0, 0.97, 0.9) * 12.0 * smoothstep(0.99972, 0.99982, md) * uNight * (1.0 - uCloud * 0.95);
+    c += vec3(0.45, 0.55, 0.75) * (pow(max(md, 0.0), 400.0) * 0.8 + pow(max(md, 0.0), 30.0) * 0.06) * uNight * (1.0 - uCloud * 0.6);
+  }
+  vec2 cp = d.xz / (yy + 0.09) * 0.07 + vec2(uT * 0.0012, uT * 0.0004);
+  float n = texture(uNoise, cp * 0.5).r * 0.6 + texture(uNoise, cp * 1.4 + 0.3).g * 0.3 + texture(uNoise, cp * 3.7).b * 0.1;
+  float cov = smoothstep(0.6 - uCloud * 0.62, 0.8 - uCloud * 0.45, n);
+  vec3 cc = uCloudCol * (0.75 + 0.5 * n) + uGlowCol * pow(sd, 3.0) * 0.8 * (1.0 - uCloud) * (1.0 - n * 0.6);
+  c = mix(c, cc, cov * smoothstep(0.0, 0.07, y));
+  if (y < 0.0) c = uHorz;
+  return c;
+}
+vec3 fogIt(vec3 col, vec3 w) {
+  vec3 dv = w - uCam; float d = length(dv); dv /= d;
+  float f = 1.0 - exp(-d * uFogDen);
+  vec3 fc = uFogCol + uGlowCol * pow(max(dot(dv, uSunSky), 0.0), 5.0) * 0.5 * (1.0 - uCloud);
+  return mix(col, fc, f);
+}
+`;
+const VS_FULL = `layout(location=0) in vec2 aP; out vec2 vUV; void main(){ vUV = aP * 0.5 + 0.5; gl_Position = vec4(aP, 0.0, 1.0); }`;
+const FS_SKY = COMMON + `
+in vec2 vUV; out vec4 o; uniform mat4 uInvVP;
+void main() {
+  vec4 a = uInvVP * vec4(vUV * 2.0 - 1.0, 1.0, 1.0);
+  vec3 d = normalize(a.xyz / a.w - uCam);
+  vec3 c = skyRad(d);
+  c = mix(c, uFogCol, clamp(uFogDen * 40.0 - 0.15, 0.0, 1.0) * smoothstep(0.5, 0.0, d.y));
+  o = vec4(c * uOS, 1.0);
+}`;
+const FS_ENV = COMMON + `
+in vec2 vUV; out vec4 o;
+void main() {
+  float ph = (vUV.x - 0.5) * 2.0 * PI, th = vUV.y * PI;
+  vec3 d = vec3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph));
+  vec3 c = skyRad(d);
+  if (d.y < 0.0) c = mix(uAmbGnd, uHorz, 0.5);
+  o = vec4(c * uOS, 1.0);
+}`;
+const VS_OBJ = `layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=2) in vec3 aC; layout(location=3) in vec4 aM;
+uniform mat4 uVP, uM; uniform vec3 uTint;
+out vec3 vW, vN, vC, vO; out vec4 vM;
+void main() { vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; vN = mat3(uM) * aN; vC = aC * uTint; vM = aM; vO = aP; gl_Position = uVP * w; }`;
+const VS_SKIN = `layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=2) in vec3 aC; layout(location=3) in vec4 aM; layout(location=4) in float aB;
+uniform mat4 uVP, uM; uniform mat4 uB[12]; uniform vec3 uTint;
+out vec3 vW, vN, vC, vO; out vec4 vM;
+void main() { mat4 b = uB[int(aB + 0.5)]; vec4 w = uM * (b * vec4(aP, 1.0)); vW = w.xyz; vN = mat3(uM) * (mat3(b) * aN); vC = aC * uTint; vM = aM; vO = aP; gl_Position = uVP * w; }`;
+const FS_OBJ = COMMON + `
+in vec3 vW, vN, vC, vO; in vec4 vM; out vec4 o; uniform float uEm;
+const vec3 SNOW = vec3(0.80, 0.84, 0.90);
+vec4 tri(vec3 p, vec3 n) { vec3 b = abs(n) + 0.001; b /= (b.x + b.y + b.z); return texture(uNoise, p.yz) * b.x + texture(uNoise, p.xz) * b.y + texture(uNoise, p.xy) * b.z; }
+void main() {
+  vec3 V = normalize(uCam - vW);
+  vec3 N = normalize(vN);
+  vec3 ng = normalize(cross(dFdx(vW), dFdy(vW)));
+  if (dot(ng, V) < 0.0) ng = -ng;
+  if (dot(N, ng) < 0.0) N = -N;
+  vec3 alb = vC; float r = vM.x, m = vM.y, ao = vM.z; int id = int(vM.w + 0.5);
+  vec3 emis = vec3(0.0); float glit = 0.0, wrap = 0.0;
+  if (id == 10) {
+    float u = vC.x, ice = vC.y, rk = vC.z;
+    float tw = vM.x > 0.5 ? smoothstep(2.7, 1.9, abs(u)) : 0.0;
+    vec4 n1 = texture(uNoise, vW.xz * 0.045), n2 = texture(uNoise, vW.xz * 0.31), n3 = texture(uNoise, vW.xz * 1.9);
+    alb = SNOW * (0.92 + 0.12 * n2.r);
+    N = normalize(N + vec3(n3.r - 0.5, 0.0, n3.g - 0.5) * 0.14 + vec3(n2.g - 0.5, 0.0, n2.b - 0.5) * 0.22);
+    r = 0.6; m = 0.0; wrap = 1.0; glit = 1.0;
+    float gr = smoothstep(0.07, 0.0, abs(abs(u) - 0.3));
+    float paw = smoothstep(0.6, 0.78, texture(uNoise, vec2(vW.x * 1.7 + vW.z * 0.9, vW.z * 1.7 - vW.x * 0.9)).b) * smoothstep(0.75, 0.2, abs(u));
+    alb = mix(alb, SNOW * vec3(0.87, 0.86, 0.85) * (0.86 + 0.2 * n3.b), tw);
+    alb *= 1.0 - (gr * 0.32 + paw * 0.16) * tw;
+    r = mix(r, 0.45, tw); glit *= 1.0 - tw * 0.6;
+    float dust = smoothstep(0.42, 0.75, n2.r * 0.7 + n1.b * 0.55);
+    float crack = smoothstep(0.02, 0.0, abs(n2.a - 0.5)) + smoothstep(0.015, 0.0, abs(n1.a - 0.47)) * 0.7;
+    vec3 iceA = vec3(0.09, 0.16, 0.21) * (0.8 + 0.5 * n1.g) + vec3(0.3, 0.4, 0.46) * crack * (1.0 - dust);
+    iceA = mix(iceA, SNOW * 0.92, max(dust * 0.9, tw * 0.75));
+    alb = mix(alb, iceA, ice); r = mix(r, mix(0.07, 0.5, max(dust, tw * 0.8)), ice); wrap *= 1.0 - ice * 0.7; glit *= 1.0 - ice * 0.5;
+    float rr = rk * smoothstep(0.85, 0.55, N.y);
+    alb = mix(alb, vec3(0.12, 0.115, 0.11) * (0.6 + 0.8 * n2.r), rr); r = mix(r, 0.8, rr); glit *= 1.0 - rr; wrap *= 1.0 - rr;
+  }
+  else if (id == 1 || id == 13 || id == 18) {
+    vec4 t1 = tri(vW * (id == 13 ? 0.6 : 0.35), N), t2 = tri(vW * 1.6, N);
+    float lim = 0.4;
+    if (id == 1) { alb *= 0.55 + 0.9 * t1.r; r = 0.75 + 0.2 * t2.g; N = normalize(N + (t2.rgb - 0.5) * 0.5); }
+    else if (id == 13) { alb *= 0.7 + 0.6 * t2.r; r = 0.8; N = normalize(N + (t2.rgb - 0.5) * 0.7); lim = 0.3; }
+    else { alb *= 0.65 + 0.6 * t1.g; r = 0.85; }
+    float snowy = smoothstep(lim, lim + 0.32, N.y + (t1.b - 0.5) * 0.6);
+    alb = mix(alb, SNOW, snowy); r = mix(r, 0.6, snowy); glit = snowy; wrap = snowy;
+  }
+  else if (id == 3) { vec4 t = texture(uNoise, vec2(vO.x * 0.6, vO.y * 6.0 + vO.z * 6.0)); alb *= 0.7 + 0.5 * t.r; r = 0.55 + 0.3 * t.g; }
+  else if (id == 5) { emis = vC * vM.y * uEm; alb = vC * 0.1; m = 0.0; }
+  else if (id == 7) { vec4 t = tri(vW * 0.5, N); r = 0.35 + 0.3 * t.r; }
+  else if (id == 9) {
+    vec4 t = texture(uNoise, vec2(vO.x * 9.0 + vO.y * 2.0, vO.z * 9.0 + vO.y * 5.0));
+    vec4 t2 = texture(uNoise, vec2(vO.x * 27.0, vO.y * 23.0 + vO.z * 19.0));
+    alb *= 0.78 + 0.32 * t.r + 0.14 * (t2.g - 0.5);
+    N = normalize(N + (t2.rgb - 0.5) * 0.35);
+    r = 0.8;
+    float rimF = pow(1.0 - max(dot(N, V), 0.0), 2.2);
+    emis += alb * rimF * (uAmbSky * 1.6 + uMainCol * 0.3 * clamp(dot(N, uMainDir) + 0.5, 0.0, 1.0) + uFillCol * 0.35) * 0.9;
+    wrap = 0.6;
+  }
+  else if (id == 11) { vec4 t = texture(uNoise, vW.xz * 0.5); alb = vec3(0.02, 0.04, 0.055) + vec3(0.25, 0.32, 0.35) * smoothstep(0.02, 0.0, abs(t.a - 0.5)); r = 0.05; m = 0.0; }
+  else if (id == 12) { vec4 t = texture(uNoise, vW.xz * 0.6 + uT * 0.03); N = normalize(N + vec3(t.r - 0.5, 0.0, t.g - 0.5) * 0.12); alb = vec3(0.004, 0.008, 0.01); r = 0.03; m = 0.0; }
+  else if (id == 14) { vec4 t = texture(uNoise, vO.xy * 8.0 + vO.zx * 8.0); alb *= 0.85 + 0.25 * t.r; r = 0.9; }
+  else if (id == 15) { vec4 t = tri(vW * 0.4, N); alb = SNOW * (0.95 + 0.08 * t.r); N = normalize(N + (t.rgb - 0.5) * 0.25); r = 0.6; glit = 1.0; wrap = 1.0; }
+  else if (id == 16) {
+    vec4 t = tri(vW * 0.004, N), t2 = tri(vW * 0.02, N);
+    float sn = smoothstep(0.42, 0.72, N.y + (t.r - 0.5) * 0.5 + (t2.g - 0.5) * 0.3);
+    alb = mix(vec3(0.07, 0.07, 0.075) * (0.7 + 0.6 * t2.r), SNOW * 0.95, sn); r = mix(0.85, 0.6, sn); wrap = sn;
+  }
+  else if (id == 17) { vec3 Ld; vec3 sp = spotAt(vW, Ld); emis += vC * dot(sp, vec3(0.33)) * 10.0; }
+  else if (id == 19) { vec4 t = tri(vW * 0.8, N); alb = vec3(0.42, 0.6, 0.7) * (0.8 + 0.4 * t.r); r = 0.12; N = normalize(N + (t.rgb - 0.5) * 0.4); float sn = smoothstep(0.6, 0.9, N.y); alb = mix(alb, SNOW, sn); }
+  float sh = shadowAt(vW);
+  vec3 col = brdf(N, V, uMainDir, alb, r, m) * uMainCol * sh;
+  col += alb * uMainCol * max(0.0, dot(N, uMainDir) + 0.35) * 0.07 * wrap * sh;
+  col += brdf(N, V, uFillDir, alb, r, m) * uFillCol;
+  col += localLights(vW, N, V, alb, r, m);
+  vec3 irr = mix(uAmbGnd, uAmbSky, N.y * 0.5 + 0.5);
+  float NdV = max(dot(N, V), 0.0);
+  vec3 F0 = mix(vec3(0.04), alb, m);
+  vec3 Fr = F0 + (max(vec3(1.0 - r), F0) - F0) * pow(1.0 - NdV, 5.0);
+  vec3 Rv = reflect(-V, N);
+  vec3 spec = env(Rv, r * 6.0) * (Rv.y < 0.0 ? 0.3 : 1.0) / uOS;
+  col += ((1.0 - Fr) * (1.0 - m) * alb * irr + Fr * spec) * ao;
+  if (glit > 0.0) {
+    float g1 = texture(uNoise, vW.xz * 3.1 + V.xz * 0.9).b, g2 = texture(uNoise, vW.zx * 4.3 - V.zx * 0.7 + 0.37).b;
+    float sp = smoothstep(0.36, 0.42, g1 * g2) * glit;
+    vec3 Ld; vec3 spt = spotAt(vW, Ld);
+    col += sp * (uMainCol * sh * max(dot(N, uMainDir), 0.0) * 2.0 + uFillCol * 1.2 + spt * 2.5);
+  }
+  col += emis;
+  o = vec4(fogIt(col, vW) * uOS, 1.0);
+}`;
+const VS_SNOW = `layout(location=0) in vec4 aS;
+uniform mat4 uVP; uniform vec3 uCam; uniform float uT; uniform vec3 uSnowV; uniform float uBox, uStreak; uniform vec3 uSpP, uSpD;
+out float vA; out float vSp;
+void main() {
+  vec3 wob = vec3(sin(uT * 0.9 + aS.x * 40.0), 0.0, cos(uT * 0.8 + aS.z * 40.0)) * 0.5;
+  vec3 wp = aS.xyz * uBox + uSnowV * uT + wob;
+  vec3 l = mod(wp - uCam + uBox * 0.5, uBox) - uBox * 0.5;
+  vec3 p = uCam + l - uSnowV * uStreak * aS.w;
+  float d = length(l);
+  vA = smoothstep(uBox * 0.5, uBox * 0.2, d) * smoothstep(0.5, 1.6, d);
+  vec3 Ld = normalize(p - uSpP);
+  vSp = smoothstep(0.9, 0.975, dot(Ld, uSpD)) * 50.0 / (dot(p - uSpP, p - uSpP) + 3.0);
+  gl_Position = uVP * vec4(p, 1.0);
+}`;
+const FS_SNOW = `in float vA; in float vSp; out vec4 o; uniform vec3 uSnowC; uniform float uOS;
+void main() { o = vec4((uSnowC + vec3(1.0, 0.95, 0.85) * vSp) * vA * uOS, 1.0); }`;
+const VS_PART = `layout(location=0) in vec4 aP; layout(location=1) in vec4 aC;
+uniform mat4 uVP; uniform float uPS, uMaxPt; out vec4 vC;
+void main() { gl_Position = uVP * vec4(aP.xyz, 1.0); gl_PointSize = clamp(aP.w * uPS / gl_Position.w, 1.0, uMaxPt); vC = aC; vC.a *= smoothstep(0.6, 2.5, gl_Position.w); }`;
+const FS_PART = `in vec4 vC; out vec4 o; uniform float uOS;
+void main() { vec2 q = gl_PointCoord * 2.0 - 1.0; float r = dot(q, q); if (r > 1.0) discard; float a = 1.0 - r; a *= a * vC.a; o = vec4(vC.rgb * a * uOS, a); }`;
+const VS_LINE = `layout(location=0) in vec3 aP; uniform mat4 uVP; void main() { gl_Position = uVP * vec4(aP, 1.0); }`;
+const FS_LINE = `out vec4 o; uniform vec3 uCol; uniform float uOS; void main() { o = vec4(uCol * uOS, 1.0); }`;
+const VS_SHADOW = `layout(location=0) in vec3 aP; uniform mat4 uLVP, uM; void main() { gl_Position = uLVP * uM * vec4(aP, 1.0); }`;
+const VS_SHADOW_SKIN = `layout(location=0) in vec3 aP; layout(location=4) in float aB; uniform mat4 uLVP, uM; uniform mat4 uB[12]; void main() { gl_Position = uLVP * uM * (uB[int(aB + 0.5)] * vec4(aP, 1.0)); }`;
+const FS_SHADOW = `void main() {}`;
+const FS_DOWN = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc; uniform vec2 uTx; uniform float uTh;
+void main() {
+  vec3 c = (texture(uSrc, vUV + uTx * vec2(-1.0, -1.0)).rgb + texture(uSrc, vUV + uTx * vec2(1.0, -1.0)).rgb + texture(uSrc, vUV + uTx * vec2(-1.0, 1.0)).rgb + texture(uSrc, vUV + uTx * vec2(1.0, 1.0)).rgb) * 0.25;
+  if (uTh > 0.0) { float b = max(c.r, max(c.g, c.b)); c *= max(b - uTh, 0.0) / max(b, 1e-4); }
+  o = vec4(min(c, vec3(60.0)), 1.0);
+}`;
+const FS_UP = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc; uniform vec2 uTx; uniform float uK;
+void main() {
+  vec3 c = texture(uSrc, vUV).rgb * 4.0;
+  c += (texture(uSrc, vUV + vec2(uTx.x, 0.0)).rgb + texture(uSrc, vUV - vec2(uTx.x, 0.0)).rgb + texture(uSrc, vUV + vec2(0.0, uTx.y)).rgb + texture(uSrc, vUV - vec2(0.0, uTx.y)).rgb) * 2.0;
+  c += texture(uSrc, vUV + uTx).rgb + texture(uSrc, vUV - uTx).rgb + texture(uSrc, vUV + vec2(uTx.x, -uTx.y)).rgb + texture(uSrc, vUV + vec2(-uTx.x, uTx.y)).rgb;
+  o = vec4(c / 16.0 * uK, 1.0);
+}`;
+const FS_COMP = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc, uBloom; uniform float uExp, uBloomK, uGrain, uVig, uOS, uHasBloom, uCool, uCold; uniform vec2 uRes;
+vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+float h12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+void main() {
+  vec3 c = texture(uSrc, vUV).rgb / uOS;
+  if (uHasBloom > 0.5) c += texture(uBloom, vUV).rgb / uOS * uBloomK;
+  c *= uExp;
+  c = aces(c);
+  c = pow(c, vec3(1.0 / 2.2));
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(c, c * vec3(0.88, 0.97, 1.12), uCool * smoothstep(0.6, 0.1, l));
+  vec2 q = vUV - 0.5; q.x *= uRes.x / uRes.y;
+  float vg = pow(length(q) * 1.1, 2.6);
+  c *= 1.0 - uVig * vg;
+  c = mix(c, vec3(l) * vec3(0.85, 0.93, 1.05), uCold * smoothstep(0.15, 0.7, length(q)) * 0.6);
+  c += (h12(vUV * uRes + uGrain) - 0.5) * 0.028;
+  o = vec4(c, 1.0);
+}`;
+
+const UTYPES = {};
+function mkProg(vsrc, fsrc, name) {
+  const mk = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, SH_HEAD + src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(`${name} のシェーダー: ${gl.getShaderInfoLog(s)}`);
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vsrc));
+  gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fsrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`${name} のリンク: ${gl.getProgramInfoLog(p)}`);
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) {
+    const info = gl.getActiveUniform(p, i), key = info.name.replace(/\[0\]$/, '');
+    u[key] = { loc: gl.getUniformLocation(p, info.name), type: info.type, size: info.size };
+  }
+  return { p, u, name };
+}
+let curProg = null;
+function use(pr) { if (curProg !== pr) { gl.useProgram(pr.p); curProg = pr; } }
+function setU(pr, vals) {
+  use(pr);
+  for (const k in vals) {
+    const e = pr.u[k];
+    if (!e) continue;
+    const v = vals[k], l = e.loc;
+    switch (e.type) {
+      case gl.FLOAT: e.size > 1 ? gl.uniform1fv(l, v) : gl.uniform1f(l, v); break;
+      case gl.FLOAT_VEC2: gl.uniform2fv(l, v); break;
+      case gl.FLOAT_VEC3: gl.uniform3fv(l, v); break;
+      case gl.FLOAT_VEC4: gl.uniform4fv(l, v); break;
+      case gl.FLOAT_MAT4: gl.uniformMatrix4fv(l, false, v); break;
+      default: gl.uniform1i(l, v);
+    }
+  }
+}
+function uploadRaw(verts, idx, skin) {
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  const S = (skin ? 14 : 13) * 4;
+  [[0, 3, 0], [1, 3, 3], [2, 3, 6], [3, 4, 9]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, S, off * 4); });
+  if (skin) { gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 1, gl.FLOAT, false, S, 13 * 4); }
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, n: idx.length, skin: !!skin };
+}
+const upload = (mesh) => uploadRaw(new Float32Array(mesh.v), new Uint32Array(mesh.idx), mesh.skin);
+function drawMesh(m) { gl.bindVertexArray(m.vao); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0); }
+function makeTex(w, h, data, opt = {}) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, opt.ifmt || gl.RGBA8, w, h, 0, opt.fmt || gl.RGBA, opt.type || gl.UNSIGNED_BYTE, data);
+  const mip = opt.mip !== false && data;
+  if (mip) gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, opt.wrap === false ? gl.CLAMP_TO_EDGE : gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, opt.wrapT === false || opt.wrap === false ? gl.CLAMP_TO_EDGE : gl.REPEAT);
+  return t;
+}
+function noiseTexData() {
+  const N = 256, d = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = x / N, v = y / N, i = (y * N + x) * 4;
+    d[i] = fbm(u * 4, v * 4, 5, 1, 4) * 255;
+    d[i + 1] = fbm(u * 8, v * 8, 4, 2, 8) * 255;
+    d[i + 2] = fbm(u * 16, v * 16, 3, 3, 16) * 255;
+    d[i + 3] = fbm(u * 6, v * 6, 4, 4, 6) * 255;
+  }
+  return d;
+}
+
+// ---- 描画先(HDR) ----
+const QSTEPS = [1, 0.82, 0.68, 0.55, 0.45, 0.36, 0.3, 0.25];
+let quality = 0, cssW = 1, cssH = 1, rw = 1, rh = 1;
+const RT = { scene: null, bloom: [], env: null, envW: 0, shadow: null, shadowTex: null, shadowN: 0 };
+let progs = {}, meshes = {}, chunks = [], fullVao = null, snowVao = null, snowN = 0, partVao = null, partBuf = null, lineVao = null, lineBuf = null;
+let noiseTex = null;
+const fmt = () => (HDR ? { ifmt: gl.RGBA16F, type: gl.HALF_FLOAT } : { ifmt: gl.RGBA8, type: gl.UNSIGNED_BYTE });
+function mkTarget(w, h, depth) {
+  const f = fmt();
+  const tex = makeTex(w, h, null, { ifmt: f.ifmt, type: f.type, wrap: false, mip: false });
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let rb = null;
+  if (depth) {
+    rb = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fb, tex, rb, w, h };
+}
+function freeTarget(t) { if (!t) return; gl.deleteFramebuffer(t.fb); gl.deleteTexture(t.tex); if (t.rb) gl.deleteRenderbuffer(t.rb); }
+const bloomLevels = () => [5, 5, 4, 4, 3, 3, 2, 2][quality];
+function resize() {
+  cssW = Math.max(1, innerWidth); cssH = Math.max(1, innerHeight);
+  const dpr = Math.min(devicePixelRatio || 1, isTouch ? 1.6 : 2);
+  rw = Math.max(64, Math.round(cssW * dpr * QSTEPS[quality]));
+  rh = Math.max(64, Math.round(cssH * dpr * QSTEPS[quality]));
+  if (!gl) return;
+  cvs.width = rw; cvs.height = rh;
+  freeTarget(RT.scene);
+  RT.scene = mkTarget(rw, rh, true);
+  RT.bloom.forEach(freeTarget);
+  RT.bloom = [];
+  let w = rw, h = rh;
+  for (let i = 0; i < bloomLevels(); i++) { w = Math.max(2, w >> 1); h = Math.max(2, h >> 1); RT.bloom.push(mkTarget(w, h, false)); }
+  const ew = quality <= 2 ? 256 : 128;
+  if (RT.envW !== ew) {
+    if (RT.env) { gl.deleteFramebuffer(RT.env.fb); gl.deleteTexture(RT.env.tex); }
+    const f = fmt();
+    const tex = makeTex(ew, ew / 2, null, { ifmt: f.ifmt, type: f.type, mip: false, wrapT: false });
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    RT.env = { fb, tex, w: ew, h: ew / 2 };
+    RT.envW = ew;
+  }
+  const sn = quality === 0 ? 2048 : 1024;
+  if (RT.shadowN !== sn) {
+    if (RT.shadowTex) { gl.deleteTexture(RT.shadowTex); gl.deleteFramebuffer(RT.shadow); }
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, sn, sn, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, t, 0);
+    gl.clearDepth(1); gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    RT.shadowTex = t; RT.shadow = fb; RT.shadowN = sn;
+  }
+}
+
+// ---- 動かない景色(160m ごとのかたまり: 地面 / 木・岩・杭・小屋) ----
+const CHUNK_ROWS = 40, NCH = Math.ceil(NZ / CHUNK_ROWS);
+const STATIC = { lights: [], hut: null, gate: null, village: [] };
+function buildTerrainChunk(c) {
+  const iz0 = c * CHUNK_ROWS, iz1 = Math.min(NZ, iz0 + CHUNK_ROWS), rows = iz1 - iz0 + 1;
+  const v = new Float32Array(rows * VW * 13), idx = new Uint32Array((rows - 1) * NX * 6);
+  let o = 0;
+  for (let iz = iz0; iz <= iz1; iz++) for (let ix = 0; ix <= NX; ix++) {
+    const i = iz * VW + ix, x = TX0 + ix * CELL, z = TZ0 + iz * CELL;
+    const hl = HF[iz * VW + Math.max(0, ix - 1)], hr = HF[iz * VW + Math.min(NX, ix + 1)], hd = HF[Math.max(0, iz - 1) * VW + ix], hu = HF[Math.min(NZ, iz + 1) * VW + ix];
+    let nx = (hl - hr) / (2 * CELL), nz = (hd - hu) / (2 * CELL), ny = 1;
+    const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    const near = DF[i] < 12 ? 1 : 0;
+    v.set([x, HF[i], z, nx, ny, nz, near ? clamp(UF[i], -20, 20) : 20, ICEF[i], sstep(0.28, 0.5, 1 - ny), near, 0, 1, 10], o); o += 13;
+  }
+  let k = 0;
+  for (let r = 0; r < rows - 1; r++) for (let ix = 0; ix < NX; ix++) {
+    const a = r * VW + ix, b = a + 1, cc = a + VW, d = cc + 1;
+    idx[k++] = a; idx[k++] = cc; idx[k++] = b; idx[k++] = b; idx[k++] = cc; idx[k++] = d;
+  }
+  return uploadRaw(v, idx, false);
+}
+function buildStatics() {
+  const props = [];
+  for (let c = 0; c < NCH; c++) props.push(new Mesh());
+  const chunkOf = (z) => clamp(Math.floor((z - TZ0) / (CELL * CHUNK_ROWS)), 0, NCH - 1);
+  // 木
+  const TREE_N = 1700;
+  let n = 0, tries = 0;
+  while (n < TREE_N && tries < 70000) {
+    tries++;
+    const x = TX0 + 8 + vr() * (NX * CELL - 16), z = TZ0 + 8 + vr() * (NZ * CELL - 16);
+    const i = nearIdx(x, z), d = DF[i] < 30 ? DF[i] : cbil(CD, x, z);
+    if (d < 7.5 || d > 150) continue;
+    const h = terrH(x, z);
+    if (h > 34 || lakeR(x, z) < 1.12 || ICEF[i] > 0.05) continue;
+    const sl = Math.abs(terrH(x + 3, z) - terrH(x - 3, z)) / 6 + Math.abs(terrH(x, z + 3) - terrH(x, z - 3)) / 6;
+    if (sl > 0.7) continue;
+    const p = d < 40 ? 0.95 : d < 80 ? 0.5 : 0.22;
+    if (vr() > p * (1 - sstep(24, 34, h))) continue;
+    addSpruce(props[chunkOf(z)], x, h, z, 0.65 + vr() * 0.85, vr() * TAU, Math.floor(vr() * 3));
+    n++;
+  }
+  // 飾りの岩
+  for (let k = 0; k < 260; k++) {
+    const x = TX0 + 8 + vr() * (NX * CELL - 16), z = TZ0 + 8 + vr() * (NZ * CELL - 16);
+    const i = nearIdx(x, z), d = DF[i] < 30 ? DF[i] : cbil(CD, x, z);
+    if (d < 6 || d > 120 || lakeR(x, z) < 1.03 || ICEF[i] > 0.05) { k -= 0.5; continue; }
+    const h = terrH(x, z);
+    addRock(props[chunkOf(z)], x, h - 0.2, z, 0.8 + vr() * (h > 30 ? 3.5 : 2), vr() * TAU, vr() * 50, 0.55 + vr() * 0.3);
+  }
+  // 目じるしの杭(25m ごと、左右かわるがわる)
+  for (const nm of SEGNAMES) {
+    const sg = SEG[nm];
+    for (let ls = 12, k = 0; ls < sg.len - 4; ls += 25, k++) {
+      const p = segPoint(nm, ls, (k % 2 ? 1 : -1) * 3.1);
+      addStake(props[chunkOf(p.z)], p.x, terrH(p.x, p.z), p.z);
+    }
+  }
+  // 分かれ道の道しるべ
+  for (const [nm, ls] of [['A', SEG.A.len - 8], ['B', SEG.B.len - 8]]) {
+    const p = segPoint(nm, ls, -3.6), y = terrH(p.x, p.z), m = props[chunkOf(p.z)];
+    m.rod([p.x, y - 0.3, p.z], [p.x, y + 2.1, p.z], 0.07, 6, [0.3, 0.2, 0.12], MT(0.85, 0, 0.9, 3));
+    for (const [dy, a] of [[1.85, 0.5], [1.45, -0.5]]) { m.push(M4.trs(p.x, y + dy, p.z, p.h + a, 0, 0)); m.box(0.55, 0, 0, 1.1, 0.24, 0.05, [0.5, 0.36, 0.22], MT(0.8, 0, 0.9, 3)); m.pop(); }
+  }
+  // 休み小屋(夜の森)
+  {
+    const ls = Math.round(HUT_F * SEG.B.len), p = segPoint('B', ls, 9.5), y = terrH(p.x, p.z);
+    addCabin(props[chunkOf(p.z)], p.x, y - 0.1, p.z, p.h + Math.PI, 5.2, 4.0, 2.45, [0.33, 0.22, 0.13]);
+    const f = M4.trs(p.x, y, p.z, p.h + Math.PI, 0, 0), wl = M4.xf(f, 5.2 * 0.22, 1.35, 2.9), ch = M4.xf(f, 5.2 * 0.3, 4.4, -0.4);
+    STATIC.hut = { x: p.x, y, z: p.z, ls, win: wl, chimney: ch };
+    STATIC.lights.push({ p: wl, r: 16, c: [7, 3.6, 1.4], kind: 'hut' });
+  }
+  // 村(道の終わり)
+  {
+    const sg = SEG.C, end = sg.len;
+    const spots = [[-26, 14], [-50, -12], [-70, 18], [-92, -16], [-40, 34], [-110, 12], [-60, -30]];
+    spots.forEach(([back, side], k) => {
+      const p = segPoint('C', clamp(end + back, 0, end), side), y = terrH(p.x, p.z);
+      const W = 5 + vr() * 2.5, D = 4.2 + vr() * 1.5, H = 2.5 + vr() * 1.2;
+      addCabin(props[chunkOf(p.z)], p.x, y - 0.1, p.z, p.h + (side > 0 ? Math.PI : 0), W, D, H, mixc([0.3, 0.2, 0.12], [0.42, 0.3, 0.2], vr()));
+      const f = M4.trs(p.x, y, p.z, p.h + (side > 0 ? Math.PI : 0), 0, 0);
+      STATIC.village.push({ chimney: M4.xf(f, W * 0.3, H + 2, -0.4) });
+      if (k < 5) STATIC.lights.push({ p: M4.xf(f, W * 0.22, H * 0.55, D / 2 + 0.8), r: 15, c: [6, 3.2, 1.3], kind: 'village' });
+    });
+    // 村の入り口の門(灯)
+    const g = segPoint('C', end - 22, 0), gy = terrH(g.x, g.z), m = props[chunkOf(g.z)];
+    for (const u of [-3.4, 3.4]) {
+      const p = segPoint('C', end - 22, u);
+      m.rod([p.x, gy - 0.3, p.z], [p.x, gy + 3.4, p.z], 0.11, 7, [0.28, 0.19, 0.11], MT(0.85, 0, 0.9, 18));
+      m.ellipsoid([p.x, gy + 3.0, p.z], [0.16, 0.22, 0.16], 5, [1.0, 0.6, 0.25], MT(0.4, 5, 1, 5));
+      STATIC.lights.push({ p: [p.x, gy + 3.0, p.z], r: 18, c: [8, 4.2, 1.6], kind: 'gate' });
+    }
+    const a = segPoint('C', end - 22, -3.4), b = segPoint('C', end - 22, 3.4);
+    m.rod([a.x, gy + 3.25, a.z], [b.x, gy + 3.25, b.z], 0.1, 6, [0.28, 0.19, 0.11], MT(0.85, 0, 0.9, 18));
+    STATIC.gate = { x: g.x, y: gy, z: g.z };
+  }
+  chunks = [];
+  for (let c = 0; c < NCH; c++) {
+    const z0 = TZ0 + c * CHUNK_ROWS * CELL, z1 = Math.min(TZ0 + NZ * CELL, z0 + CHUNK_ROWS * CELL);
+    chunks.push({ z0, z1, terrain: buildTerrainChunk(c), props: props[c].idx.length ? upload(props[c]) : null });
+  }
+}
+
+function initGL() {
+  if (gl.getExtension('EXT_color_buffer_float')) HDR = true;
+  gl.getExtension('OES_texture_float_linear');
+  progs = {
+    sky: mkProg(VS_FULL, FS_SKY, '空'), env: mkProg(VS_FULL, FS_ENV, '映りこみ'), obj: mkProg(VS_OBJ, FS_OBJ, '物'), skin: mkProg(VS_SKIN, FS_OBJ, '犬'),
+    snow: mkProg(VS_SNOW, FS_SNOW, '雪'), part: mkProg(VS_PART, FS_PART, '粒'), line: mkProg(VS_LINE, FS_LINE, '線'),
+    shadow: mkProg(VS_SHADOW, FS_SHADOW, '影'), shadowSkin: mkProg(VS_SHADOW_SKIN, FS_SHADOW, '犬の影'),
+    down: mkProg(VS_FULL, FS_DOWN, '光のにじみ(縮小)'), up: mkProg(VS_FULL, FS_UP, '光のにじみ(拡大)'), comp: mkProg(VS_FULL, FS_COMP, '仕上げ'),
+  };
+  for (const k of ['sky', 'env', 'obj', 'skin']) setU(progs[k], { uNoise: 0, uEnv: 2, uShadow: 3 });
+  setU(progs.down, { uSrc: 4 }); setU(progs.up, { uSrc: 4 }); setU(progs.comp, { uSrc: 4, uBloom: 5 });
+  noiseTex = makeTex(256, 256, noiseTexData());
+  fullVao = gl.createVertexArray(); gl.bindVertexArray(fullVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  {
+    const N = 4200, d = new Float32Array(N * 8);
+    for (let i = 0; i < N; i++) { const x = vr(), y = vr(), z = vr(); d.set([x, y, z, 0, x, y, z, 1], i * 8); }
+    snowVao = gl.createVertexArray(); gl.bindVertexArray(snowVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+    snowN = N;
+  }
+  partVao = gl.createVertexArray(); gl.bindVertexArray(partVao);
+  partBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferData(gl.ARRAY_BUFFER, PMAX * 8 * 4, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 32, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 16);
+  lineVao = gl.createVertexArray(); gl.bindVertexArray(lineVao);
+  lineBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf); gl.bufferData(gl.ARRAY_BUFFER, LINE_MAX * 3 * 4, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  meshes = {
+    sled: upload(buildSled()), crate: upload(buildCrate()), musher: upload(buildMusher()), ring: upload(buildRing()), plate: upload(buildIcePlate()),
+    dogs: [0, 1, 2, 3].map((c) => upload(buildDog(c))), obstacles: null,
+  };
+  buildStatics();
+  resize();
+}
+
+// =============================================================================
+//  粒(雪けむり・息・煙・水しぶき・氷のかけら・湯気)
+// =============================================================================
+const PMAX = 2400;
+const POOL = { n: 0, max: PMAX, d: new Float32Array(PMAX * 12) };
+let pLimit = 1;
+const stage = new Float32Array(PMAX * 8);
+// 種類: 0 雪けむり / 1 息 / 2 煙 / 3 水しぶき / 4 氷と雪のかけら / 5 湯気 / 6 地ふぶき
+function emit(x, y, z, vx, vy, vz, life, size, type) {
+  if (POOL.n >= POOL.max * pLimit) return;
+  const o = POOL.n++ * 12, d = POOL.d;
+  d[o] = x; d[o + 1] = y; d[o + 2] = z; d[o + 3] = vx; d[o + 4] = vy; d[o + 5] = vz;
+  d[o + 6] = life; d[o + 7] = life; d[o + 8] = size; d[o + 9] = type; d[o + 10] = vr(); d[o + 11] = y;
+}
+function updPool(dt) {
+  const d = POOL.d, wx = Math.cos(G.windA) * (1 + 9 * G.W), wz = Math.sin(G.windA) * (1 + 9 * G.W);
+  for (let i = 0; i < POOL.n; i++) {
+    const o = i * 12, ty = d[o + 9];
+    d[o + 6] -= dt;
+    if (d[o + 6] <= 0) {
+      const last = (POOL.n - 1) * 12;
+      for (let k = 0; k < 12; k++) d[o + k] = d[last + k];
+      POOL.n--; i--; continue;
+    }
+    if (ty === 0 || ty === 3 || ty === 4 || ty === 6) {
+      d[o + 4] -= (ty === 4 ? 9.8 : ty === 3 ? 9.8 : ty === 6 ? 0.6 : 2.6) * dt;
+      const k = Math.exp(-dt * (ty === 4 ? 0.3 : ty === 6 ? 0.8 : 1.6));
+      d[o + 3] = d[o + 3] * k + wx * 0.6 * (1 - k); d[o + 5] = d[o + 5] * k + wz * 0.6 * (1 - k);
+      if (ty === 4 && d[o + 1] < d[o + 11] - 0.6) d[o + 6] = Math.min(d[o + 6], 0.05);
+    } else {
+      const k = Math.exp(-dt * 0.9);
+      d[o + 3] = d[o + 3] * k + wx * 0.5 * (1 - k); d[o + 5] = d[o + 5] * k + wz * 0.5 * (1 - k);
+      d[o + 4] = d[o + 4] * k + (ty === 2 ? 1.6 : ty === 5 ? 0.9 : 0.3) * (1 - k);
+    }
+    d[o] += d[o + 3] * dt; d[o + 1] += d[o + 4] * dt; d[o + 2] += d[o + 5] * dt;
+  }
+}
+function packParticles() {
+  if (!POOL.n) return 0;
+  const d = POOL.d, s = stage, a = L.ambSky, mc = L.mainCol, fc = L.fillCol;
+  const lit = [a[0] * 2.4 + mc[0] * 0.35 + fc[0] * 0.6, a[1] * 2.4 + mc[1] * 0.35 + fc[1] * 0.6, a[2] * 2.4 + mc[2] * 0.35 + fc[2] * 0.6];
+  const sp = FX.spP, sd = FX.spD, sc = FX.spC;
+  for (let i = 0; i < POOL.n; i++) {
+    const o = i * 12, q = i * 8, ty = d[o + 9], f = d[o + 6] / d[o + 7], age = 1 - f;
+    s[q] = d[o]; s[q + 1] = d[o + 1]; s[q + 2] = d[o + 2];
+    // ヘッドランプに照らされる
+    const lx = d[o] - sp[0], ly = d[o + 1] - sp[1], lz = d[o + 2] - sp[2], l2 = lx * lx + ly * ly + lz * lz, li = 1 / Math.sqrt(l2 + 1e-4);
+    // ランプのすぐ前(御者の息)まで明るくすると、犬の上に白い玉がかぶるので、1m より近いものは照らさない
+    const cone = sstep(0.9, 0.975, (lx * sd[0] + ly * sd[1] + lz * sd[2]) * li) / (l2 + 1) * sstep(0.6, 2.2, l2);
+    const r0 = lit[0] + sc[0] * cone * 0.25, g0 = lit[1] + sc[1] * cone * 0.25, b0 = lit[2] + sc[2] * cone * 0.25;
+    let r, g, b, al, size = d[o + 8];
+    if (ty === 0 || ty === 6) { size *= 0.6 + age * 1.6; al = f * (ty === 6 ? 0.22 : 0.5); r = r0 * 1.05; g = g0 * 1.07; b = b0 * 1.1; }
+    else if (ty === 1) { size *= 0.4 + age * 2.0; al = Math.sin(f * Math.PI) * 0.22; r = r0; g = g0; b = b0 * 1.05; }
+    else if (ty === 2) { size *= 0.5 + age * 2.6; al = Math.min(1, age * 4) * f * 0.35; r = r0 * 0.45; g = g0 * 0.45; b = b0 * 0.48; }
+    else if (ty === 3) { size *= 0.6 + age; al = f * 0.6; r = r0 * 0.75; g = g0 * 0.85; b = b0 * 0.95; }
+    else if (ty === 4) { size *= 1; al = Math.min(1, f * 3) * 0.95; r = r0 * 1.15; g = g0 * 1.2; b = b0 * 1.3; }
+    else { size *= 0.6 + age * 2.2; al = Math.sin(f * Math.PI) * 0.2; r = r0 * 0.9; g = g0 * 0.95; b = b0; }
+    s[q + 3] = size; s[q + 4] = r; s[q + 5] = g; s[q + 6] = b; s[q + 7] = al;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, partBuf);
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, s.subarray(0, POOL.n * 8));
+  return POOL.n;
+}
+
+// =============================================================================
+//  遊びの状態
+// =============================================================================
+const DT = 1 / 60;
+const PACE_V = [0, 4.6, 7.6, 10.6], PACE_NAME = ['止まれ', 'トロット', '駆け足', '全力'];
+const DRAIN = [-5, -1.2, 0.35, 2.6], UP_DRAIN = [0, 6, 8, 16], BRAKE = [0, 0.3, 0.55, 1];
+const PAIR_OFF = [2.9, 4.6, 6.3], LEAD_OFF = 6.3, START_S = 14;
+const DOG_NAMES = ['クマ', 'ユキ', 'ソラ', 'ハク', 'シラ', 'ノノ'];
+const BRANCH_TXT = {
+  L: ['湖を渡る', '近道。氷が後ろから割れてくる。薄い氷は速さで渡る'],
+  S: ['岸を回る', '遠回り。吹きだまりで遅くなる'],
+  P: ['峠を越える', '近道。きつい上りと寒風、急な下り'],
+  V: ['川沿いを行く', '遠回り。開いた水面をよける'],
+};
+const FORK = [];
+{
+  const r = ROUTES.SV;
+  for (const [n, a, b, safe] of [[0, 'L', 'S', 'S'], [1, 'P', 'V', 'V']]) {
+    const s = r.forks[n], at = routeAt(r, s - 6), rx = -Math.sin(at.h), rz = Math.cos(at.h);
+    const side = (nm) => { const sg = SEG[nm]; return (sg.X[30] - sg.X[0]) * rx + (sg.Z[30] - sg.Z[0]) * rz; };
+    FORK.push(side(a) > side(b) ? { right: a, left: b, safe } : { right: b, left: a, safe });
+  }
+}
+let gstate = 'title', G = null;
+const FX = { spP: [0, 0, 0], spD: [0, -1, 0], spC: [0, 0, 0] };
+const _at = {}, _w = {};
+let obsBufs = null;
+function genObstacles() {
+  const out = [];
+  let id = 0;
+  const add = (seg, ls, u, rs, ru, kind) => out.push({ id: id++, seg, ls, u, rs, ru, kind, hit: false, gs: 0 });
+  for (const nm of SEGNAMES) {
+    const sg = SEG[nm];
+    const s0 = nm === 'A' ? 120 : nm === 'B' || nm === 'C' ? 40 : 34;
+    const s1 = sg.len - (nm === 'A' || nm === 'B' ? 45 : nm === 'C' ? 70 : 30);
+    let ls = s0 + R() * 20;
+    while (ls < s1) {
+      const hutLs = Math.round(HUT_F * sg.len);
+      if (nm === 'B' && Math.abs(ls - hutLs) < 40) { ls += 20; continue; }
+      const side = R() < 0.5 ? -1 : 1, k = R(), ki = Math.round(ls);
+      if (nm === 'L' && sg.LK[ki]) {
+        if (k < 0.5) { const r = 1.5 + R() * 0.8; add(nm, ls, (R() - 0.5) * 2.4, r, r, 'thin'); }
+        else add(nm, ls, side * 1.7, 0.45, 2.0, 'ridge');
+      } else if (nm === 'V' && sg.RV[ki]) {
+        if (k < 0.62) { const r = 1.25 + R() * 0.6; add(nm, ls, side * (0.95 + R() * 0.6), r, r, 'water'); }
+        else if (k < 0.8) add(nm, ls, side * 1.7, 0.45, 2.0, 'ridge');
+        else { const r = 0.7 + R() * 0.4; add(nm, ls, side * (0.8 + R() * 0.7), r, r, 'rock'); }
+      } else if (nm === 'S' && k < 0.42) {
+        const full = R() < 0.35;
+        add(nm, ls, full ? 0 : side * 1.2, 7 + R() * 6, full ? 3.2 : 1.6, 'drift');
+        ls += 10;
+      } else if (k < 0.55) { const r = 0.65 + R() * 0.45; add(nm, ls, side * (0.6 + R() * 1.0), r, r, 'rock'); }
+      else add(nm, ls, side * 1.65, 0.35, 1.95, 'log');
+      ls += (nm === 'A' && ls < 300 ? 48 : 32) + R() * (nm === 'P' ? 30 : 34);
+    }
+  }
+  for (const o of out) { const p = segPoint(o.seg, o.ls, o.u); o.x = p.x; o.z = p.z; o.h = p.h; o.y = Math.abs(o.u) < 2.4 ? p.y : terrH(p.x, p.z); if (SEG[o.seg].LK[Math.round(o.ls)]) o.y = LAKE.y; }
+  return out;
+}
+function buildObstacleMesh(list) {
+  const m = new Mesh();
+  for (const o of list) {
+    const yaw = o.h;
+    if (o.kind === 'rock') addRock(m, o.x, o.y - 0.15, o.z, o.rs * 0.95, vr() * TAU, o.id * 3.7, 0.75);
+    else if (o.kind === 'log') {
+      m.push(M4.trs(o.x, o.y + 0.28, o.z, yaw + Math.PI / 2 + (vr() - 0.5) * 0.2, 0, 0));
+      m.rod([-o.ru - 0.4, 0, 0], [o.ru + 0.6, 0.05, 0], 0.32, 9, [0.2, 0.14, 0.09], MT(0.85, 0, 0.85, 18), 0.25);
+      for (let k = 0; k < 4; k++) { const x = -o.ru + vr() * o.ru * 2; m.rod([x, 0, 0], [x + 0.3, 0.55 + vr() * 0.4, (vr() - 0.5) * 0.8], 0.06, 4, BARK, MT(0.9, 0, 0.9, 18)); }
+      m.pop();
+    } else if (o.kind === 'ridge') {
+      m.push(M4.trs(o.x, o.y, o.z, yaw, 0, 0));
+      for (let k = 0; k < 7; k++) {
+        const zz = -o.ru + (k / 6) * o.ru * 2;
+        m.push(M4.trs((vr() - 0.5) * 0.4, 0.15, zz, vr() * TAU, (vr() - 0.5) * 0.9, (vr() - 0.5) * 0.9));
+        m.box(0, 0, 0, 0.5 + vr() * 0.5, 0.5 + vr() * 0.7, 0.4 + vr() * 0.4, [0.45, 0.62, 0.72], MT(0.12, 0, 1, 19));
+        m.pop();
+      }
+      m.pop();
+    } else if (o.kind === 'thin' || o.kind === 'water') {
+      const water = o.kind === 'water';
+      m.push(M4.tr(o.x, o.y + (water ? 0.03 : 0.025), o.z));
+      const N = 18, c = m.vert([0, 0, 0], [0, 1, 0], [0, 0, 0], MT(0.05, 0, 1, water ? 12 : 11)), ring = [], rad = [];
+      for (let k = 0; k < N; k++) rad.push(o.rs * (0.85 + 0.3 * vr()));
+      for (let k = 0; k <= N; k++) { const a = (k / N) * TAU, rr = rad[k % N]; ring.push(m.vert([Math.cos(a) * rr, 0, Math.sin(a) * rr], [0, 1, 0], [0, 0, 0], MT(0.05, 0, 1, water ? 12 : 11))); }
+      for (let k = 0; k < N; k++) m.tri(c, ring[k], ring[k + 1]);
+      if (water) for (let k = 0; k < 9; k++) { const a = vr() * TAU; m.push(M4.trs(Math.cos(a) * o.rs, 0.02, Math.sin(a) * o.rs, vr() * TAU, 0, 0)); m.box(0, 0, 0, 0.5 + vr() * 0.4, 0.12, 0.3 + vr() * 0.3, [0.5, 0.65, 0.75], MT(0.15, 0, 1, 19)); m.pop(); }
+      m.pop();
+    } else if (o.kind === 'drift') {
+      m.push(M4.trs(o.x, o.y - 0.05, o.z, yaw, 0, 0));
+      for (let k = 0; k < 3; k++) m.ellipsoid([(k - 1) * o.rs * 0.5, 0, (vr() - 0.5) * 0.4], [o.rs * 0.55, 0.38 + vr() * 0.15, o.ru * 0.95], 6, [0.86, 0.88, 0.92], MT(0.6, 0, 1, 15));
+      m.pop();
+    }
+  }
+  return m;
+}
+function newRun() {
+  const g = {
+    t: 0, vt: 0, s: START_S, v: 0, pace: 0, steer: 0, uLead: 0, uSled: 0, E: 100, warmth: 100, crates: 6, fish: 2, injured: [],
+    b1: null, b2: null, route: ROUTES.SV, hist: new Float32Array(Math.ceil((ROUTES.SV.n + 40) * 4)), histK: Math.floor((START_S + LEAD_OFF) * 4),
+    crashT: 0, crashKind: '', crashes: 0, tip: 0, tipA: 0, sink: 0, sinkA: 0, eatT: 0, wetT: 0, resting: false, atHut: false, restT: 0, restNoted: false,
+    overrun: 0, push: 0, grade: 0, deep: false, seg: 'A', y: 0,
+    stormAt: 255 + R() * 45, windA: Math.PI * 0.5 + (R() - 0.5) * 1.6, W: 0, day: 1, night: 0,
+    crack: { on: false, done: false, cs: 0, v: 0, last: 0, start: 0, escaped: false },
+    events: [], lost: [], lostCrates: [], cracks: [], plates: [], holes: [], score: 0, cause: '', endT: 0, maxCrackGap: 99,
+    hints: {}, fed: 0, thinPass: 0, dogs: [], musherBreath: 0, smokeT: 0, wasPace: 0, splits: {},
+  };
+  const lk = SEG.L.LK.indexOf(1);
+  g.crack.start = lk + 45 + R() * 60;
+  g.obs = genObstacles();
+  g.obsR = [];
+  const coats = [0, 2, 1, 3, 0, 1];
+  for (let i = 0; i < 6; i++) g.dogs.push({ coat: coats[i], ph: vr(), x: 0, y: 0, z: 0, yaw: 0, pitch: 0, jit: (vr() - 0.5) * 0.25, sway: 0, swayP: vr() * TAU, breathT: vr(), wagP: vr() * TAU, pose: { bob: 0, pitch: 0, flex: 0, head: 0, look: 0, tail: 0, wag: 0, roll: 0, u: [0, 0, 0, 0], l: [0, 0, 0, 0] } });
+  G = g;
+  mapObs();
+  if (gl) {
+    if (meshes.obstacles) { gl.deleteVertexArray(meshes.obstacles.vao); }
+    meshes.obstacles = upload(buildObstacleMesh(g.obs));
+  }
+  POOL.n = 0;
+  return g;
+}
+function mapObs() {
+  const g = G, r = g.route;
+  g.obsR = g.obs.filter((o) => r.order.includes(o.seg));
+  for (const o of g.obsR) o.gs = r.segStart[o.seg] + o.ls;
+  g.obsR.sort((a, b) => a.gs - b.gs);
+}
+function ev(type, extra = {}) { G.events.push(Object.assign({ type, t: +G.t.toFixed(2), s: +G.s.toFixed(1) }, extra)); }
+function histFill() {
+  const g = G, k1 = Math.floor((g.s + LEAD_OFF) * 4);
+  for (let k = g.histK + 1; k <= k1 && k < g.hist.length; k++) g.hist[k] = g.uLead;
+  g.histK = Math.max(g.histK, Math.min(k1, g.hist.length - 1));
+}
+function uAt(s) {
+  const g = G, f = s * 4, k = Math.floor(f);
+  if (k >= g.histK) return g.uLead;
+  if (k < 0) return 0;
+  return lerp(g.hist[k], g.hist[Math.min(k + 1, g.histK)], f - k);
+}
+function hitTest(o, s, u, hu, hs) {
+  const ds = (s - o.gs) / (o.rs + hs), du = (u - o.u) / (o.ru + hu);
+  return o.kind === 'rock' || o.kind === 'thin' || o.kind === 'water' ? ds * ds + du * du < 1 : Math.abs(ds) < 1 && Math.abs(du) < 1;
+}
+function inDrift(s, u) {
+  for (const o of G.obsR) {
+    if (o.gs - o.rs > s) break;
+    if (o.kind === 'drift' && o.gs + o.rs > s && Math.abs(u - o.u) < o.ru + 0.3) return true;
+  }
+  return false;
+}
+function chooseFork(n) {
+  const g = G, f = FORK[n - 1];
+  const side = g.uLead > 0.25 ? 1 : g.uLead < -0.25 ? -1 : g.steer > 0.1 ? 1 : g.steer < -0.1 ? -1 : 0;
+  const b = side > 0 ? f.right : side < 0 ? f.left : f.safe;
+  if (n === 1) g.b1 = b; else g.b2 = b;
+  g.route = ROUTES[(g.b1 || 'S') + (g.b2 || 'V')];
+  mapObs();
+  ev('fork', { n, b });
+  g.splits['fork' + n] = g.t;
+  toast(`${BRANCH_TXT[b][0]}`);
+}
+function step(dt) {
+  const g = G;
+  g.t += dt;
+  g.W = sstep(g.stormAt, g.stormAt + 110, g.t);
+  g.day = 1 - sstep(25, 140, g.t);
+  g.night = sstep(100, 170, g.t);
+  const sLead = g.s + LEAD_OFF;
+  if (!g.b1 && sLead >= g.route.forks[0] - 1) chooseFork(1);
+  else if (g.b1 && !g.b2 && sLead >= g.route.forks[1] - 1) chooseFork(2);
+  const at = routeAt(g.route, g.s, _at);
+  g.grade = at.g; g.seg = at.seg;
+  if (g.b1) { const hd = g.s - g.route.hutS; g.atHut = hd > -16 && hd < 10; } else g.atHut = false;
+  g.resting = g.atHut && g.v < 0.7 && g.crashT <= 0;
+  if (g.resting) { g.restT += dt; if (!g.restNoted) { g.restNoted = true; ev('rest'); toast('小屋で休む(体力と体温が戻る)'); sfx('door'); } }
+  g.deep = inDrift(g.s, g.uSled) || Math.abs(g.uSled) > 2.6 || Math.abs(g.uLead) > 2.9;
+  const inj = g.injured.length;
+  let p = g.pace, target = 0;
+  if (g.crashT > 0) {
+    g.crashT -= dt; p = 0;
+    if (g.crashT <= 0) g.crashKind = '';
+  } else {
+    const fat = 0.42 + 0.58 * sstep(0, 30, g.E);
+    let vt = PACE_V[p] * fat * (1 - 0.07 * inj);
+    if (g.grade > 0) vt *= 1 - clamp(g.grade, 0, 0.3) * 1.1;
+    if (g.deep) vt *= 0.55;
+    if (g.eatT > 0) vt *= 0.7;
+    let boost = 0;
+    if (g.grade < -0.02 && p > 0) boost = (-g.grade - 0.02) * 65 * BRAKE[p];
+    target = vt + boost;
+    g.push = boost;
+    if (boost > 4 && g.v > 3) g.overrun += (boost - 4) * dt * 0.35; else g.overrun = Math.max(0, g.overrun - dt * 0.6);
+    if (g.overrun >= 1) crash('overrun');
+  }
+  const a = target > g.v ? 2.4 : p === 0 ? 6.5 : 4.5;
+  g.v = Math.max(0, g.v + clamp(target - g.v, -a * dt, a * dt));
+  // 犬の体力
+  const pe = g.crashT > 0 ? 0 : p;
+  let drain = DRAIN[pe] + g.grade * UP_DRAIN[pe] * (g.grade > 0 ? 1 : 0.4);
+  if (g.deep && pe > 0) drain = drain > 0 ? drain * 1.7 : drain * 0.5 + 0.8;
+  if (inj) drain *= 1 + 0.08 * inj;
+  if (g.resting) drain = -8;
+  g.E = clamp(g.E - drain * dt, 0, 100);
+  if (g.eatT > 0) g.eatT -= dt;
+  // 体温
+  const altF = sstep(22, 40, at.y);
+  let wd = 0.06 + 0.11 * g.night + 0.5 * g.W +0.28 * altF * (0.5 + g.W) + (g.wetT > 0 ? 0.35 : 0) + (g.v < 0.5 ? 0.08 : 0);
+  if (g.resting) wd = -5.5;
+  g.warmth = clamp(g.warmth - wd * dt, 0, 100);
+  if (g.wetT > 0) g.wetT -= dt;
+  // 進む・舵
+  g.s += g.v * dt;
+  if (g.crashT <= 0 && g.v > 0.2) {
+    const lat = 2.2 + 0.13 * g.v;
+    if (Math.abs(g.steer) > 0.05) g.uLead += g.steer * lat * dt;
+    else g.uLead -= g.uLead * Math.min(1, 1.1 * dt);
+    g.uLead = clamp(g.uLead, -5.5, 5.5);
+  }
+  histFill();
+  g.uSled = uAt(g.s);
+  collide();
+  crackStep(dt);
+  hints();
+  if (g.b2 && g.s >= g.route.finishS) finish();
+  else if (g.warmth <= 0) fail('cold');
+}
+function collide() {
+  const g = G, sl = g.s + LEAD_OFF;
+  for (const o of g.obsR) {
+    if (o.gs - o.rs > sl + 2) break;
+    if (o.hit || o.gs + o.rs < g.s - 2 || o.kind === 'drift') continue;
+    const byLead = o.kind !== 'thin' && hitTest(o, sl, g.uLead, 0.62, 0.45);
+    const bySled = hitTest(o, g.s, g.uSled, o.kind === 'thin' ? 0.3 : 0.36, o.kind === 'thin' ? 0.6 : 1.3);
+    if (!byLead && !bySled) continue;
+    o.hit = true;
+    if (o.kind === 'thin') {
+      if (g.v < 6.0) crash('thin', o);
+      else { g.thinPass++; ev('thinPass', { id: o.id, v: +g.v.toFixed(2) }); sfx('crackSmall'); crackBurst(o.x, o.y, o.z, 10); }
+    } else if (o.kind === 'water') crash('water', o);
+    else if (g.v > 3.0) crash('solid', o, byLead);
+    else { g.v *= 0.35; ev('bump', { id: o.id }); sfx('thud'); }
+  }
+}
+function crash(kind, o, byLead) {
+  const g = G, v = g.v;
+  let lose = 0, injure = false, stop = 2.4;
+  if (kind === 'solid') { lose = v > 6.5 ? 1 : 0; injure = !!byLead && v > 6.5; stop = 2.2 + v * 0.08; g.tip = v > 5 ? 1 : 0.45; }
+  else if (kind === 'overrun') { lose = 1; injure = true; stop = 3.0; g.tip = 0.75; }
+  else if (kind === 'thin') { lose = 1; stop = 4.0; g.warmth -= 22; g.wetT = 35; g.sink = 1; }
+  else if (kind === 'fall') { lose = 2; stop = 5.0; g.warmth -= 30; g.wetT = 45; g.sink = 1; }
+  else if (kind === 'water') { lose = 1; stop = 4.0; g.warmth -= 22; g.wetT = 35; g.sink = 0.7; }
+  g.warmth = Math.max(0, g.warmth);
+  lose = Math.min(lose, g.crates);
+  for (let k = 0; k < lose; k++) dropCrate(k);
+  g.crates -= lose;
+  let hurt = -1;
+  if (injure && g.injured.length < 3) { const cand = [0, 1, 2, 3, 4, 5].filter((i) => !g.injured.includes(i)); hurt = cand[Math.floor(R() * cand.length)]; g.injured.push(hurt); }
+  g.crashT = stop; g.crashKind = kind; g.crashes++;
+  g.v = kind === 'solid' ? v * 0.1 : 0;
+  g.overrun = 0;
+  // 追突のあとは、犬が絡まってしまうので、トロットからやり直す
+  if (kind === 'overrun') g.pace = Math.min(g.pace, 1);
+  if (g.crack.on) { g.crack.on = false; g.crack.done = true; }
+  ev('crash', { kind, lose, injure: hurt >= 0, v: +v.toFixed(2), id: o ? o.id : -1, seg: g.seg });
+  const sp = sledPose();
+  if (kind === 'solid' || kind === 'overrun') {
+    for (let k = 0; k < 40; k++) emit(sp.x + (vr() - 0.5) * 2, sp.y + 0.3, sp.z + (vr() - 0.5) * 2, (vr() - 0.5) * 5, 1 + vr() * 3.5, (vr() - 0.5) * 5, 0.9 + vr() * 0.8, 0.9 + vr() * 0.8, 0);
+    for (let k = 0; k < 24; k++) emit(sp.x, sp.y + 0.5, sp.z, (vr() - 0.5) * 6, 2 + vr() * 4, (vr() - 0.5) * 6, 1.2, 0.12, 4);
+    sfx('crash'); cam.shake = Math.min(1.2, 0.4 + v * 0.08);
+  } else {
+    for (let k = 0; k < 50; k++) emit(sp.x + (vr() - 0.5) * 2.5, sp.y + 0.1, sp.z + (vr() - 0.5) * 2.5, (vr() - 0.5) * 4, 2 + vr() * 5, (vr() - 0.5) * 4, 0.9 + vr() * 0.6, 0.35 + vr() * 0.4, 3);
+    for (let k = 0; k < 20; k++) emit(sp.x, sp.y + 0.2, sp.z, (vr() - 0.5) * 5, 1.5 + vr() * 3, (vr() - 0.5) * 5, 1.3, 0.14, 4);
+    g.holes.push({ x: sp.x, y: sp.y, z: sp.z, r: kind === 'fall' ? 2.6 : 1.8 });
+    sfx('splash'); cam.shake = 0.8;
+  }
+  const msg = { solid: lose ? '激突! 荷が落ちた' : '激突!', overrun: 'そりが犬に追突! 荷が落ちた', thin: '薄い氷を踏み抜いた!', fall: '割れた氷に落ちた!', water: '水面に落ちた!' }[kind];
+  toast(msg + (hurt >= 0 ? `(${DOG_NAMES[hurt]}がけが)` : ''));
+}
+function dropCrate(k) {
+  const g = G, sp = sledPose(), sd = (k % 2 ? 1 : -1) * (vr() < 0.5 ? 1 : -1);
+  g.lostCrates.push({ x: sp.x, y: sp.y + 1.0, z: sp.z, vx: -Math.sin(sp.yaw) * sd * (2 + vr() * 2) + Math.cos(sp.yaw) * g.v * 0.4, vy: 3 + vr() * 2, vz: Math.cos(sp.yaw) * sd * (2 + vr() * 2) + Math.sin(sp.yaw) * g.v * 0.4, rot: vr() * TAU, spin: (vr() - 0.5) * 9, tilt: 0, rest: false, wet: g.sink > 0 });
+  g.lost.push({ where: SEGJP[g.seg] || g.seg, s: Math.round(g.s) });
+}
+function crackStep(dt) {
+  const g = G, c = g.crack;
+  if (g.b1 !== 'L' || c.done) return;
+  const r = g.route, ls = g.s - r.segStart.L;
+  if (!c.on) {
+    if (ls >= c.start && g.crashT <= 0) { c.on = true; c.cs = g.s - 24; c.v = 7.0; c.last = c.cs; ev('crack'); toast('氷が割れはじめた! 全力で駆けぬけろ'); sfx('crack'); cam.shake = 0.5; cam.cine = 2.8; }
+    return;
+  }
+  c.v = Math.min(8.4, c.v + dt * 0.9);
+  c.cs += c.v * dt;
+  g.maxCrackGap = Math.min(g.maxCrackGap, g.s - c.cs);
+  while (c.cs - c.last > 1.2) { c.last += 1.2; crackFx(c.last); }
+  if (g.s > r.lakeOut + 3) { c.on = false; c.done = true; c.escaped = true; ev('escape', { gap: +(g.s - c.cs).toFixed(1) }); toast('逃げきった!'); sfx('escape'); }
+  else if (c.cs >= g.s - 1.0) crash('fall');
+}
+function crackFx(cs) {
+  const g = G, r = g.route, at = worldAt(r, cs, 0, {}), h = at.h, rx = -Math.sin(h), rz = Math.cos(h), fx = Math.cos(h), fz = Math.sin(h), y = LAKE.y + 0.03;
+  if (!r.LK[clamp(Math.round(cs), 0, r.n - 1)]) return;
+  const P = (s, u) => [at.x + fx * s + rx * u, y, at.z + fz * s + rz * u];
+  for (const sd of [-1, 1]) {
+    let u = sd * (0.3 + vr() * 1.2), s = (vr() - 0.5) * 1.2;
+    const n = 3 + Math.floor(vr() * 3);
+    for (let k = 0; k < n; k++) {
+      const u2 = u + sd * (1.2 + vr() * 2.2), s2 = s + (vr() - 0.5) * 2.2;
+      if (g.cracks.length < 1500) g.cracks.push(P(s, u), P(s2, u2));
+      u = u2; s = s2;
+    }
+  }
+  if (g.cracks.length < 1500) g.cracks.push(P(-0.6, (vr() - 0.5) * 1.5), P(0.6, (vr() - 0.5) * 1.5));
+  if (vr() < 0.75 && g.plates.length < 70) {
+    const u = (vr() < 0.5 ? -1 : 1) * (0.8 + vr() * 5.5), p = P(-1, u);
+    g.plates.push({ x: p[0], y: LAKE.y - 0.02, z: p[2], yaw: vr() * TAU, tilt: 0, tt: 0.25 + vr() * 0.55, t: 0, s: 0.7 + vr() * 0.8 });
+    g.holes.push({ x: p[0], y: LAKE.y, z: p[2], r: 0.9 + vr() * 0.5 });
+  }
+  const c = P(0, 0);
+  for (let k = 0; k < 7; k++) emit(c[0] + (vr() - 0.5) * 6, y + 0.1, c[2] + (vr() - 0.5) * 6, (vr() - 0.5) * 2.5, 2 + vr() * 4, (vr() - 0.5) * 2.5, 0.8 + vr() * 0.5, 0.3 + vr() * 0.3, 3);
+  for (let k = 0; k < 4; k++) emit(c[0] + (vr() - 0.5) * 4, y + 0.1, c[2] + (vr() - 0.5) * 4, (vr() - 0.5) * 3, 2 + vr() * 3, (vr() - 0.5) * 3, 1.1, 0.12, 4);
+  if (vr() < 0.5) sfx('crackSmall');
+}
+function crackBurst(x, y, z, n) {
+  const g = G;
+  for (let k = 0; k < n; k++) { const a = vr() * TAU, l = 1 + vr() * 2.5; if (g.cracks.length < 1500) g.cracks.push([x, y + 0.03, z], [x + Math.cos(a) * l, y + 0.03, z + Math.sin(a) * l]); }
+}
+function feed() {
+  const g = G;
+  if (gstate !== 'play' || g.fish <= 0 || g.crashT > 0) return;
+  g.fish--; g.fed++; g.E = Math.min(100, g.E + 32); g.eatT = 2.0;
+  ev('feed', { E: Math.round(g.E) });
+  sfx('feed'); toast('干し魚をやった(体力 +32)');
+}
+function setPace(p) {
+  const g = G;
+  if (gstate !== 'play') return;
+  const np = clamp(p, 0, 3);
+  if (np === g.pace) return;
+  sfx(np > g.pace ? 'hike' : 'whoa');
+  g.pace = np;
+  ev('pace', { p: np });
+}
+function finish() {
+  const g = G;
+  gstate = 'finish'; g.endT = 0;
+  g.score = g.crates * 100 + Math.max(0, Math.round((460 - g.t) * 4));
+  ev('finish', { score: g.score });
+  recordRun(true);
+  sfx('bell'); sfx('bark'); toast('村に着いた!');
+}
+function fail(cause) {
+  const g = G;
+  gstate = 'fail'; g.endT = 0; g.cause = cause; g.score = 0;
+  ev('fail', { cause });
+  recordRun(false);
+  sfx('lost'); toast('体が凍えて、もう進めない……');
+}
+function recordRun(ok) {
+  const g = G;
+  save.runs++;
+  if (ok) {
+    save.arrived++;
+    const k = g.route.key, b = save.best[k];
+    g.newBest = !b || g.score > b.score;
+    if (g.newBest) save.best[k] = { score: g.score, t: Math.round(g.t), crates: g.crates };
+    save.bestScore = Math.max(save.bestScore || 0, g.score);
+  }
+  writeSave();
+}
+const HINTS = {
+  start: () => (isTouch ? '▲ でペースを上げると、犬が走り出す' : '↑ でペースを上げると、犬が走り出す'),
+  steer: () => (isTouch ? '画面を左右になぞって犬を寄せる。そりは犬の通ったあとを通る' : '← → で犬を左右へ。そりは犬の通ったあとを通る'),
+  tired: () => `犬が疲れてきた。トロットで息を整えるか、干し魚(${isTouch ? '干魚' : 'F'})を`,
+  up: () => '上り坂。全力だと体力をみるみる使う',
+  down: () => '急な下り。全力のままだと、そりが犬に追突する。ペースを下げてブレーキ',
+  hut: () => '小屋の灯だ。前で止まれば休める(体力と体温が戻る)',
+  storm: () => '嵐が来た。体温がどんどん下がる',
+};
+let hintT = 0;
+function showHint(k) { const g = G; if (g.hints[k]) return; g.hints[k] = true; setHint(HINTS[k]()); hintT = 6; }
+function hints() {
+  const g = G;
+  if (g.t < 1) return;
+  if (g.pace === 0 && g.t > 1.5 && !g.hints.start) showHint('start');
+  const sl = g.s + LEAD_OFF;
+  if (!g.hints.steer) for (const o of g.obsR) { if (o.gs > sl + 70) break; if (o.gs > sl && o.kind !== 'drift') { showHint('steer'); break; } }
+  if (g.E < 35) showHint('tired');
+  if (g.grade > 0.07) showHint('up');
+  if (g.grade < -0.07) showHint('down');
+  if (g.b1 && g.route.hutS - g.s < 130 && g.route.hutS - g.s > 0) showHint('hut');
+  if (g.W > 0.15) showHint('storm');
+}
+
+// =============================================================================
+//  光・時間・天気
+// =============================================================================
+const L = { sunDir: [0, 0.1, 1], sunVis: 1, mainDir: [0, 1, 0], mainCol: [0, 0, 0], fillDir: [0, 1, 0], fillCol: [0, 0, 0], ambSky: [0, 0, 0], ambGnd: [0, 0, 0], fog: [0, 0, 0], zen: [0, 0, 0], horz: [0, 0, 0], glow: [0, 0, 0], cloudCol: [0, 0, 0], moonDir: [0, 1, 0], fogDen: 0.002, night: 0, aur: 0, cloud: 0, exp: 1, cool: 0, snowAmt: 0, snowV: [0, -1, 0], snowC: [0, 0, 0], lamp: 0 };
+// 時刻ごとの色(金色の夕方 / 日の入り / 青い夕暮れ / 夜)
+const SKYK = [
+  { t: 0, zen: [0.2, 0.34, 0.62], horz: [1.15, 0.78, 0.52], glow: [2.2, 1.1, 0.42], amb: [0.42, 0.48, 0.62], gnd: [0.36, 0.3, 0.27], fog: [0.78, 0.62, 0.52], cloud: [0.95, 0.72, 0.6], sun: [6.0, 3.8, 2.0] },
+  { t: 75, zen: [0.1, 0.17, 0.42], horz: [1.05, 0.46, 0.24], glow: [2.5, 0.85, 0.25], amb: [0.22, 0.25, 0.38], gnd: [0.2, 0.16, 0.15], fog: [0.56, 0.38, 0.33], cloud: [0.8, 0.42, 0.34], sun: [4.8, 1.8, 0.55] },
+  { t: 130, zen: [0.025, 0.05, 0.15], horz: [0.2, 0.2, 0.36], glow: [0.4, 0.16, 0.12], amb: [0.06, 0.08, 0.15], gnd: [0.035, 0.045, 0.07], fog: [0.12, 0.14, 0.24], cloud: [0.12, 0.12, 0.2], sun: [0.6, 0.2, 0.1] },
+  { t: 185, zen: [0.004, 0.008, 0.022], horz: [0.02, 0.03, 0.058], glow: [0, 0, 0], amb: [0.018, 0.025, 0.045], gnd: [0.008, 0.011, 0.018], fog: [0.022, 0.03, 0.055], cloud: [0.03, 0.035, 0.052], sun: [0, 0, 0] },
+];
+const STORM = { zen: [0.02, 0.024, 0.032], horz: [0.06, 0.068, 0.082], amb: [0.04, 0.046, 0.058], gnd: [0.02, 0.022, 0.028], fog: [0.06, 0.066, 0.08], cloud: [0.05, 0.055, 0.066] };
+function skyAt(t) {
+  let i = 0;
+  while (i < SKYK.length - 2 && SKYK[i + 1].t < t) i++;
+  const a = SKYK[i], b = SKYK[i + 1], f = sstep(a.t, b.t, t), o = {};
+  for (const k of ['zen', 'horz', 'glow', 'amb', 'gnd', 'fog', 'cloud', 'sun']) o[k] = mixc(a[k], b[k], f);
+  return o;
+}
+function updLighting() {
+  const g = G, t = gstate === 'title' ? 8 : g.t, W = g.W;
+  const k = skyAt(t);
+  const el = lerp(0.085, -0.22, sstep(0, 150, t)), az = 2.25;
+  L.sunDir = [Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)];
+  L.sunVis = sstep(-0.035, 0.03, el) * (1 - W);
+  const mel = lerp(0.2, 0.52, sstep(60, 420, t)), maz = -0.75;
+  L.moonDir = [Math.cos(mel) * Math.cos(maz), Math.sin(mel), Math.cos(mel) * Math.sin(maz)];
+  const moonVis = sstep(70, 160, t) * (1 - W * 0.88);
+  const moonCol = [0.13 * moonVis, 0.16 * moonVis, 0.24 * moonVis];
+  const sunCol = k.sun.map((x) => x * L.sunVis);
+  if (t < 118 || L.sunVis > 0.02) { L.mainDir = L.sunDir; L.mainCol = sunCol; L.fillDir = L.moonDir; L.fillCol = moonCol; }
+  else { L.mainDir = L.moonDir; L.mainCol = moonCol; L.fillDir = [0, 1, 0]; L.fillCol = [0.004, 0.005, 0.008]; }
+  const sw = sstep(0, 1, W) * g.night + W * 0.6 * (1 - g.night);
+  L.zen = mixc(k.zen, STORM.zen, sw); L.horz = mixc(k.horz, STORM.horz, sw); L.glow = k.glow.map((x) => x * (1 - W));
+  L.ambSky = mixc(k.amb, STORM.amb, sw); L.ambGnd = mixc(k.gnd, STORM.gnd, sw); L.fog = mixc(k.fog, STORM.fog, sw); L.cloudCol = mixc(k.cloud, STORM.cloud, sw);
+  L.night = sstep(95, 175, t);
+  L.aur = sstep(120, 190, t) * (1 - sstep(0.02, 0.4, W));
+  // オーロラが地面をほのかに染める
+  L.ambSky = [L.ambSky[0], L.ambSky[1] + 0.025 * L.aur, L.ambSky[2] + 0.008 * L.aur];
+  L.cloud = gstate === 'title' ? 0 : sstep(g.stormAt - 70, g.stormAt + 40, t);
+  L.fogDen = lerp(0.0015, 0.0022, L.night) + W * W * 0.045 + W * 0.004;
+  L.exp = lerp(1.0, 3.0, L.night) * (1 + W * 0.15);
+  L.cool = L.night * 0.8;
+  L.snowAmt = 0.1 + 0.9 * W;
+  const ws = 1 + 13 * W;
+  L.snowV = [Math.cos(g.windA) * ws, -1.1 - 0.8 * W, Math.sin(g.windA) * ws];
+  L.snowC = [L.ambSky[0] * 1.8 + L.mainCol[0] * 0.15 + 0.004, L.ambSky[1] * 1.8 + L.mainCol[1] * 0.15 + 0.005, L.ambSky[2] * 1.8 + L.mainCol[2] * 0.15 + 0.007];
+  L.lamp = sstep(85, 135, t);
+}
+
+// =============================================================================
+//  動き(犬・そり・人・粒)
+// =============================================================================
+function groundY(o, u) { return Math.abs(u) < 2.4 ? o.y : lerp(o.y, terrH(o.wx, o.wz), sstep(2.4, 4.5, Math.abs(u))); }
+function sledPose() {
+  const g = G, s = g.s, u = g.uSled;
+  worldAt(g.route, s, u, _w);
+  const du = (uAt(s + 1) - uAt(s - 1)) / 2;
+  return { x: _w.wx, y: groundY(_w, u), z: _w.wz, yaw: _w.h + Math.atan(du), pitch: Math.atan(_w.g), h: _w.h };
+}
+function legAngles(p, front, A, B) {
+  const ST = 0.6;
+  if (p < ST) { const q = p / ST; return [lerp(A, -A, q), front ? 0.06 : -0.08]; }
+  const q = (p - ST) / (1 - ST), e = q * q * (3 - 2 * q), lift = Math.sin(q * Math.PI);
+  return [lerp(-A, A, e), front ? -B * lift : B * lift * 0.85];
+}
+const TROT_O = [0, 0.5, 0.5, 0], GAL_O = [0.6, 0.7, 0.08, 0.0];
+function animDog(d, i, dt, v, tired, limp) {
+  const P = d.pose, run = sstep(0.15, 1.2, v), gal = sstep(5.4, 8.2, v);
+  const stride = lerp(1.25, 3.3, sstep(3, 10.5, v));
+  d.ph = (d.ph + dt * (v > 0.15 ? v / stride : 0)) % 1;
+  for (let k = 0; k < 4; k++) {
+    const tA = legAngles((d.ph + TROT_O[k]) % 1, k < 2, 0.42, 1.0), gA = legAngles((d.ph + GAL_O[k]) % 1, k < 2, 0.72, 1.25);
+    let up = lerp(tA[0], gA[0], gal), lo = lerp(tA[1], gA[1], gal);
+    if (limp && k === 0) { up *= 0.45; lo = lo * 0.5 - 0.35; }
+    P.u[k] = up * run; P.l[k] = lo * run;
+  }
+  const w = TAU * d.ph;
+  const idle = 1 - run;
+  d.breathT += dt;
+  P.bob = lerp(0.016 * Math.cos(2 * w), 0.04 * Math.sin(w + 0.6), gal) * run + Math.sin(d.breathT * 7) * 0.004 * idle + (limp ? -0.025 * Math.max(0, Math.sin(w)) * run : 0);
+  P.pitch = 0.09 * Math.sin(w) * gal * run;
+  P.flex = 0.09 * Math.sin(w + Math.PI / 2) * gal * run;
+  P.head = -P.pitch * 0.6 + 0.04 * Math.sin(2 * w) * run - 0.28 * tired + (idle > 0.5 ? 0.12 * Math.sin(d.breathT * 0.7 + i) : 0) - 0.12 * run;
+  P.look = idle > 0.5 ? 0.35 * Math.sin(d.breathT * 0.45 + i * 1.7) : 0;
+  P.tail = 0.06 * Math.sin(w * 2) * run - 0.25 * tired;
+  P.wag = idle * 0.35 * Math.sin(d.breathT * (gstate === 'title' ? 11 : 6) + d.wagP);
+  P.roll = 0.04 * Math.sin(w) * run * (1 - gal);
+}
+function updVisual(dt) {
+  const g = G;
+  g.vt += dt;
+  // そりの傾き(転倒・沈む)
+  g.tipA = lerp(g.tipA, g.crashT > 0.6 ? g.tip : 0, 1 - Math.exp(-dt * (g.crashT > 0.6 ? 9 : 3)));
+  g.sinkA = lerp(g.sinkA, g.crashT > 0.8 ? g.sink : 0, 1 - Math.exp(-dt * 3));
+  if (g.crashT <= 0) { g.tip = 0; g.sink = 0; }
+  // 犬
+  const tired = 1 - sstep(10, 45, g.E);
+  for (let i = 0; i < 6; i++) {
+    const d = g.dogs[i], pr = Math.floor(i / 2), side = i % 2 ? 1 : -1;
+    d.swayP += dt * (1.3 + i * 0.07);
+    const s = g.s + PAIR_OFF[pr] + d.jit, du = (uAt(s + 0.8) - uAt(s - 0.8)) / 1.6;
+    const u = uAt(s) + side * 0.42 + Math.sin(d.swayP) * 0.04;
+    worldAt(g.route, s, u, _w);
+    d.x = _w.wx; d.z = _w.wz; d.yaw = _w.h + Math.atan(du); d.pitch = Math.atan(_w.g);
+    d.y = groundY(_w, u) - (inDrift(s, u) ? 0.16 : 0) - g.sinkA * 0.25 * (pr === 0 ? 1 : 0.3);
+    const v = gstate === 'title' ? 0 : g.v;
+    animDog(d, i, dt, v * (1 + d.jit * 0.1), tired, g.injured.includes(i));
+    // 足もとの雪けむりと白い息
+    if (v > 2.5 && vr() < dt * v * 1.1) emit(d.x - Math.cos(d.yaw) * 0.3, d.y + 0.08, d.z - Math.sin(d.yaw) * 0.3, -Math.cos(d.yaw) * v * 0.25 + (vr() - 0.5), 0.6 + vr() * 0.8, -Math.sin(d.yaw) * v * 0.25 + (vr() - 0.5), 0.5 + vr() * 0.4, 0.22 + vr() * 0.15, 0);
+    d.breath = (d.breath || 0) - dt;
+    if (d.breath <= 0) { d.breath = lerp(0.9, 0.35, Math.max(run01(v), tired)) * (0.8 + vr() * 0.4); const hx = d.x + Math.cos(d.yaw) * 0.72, hz = d.z + Math.sin(d.yaw) * 0.72; emit(hx, d.y + 0.78, hz, Math.cos(d.yaw) * v * 0.7 + Math.cos(d.yaw) * 0.6, 0.15, Math.sin(d.yaw) * v * 0.7 + Math.sin(d.yaw) * 0.6, 1.0 + vr() * 0.5, 0.18, 1); }
+  }
+  // そり
+  const sp = sledPose();
+  g.sx = sp.x; g.sy = sp.y; g.sz = sp.z; g.syaw = sp.yaw; g.spitch = sp.pitch;
+  const turn = angDiff(g.lastYaw ?? sp.yaw, sp.yaw) / Math.max(dt, 1e-3);
+  g.lastYaw = sp.yaw;
+  g.lean = lerp(g.lean || 0, clamp(-turn * g.v * 0.05, -0.35, 0.35), 1 - Math.exp(-dt * 5));
+  if (g.v > 2 && vr() < dt * g.v * 2.2) {
+    const back = -1.4, bx = sp.x + Math.cos(sp.yaw) * back, bz = sp.z + Math.sin(sp.yaw) * back, brake = g.pace <= 1 && g.grade < -0.04 ? 2.2 : 1;
+    for (const sd of [-0.3, 0.3]) emit(bx - Math.sin(sp.yaw) * sd, sp.y + 0.05, bz + Math.cos(sp.yaw) * sd, -Math.cos(sp.yaw) * g.v * 0.2 + (vr() - 0.5) * 0.8, 0.4 + vr() * 0.9 * brake, -Math.sin(sp.yaw) * g.v * 0.2 + (vr() - 0.5) * 0.8, 0.6 + vr() * 0.5, 0.3 * brake, 0);
+  }
+  g.musherBreath -= dt;
+  if (g.musherBreath <= 0) { g.musherBreath = 1.1 + vr() * 0.6; const mx = sp.x + Math.cos(sp.yaw) * -1.45, mz = sp.z + Math.sin(sp.yaw) * -1.45; emit(mx + Math.cos(sp.yaw) * 0.2, sp.y + 1.75, mz + Math.sin(sp.yaw) * 0.2, Math.cos(sp.yaw) * (g.v + 0.6), 0.1, Math.sin(sp.yaw) * (g.v + 0.6), 1.3, 0.22, 1); }
+  // 落ちた荷
+  for (const c of g.lostCrates) {
+    if (c.rest) continue;
+    c.vy -= 9.8 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt; c.rot += c.spin * dt; c.tilt += c.spin * 0.6 * dt;
+    const gy = terrH(c.x, c.z) + (c.wet ? -0.15 : 0.08);
+    if (c.y < gy) { c.y = gy; c.vy *= -0.25; c.vx *= 0.5; c.vz *= 0.5; c.spin *= 0.5; if (Math.abs(c.vy) < 0.6) { c.rest = true; c.tilt = Math.round(c.tilt / (Math.PI / 2)) * (Math.PI / 2) + 0.15; for (let k = 0; k < 8; k++) emit(c.x, c.y, c.z, (vr() - 0.5) * 2, 1 + vr(), (vr() - 0.5) * 2, 0.7, 0.4, c.wet ? 3 : 0); } }
+  }
+  // 割れた氷の板
+  for (const p of g.plates) { p.t += dt; p.tilt = p.tt * sstep(0, 0.6, p.t) * (1 + 0.25 * Math.sin(p.t * 3) * Math.exp(-p.t)); }
+  // 煙と湯気(近いときだけ)
+  g.smokeT -= dt;
+  if (g.smokeT <= 0) {
+    g.smokeT = 0.12;
+    const near = (p) => Math.abs(p[0] - cam.x) + Math.abs(p[2] - cam.z) < 260;
+    if (STATIC.hut && near(STATIC.hut.chimney)) { const c = STATIC.hut.chimney; emit(c[0], c[1], c[2], (vr() - 0.5) * 0.3, 0.8, (vr() - 0.5) * 0.3, 4.5, 0.9, 2); }
+    for (const h of STATIC.village) if (near(h.chimney) && vr() < 0.5) emit(h.chimney[0], h.chimney[1], h.chimney[2], (vr() - 0.5) * 0.3, 0.8, (vr() - 0.5) * 0.3, 4.5, 1.0, 2);
+    for (const o of g.obsR) {
+      if (o.kind !== 'water' || Math.abs(o.gs - g.s) > 90) continue;
+      if (vr() < 0.7) emit(o.x + (vr() - 0.5) * o.rs, o.y + 0.1, o.z + (vr() - 0.5) * o.rs, 0, 0.3, 0, 2.5, 0.8, 5);
+    }
+    if (g.W > 0.25) for (let k = 0; k < 3; k++) emit(cam.x + (vr() - 0.5) * 30, terrH(cam.x, cam.z) + 0.2, cam.z + (vr() - 0.5) * 30, Math.cos(g.windA) * 8, 0.3, Math.sin(g.windA) * 8, 2, 1.6, 6);
+  }
+  updPool(dt);
+}
+const run01 = (v) => sstep(0.2, 8, v);
+
+// =============================================================================
+//  カメラ
+// =============================================================================
+const cam = { x: 0, y: 4, z: -12, tx: 0, ty: 0, tz: 10, fov: 1.0, shake: 0, ready: false, yaw: Math.PI / 2, orbit: 0, cine: 0 };
+let VP = M4.id(), VIEW = M4.id(), PROJ = M4.id(), envAge = 99, frameN = 0, SHM = M4.id(), shadowOn = false;
+function updCam(dt) {
+  const g = G, asp = cssW / cssH, port = clamp((1 - asp) / 0.45, 0, 1);
+  let ex, ey, ez, tx, ty, tz, fov;
+  if (gstate === 'title') {
+    cam.orbit += dt * 0.11;
+    const c = worldAt(g.route, g.s + 4.5, 0, {}), a = c.h + 1.9 + Math.sin(cam.orbit) * 0.8, R0 = 8.5 + port * 3;
+    ex = c.wx + Math.cos(a) * R0; ez = c.wz + Math.sin(a) * R0; ey = c.y + 1.6 + port * 0.8;
+    tx = c.wx; ty = c.y + 0.6; tz = c.wz; fov = 0.85 + port * 0.35;
+    cam.ready = false;
+  } else {
+    // 犬が御者の頭ごしに見えるよう、少し高い所から見下ろす
+    const back = 7.2 - 0.1 * g.v + port * 2.2, up = 4.4 + 0.03 * g.v + port * 1.3 + (gstate === 'fail' ? g.endT * 1.5 : 0), side = 0.9;
+    const ah = routeAt(g.route, g.s + 2, {}).h;
+    if (!cam.ready) cam.yaw = ah;
+    cam.yaw += angDiff(cam.yaw, ah + (g.uLead - g.uSled) * 0.03) * (1 - Math.exp(-dt * 2.2));
+    ex = g.sx - Math.cos(cam.yaw) * back - Math.sin(cam.yaw) * side; ez = g.sz - Math.sin(cam.yaw) * back + Math.cos(cam.yaw) * side; ey = g.sy + up;
+    const ahead = worldAt(g.route, g.s + 13, (g.uLead + g.uSled) * 0.5, {});
+    tx = ahead.wx; tz = ahead.wz; ty = lerp(ahead.y, g.sy, 0.4) + 0.55;
+    fov = 0.95 + 0.14 * sstep(5, 11, g.v) + port * 0.38;
+    // 氷が割れはじめた瞬間だけ、犬の前に回りこんで、後ろから迫る割れ目を見せる
+    if (cam.cine > 0 && gstate === 'play') {
+      cam.cine -= dt;
+      const f = worldAt(g.route, g.s + 15, g.uLead + 3.2, {}), c = worldAt(g.route, g.s - 2, g.uSled, {});
+      const w = sstep(0, 0.5, cam.cine) * sstep(2.8, 2.3, cam.cine);
+      ex = lerp(ex, f.wx, w); ez = lerp(ez, f.wz, w); ey = lerp(ey, f.y + 1.5, w);
+      tx = lerp(tx, c.wx, w); tz = lerp(tz, c.wz, w); ty = lerp(ty, c.y + 0.6, w);
+      fov = lerp(fov, 0.9 + port * 0.35, w);
+    }
+  }
+  ey = Math.max(ey, terrH(ex, ez) + 1.2);
+  const k = cam.ready ? 1 - Math.exp(-dt * 5) : 1;
+  cam.x = lerp(cam.x, ex, k); cam.y = lerp(cam.y, ey, k); cam.z = lerp(cam.z, ez, k);
+  cam.tx = lerp(cam.tx, tx, k); cam.ty = lerp(cam.ty, ty, k); cam.tz = lerp(cam.tz, tz, k);
+  cam.fov = lerp(cam.fov, fov, cam.ready ? 1 - Math.exp(-dt * 2) : 1);
+  cam.ready = gstate !== 'title';
+  cam.shake = Math.max(0, cam.shake - dt * 1.6);
+  const sh = cam.shake * cam.shake * 0.35, t = performance.now() / 1000;
+  const e = [cam.x + Math.sin(t * 41) * sh, cam.y + Math.sin(t * 37 + 1) * sh, cam.z + Math.cos(t * 43) * sh];
+  VIEW = M4.look(e, [cam.tx, cam.ty, cam.tz], [0, 1, 0]);
+  PROJ = M4.persp(cam.fov, asp, 0.15, 6000);
+  VP = M4.mul(PROJ, VIEW);
+  cam.ex = e;
+}
+function toScreen(x, y, z) {
+  const m = VP, cx = m[0] * x + m[4] * y + m[8] * z + m[12], cy = m[1] * x + m[5] * y + m[9] * z + m[13], cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+  if (cw <= 0.05) return null;
+  return { x: (cx / cw * 0.5 + 0.5) * cssW, y: (1 - (cy / cw * 0.5 + 0.5)) * cssH, w: cw };
+}
+
+// =============================================================================
+//  描く
+// =============================================================================
+const LP = new Float32Array(32), LC = new Float32Array(24);
+let nLights = 0;
+const LINE_MAX = 3600, lineData = new Float32Array(LINE_MAX * 3);
+function commonU() {
+  return {
+    uCam: cam.ex || [cam.x, cam.y, cam.z], uT: G.vt, uMainDir: L.mainDir, uMainCol: L.mainCol, uFillDir: L.fillDir, uFillCol: L.fillCol,
+    uAmbSky: L.ambSky, uAmbGnd: L.ambGnd, uFogCol: L.fog, uZen: L.zen, uHorz: L.horz, uGlowCol: L.glow, uSunSky: L.sunDir, uMoonDir: L.moonDir, uCloudCol: L.cloudCol,
+    uFogDen: L.fogDen, uSunVis: L.sunVis, uNight: L.night, uAur: L.aur, uCloud: L.cloud, uOS: HDR ? 1 : 0.25,
+    uLP: LP, uLC: LC, uNL: nLights, uSpP: FX.spP, uSpD: FX.spD, uSpC: FX.spC, uShM: SHM, uShOn: shadowOn ? 1 : 0, uVP: VP,
+  };
+}
+function bindTex(unit, tex) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); }
+function fullscreen() { gl.bindVertexArray(fullVao); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+const viewDist = () => [700, 600, 520, 440, 380, 320, 280, 240][quality];
+function buildDraw() {
+  const g = G, list = [], skins = [];
+  // そり・人・荷
+  const SM = M4.trs(g.sx, g.sy - g.sinkA * 0.45, g.sz, g.syaw, g.spitch + g.tipA * 0.1, g.lean * 0.4 + g.tipA * 1.15);
+  list.push({ mesh: meshes.sled, M: SM });
+  const crouch = sstep(4, 10, g.v) * 0.18 + (g.pace === 0 && g.v > 1 ? -0.1 : 0);
+  const MM = M4.mul(SM, M4.mul(M4.tr(-1.62, 0, 0), M4.mul(M4.rx(g.lean * 0.9), M4.rz(-crouch))));
+  list.push({ mesh: meshes.musher, M: MM, em: L.lamp });
+  const slots = [[-0.68, -0.14], [-0.68, 0.14], [-0.3, -0.14], [-0.3, 0.14], [0.08, -0.14], [0.08, 0.14]];
+  for (let k = 0; k < g.crates; k++) list.push({ mesh: meshes.crate, M: M4.mul(SM, M4.tr(slots[k][0], 1.01, slots[k][1])) });
+  for (const c of g.lostCrates) list.push({ mesh: meshes.crate, M: M4.trs(c.x, c.y, c.z, c.rot, c.tilt, 0) });
+  for (const p of g.plates) list.push({ mesh: meshes.plate, M: M4.trs(p.x, p.y, p.z, p.yaw, 0, p.tilt, p.s), cast: false });
+  for (const h of g.holes) list.push({ mesh: meshes.disc, M: M4.mul(M4.tr(h.x, h.y + 0.035, h.z), [h.r, 0, 0, 0, 0, 1, 0, 0, 0, 0, h.r, 0, 0, 0, 0, 1]), cast: false });
+  // 犬
+  for (const d of g.dogs) skins.push({ mesh: meshes.dogs[d.coat], M: M4.trs(d.x, d.y, d.z, d.yaw, d.pitch, 0), bones: dogBones(d.pose).slice() });
+  // ヘッドランプ
+  const head = M4.xf(MM, 0.14, 1.86, 0), fwd = [Math.cos(g.syaw), 0, Math.sin(g.syaw)];
+  FX.spP = head;
+  FX.spD = (() => { const p = -0.2 + g.lean * 0.1, d = [fwd[0] * Math.cos(p), Math.sin(p), fwd[2] * Math.cos(p)]; return d; })();
+  const li = L.lamp * 90;
+  FX.spC = [li, li * 0.94, li * 0.82];
+  return { list, skins, SM, MM };
+}
+function ropeLines(SM) {
+  const g = G;
+  let n = 0;
+  const put = (a, b) => { if (n + 2 > LINE_MAX) return; lineData.set(a, n * 3); lineData.set(b, n * 3 + 3); n += 2; };
+  const front = M4.xf(SM, 1.42, 0.42, 0);
+  let prev = front;
+  for (let pr = 0; pr < 3; pr++) {
+    const s = g.s + PAIR_OFF[pr];
+    const back = worldAt(g.route, s - 0.62, uAt(s - 0.62), {}), fr = worldAt(g.route, s + 0.62, uAt(s + 0.62), {});
+    const pb = [back.wx, groundY(back, uAt(s - 0.62)) + 0.5, back.wz], pf = [fr.wx, groundY(fr, uAt(s + 0.62)) + 0.62, fr.wz];
+    put(prev, pb); put(pb, pf);
+    for (const k of [pr * 2, pr * 2 + 1]) {
+      const d = g.dogs[k], c = Math.cos(d.yaw), sn = Math.sin(d.yaw);
+      put([d.x - c * 0.32, d.y + 0.62, d.z - sn * 0.32], pb);
+      put([d.x + c * 0.36, d.y + 0.68, d.z + sn * 0.36], pf);
+    }
+    prev = pf;
+  }
+  return n;
+}
+function render() {
+  frameN++;
+  const g = G, cu = commonU(), { list, skins, SM } = buildDraw();
+  bindTex(0, noiseTex); bindTex(3, RT.shadowTex);
+  gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
+  // 1) 空の映りこみ
+  envAge++;
+  if (envAge >= (quality <= 1 ? 3 : 8)) {
+    envAge = 0;
+    bindTex(2, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, RT.env.fb);
+    gl.viewport(0, 0, RT.env.w, RT.env.h);
+    gl.disable(gl.DEPTH_TEST);
+    setU(progs.env, cu);
+    fullscreen();
+    bindTex(2, RT.env.tex);
+    gl.generateMipmap(gl.TEXTURE_2D);
+  }
+  bindTex(2, RT.env.tex);
+  // 見える範囲のかたまり
+  const vd = viewDist(), fz = Math.sin(cam.yaw), vis = [];
+  for (const c of chunks) {
+    const dz = Math.max(0, c.z0 - cam.z, cam.z - c.z1);
+    if (dz > vd) continue;
+    if (gstate !== 'title' && fz > 0.4 && c.z1 < cam.z - 60) continue;
+    vis.push(c);
+  }
+  // 2) 影(夕日 / 月)
+  const mainI = L.mainCol[0] + L.mainCol[1] + L.mainCol[2];
+  shadowOn = quality <= 4 && mainI > 0.05;
+  if (shadowOn) {
+    bindTex(3, null);
+    const c = [g.sx + Math.cos(cam.yaw) * 14, g.sy, g.sz + Math.sin(cam.yaw) * 14], S = 34, D = L.mainDir;
+    const e = [c[0] + D[0] * 200, c[1] + Math.max(0.12, D[1]) * 200, c[2] + D[2] * 200];
+    SHM = M4.mul(M4.ortho(-S, S, -S, S, 20, 450), M4.look(e, c, [0, 1, 0]));
+    gl.bindFramebuffer(gl.FRAMEBUFFER, RT.shadow);
+    gl.viewport(0, 0, RT.shadowN, RT.shadowN);
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(2, 4);
+    setU(progs.shadow, { uLVP: SHM });
+    for (const ch of vis) if (ch.props && ch.z1 > c[2] - 60 && ch.z0 < c[2] + 60) { setU(progs.shadow, { uM: M4.id() }); drawMesh(ch.props); }
+    if (meshes.obstacles) { setU(progs.shadow, { uM: M4.id() }); drawMesh(meshes.obstacles); }
+    for (const d of list) if (d.cast !== false) { setU(progs.shadow, { uM: d.M }); drawMesh(d.mesh); }
+    setU(progs.shadowSkin, { uLVP: SHM });
+    for (const d of skins) { setU(progs.shadowSkin, { uM: d.M, uB: d.bones }); drawMesh(d.mesh); }
+    gl.disable(gl.POLYGON_OFFSET_FILL);
+    bindTex(3, RT.shadowTex);
+    cu.uShM = SHM; cu.uShOn = 1;
+  } else cu.uShOn = 0;
+  // 3) 本番(HDR)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, RT.scene.fb);
+  gl.viewport(0, 0, rw, rh);
+  gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+  setU(progs.sky, Object.assign({ uInvVP: M4.inv(VP) }, cu));
+  fullscreen();
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LEQUAL);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+  setU(progs.obj, cu);
+  const I = M4.id();
+  setU(progs.obj, { uM: I, uTint: [1, 1, 1], uEm: 1 });
+  for (const ch of vis) { drawMesh(ch.terrain); if (ch.props) drawMesh(ch.props); }
+  drawMesh(meshes.ring);
+  if (meshes.obstacles) drawMesh(meshes.obstacles);
+  for (const d of list) { setU(progs.obj, { uM: d.M, uTint: d.tint || [1, 1, 1], uEm: d.em ?? 1 }); drawMesh(d.mesh); }
+  setU(progs.skin, cu);
+  for (const d of skins) { setU(progs.skin, { uM: d.M, uB: d.bones, uTint: [1, 1, 1], uEm: 1 }); drawMesh(d.mesh); }
+  // 線(引き綱・氷の割れ目)
+  const nr = ropeLines(SM);
+  let nc = 0;
+  for (const p of g.cracks) { if (nr + nc >= LINE_MAX) break; lineData.set(p, (nr + nc) * 3); nc++; }
+  if (nr + nc > 0) {
+    gl.bindVertexArray(lineVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, lineData.subarray(0, (nr + nc) * 3));
+    const amb = L.ambSky;
+    setU(progs.line, { uVP: VP, uCol: [0.02, 0.025, 0.035], uOS: cu.uOS });
+    gl.drawArrays(gl.LINES, 0, nr);
+    if (nc) { setU(progs.line, { uCol: [amb[0] * 5 + L.mainCol[0] * 0.3 + 0.02, amb[1] * 5 + L.mainCol[1] * 0.3 + 0.03, amb[2] * 5 + L.mainCol[2] * 0.3 + 0.05] }); gl.drawArrays(gl.LINES, nr, nc); }
+  }
+  // 粒と雪(半透明・加算)
+  gl.depthMask(false);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  const ps = rh * PROJ[5] * 0.5, maxPt = Math.min(256, rh * (quality >= 4 ? 0.16 : 0.3));
+  const np = packParticles();
+  if (np) { setU(progs.part, { uVP: VP, uPS: ps, uMaxPt: maxPt, uOS: cu.uOS }); gl.bindVertexArray(partVao); gl.drawArrays(gl.POINTS, 0, np); }
+  gl.blendFunc(gl.ONE, gl.ONE);
+  const nSnow = Math.floor(snowN * L.snowAmt * [1, 1, 0.85, 0.7, 0.6, 0.5, 0.4, 0.35][quality]);
+  if (nSnow > 0) {
+    setU(progs.snow, { uVP: VP, uCam: [cam.x, cam.y, cam.z], uT: g.vt, uSnowV: L.snowV, uBox: 30, uStreak: 0.035 + g.W * 0.015, uSpP: FX.spP, uSpD: FX.spD, uSnowC: L.snowC, uOS: cu.uOS });
+    gl.bindVertexArray(snowVao);
+    gl.drawArrays(gl.LINES, 0, nSnow * 2);
+  }
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+  gl.disable(gl.DEPTH_TEST);
+  // 4) 光のにじみ
+  let src = RT.scene;
+  const nb = RT.bloom.length;
+  for (let i = 0; i < nb; i++) {
+    const dst = RT.bloom[i];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, dst.w, dst.h);
+    bindTex(4, src.tex);
+    setU(progs.down, { uTx: [1 / src.w, 1 / src.h], uTh: i === 0 ? (HDR ? 1.0 / Math.max(1, L.exp) : 0.27) : 0 });
+    fullscreen();
+    src = dst;
+  }
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  for (let i = nb - 1; i > 0; i--) {
+    const s = RT.bloom[i], d = RT.bloom[i - 1];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, d.fb); gl.viewport(0, 0, d.w, d.h);
+    bindTex(4, s.tex);
+    setU(progs.up, { uTx: [1 / s.w, 1 / s.h], uK: 1 });
+    fullscreen();
+  }
+  gl.disable(gl.BLEND);
+  // 5) 仕上げ
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, rw, rh);
+  bindTex(4, RT.scene.tex);
+  bindTex(5, nb ? RT.bloom[0].tex : RT.scene.tex);
+  const cold = gstate === 'title' ? 0 : 1 - sstep(10, 55, g.warmth);
+  setU(progs.comp, { uExp: L.exp, uBloomK: 0.1 + 0.06 * L.night, uGrain: (frameN % 64) * 7.13, uVig: 0.4 + cold * 0.3, uOS: cu.uOS, uHasBloom: nb ? 1 : 0, uRes: [rw, rh], uCool: L.cool, uCold: cold });
+  fullscreen();
+  bindTex(4, null); bindTex(5, null);
+}
+function pickLights() {
+  const arr = STATIC.lights.map((l) => ({ l, d: Math.hypot(l.p[0] - cam.x, l.p[2] - cam.z) })).filter((x) => x.d < 220).sort((a, b) => a.d - b.d).slice(0, 8);
+  nLights = arr.length;
+  const on = 0.25 + 0.75 * sstep(60, 140, gstate === 'title' ? 8 : G.t);
+  arr.forEach((x, i) => { LP.set([x.l.p[0], x.l.p[1], x.l.p[2], x.l.r], i * 4); LC.set(x.l.c.map((v) => v * on * (0.92 + 0.08 * Math.sin(G.vt * 9 + i * 3))), i * 3); });
+}
+function buildDisc() {
+  const m = new Mesh(), N = 20, c = m.vert([0, 0, 0], [0, 1, 0], [0, 0, 0], MT(0.03, 0, 1, 12)), ring = [];
+  for (let k = 0; k <= N; k++) { const a = (k / N) * TAU, r = 0.85 + 0.15 * Math.sin(a * 3 + 1) * Math.cos(a * 5); ring.push(m.vert([Math.cos(a) * r, 0, Math.sin(a) * r], [0, 1, 0], [0, 0, 0], MT(0.03, 0, 1, 12))); }
+  for (let k = 0; k < N; k++) m.tri(c, ring[k], ring[k + 1]);
+  return m;
+}
+
+// =============================================================================
+//  音(Web Audio で合成)
+// =============================================================================
+let AC = null, master = null, sfxBus = null, ambBus = null, noiseBuf = null, wind = null, runner = null, pad = null, rumble = null;
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 対応していないブラウザ */ }
+  try {
+    if (!AC) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      AC = new AudioCtx();
+      master = AC.createGain(); master.gain.value = save.sound ? 0.9 : 0; master.connect(AC.destination);
+      const comp = AC.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(master);
+      sfxBus = AC.createGain(); sfxBus.gain.value = 0.8; sfxBus.connect(comp);
+      ambBus = AC.createGain(); ambBus.gain.value = 0.7; ambBus.connect(comp);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < d.length; i++) { last = last * 0.97 + (Math.random() * 2 - 1) * 0.03; d[i] = last * 6; }
+      const mk = (freq, rate = 1) => { const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = rate; const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq; const gg = AC.createGain(); gg.gain.value = 0; s.connect(f); f.connect(gg); gg.connect(ambBus); s.start(); return { g: gg, f }; };
+      wind = mk(240); runner = mk(380, 1.2); rumble = mk(120, 0.6);
+      // 夜の静かな和音(オーロラの間だけ)
+      const pg = AC.createGain(); pg.gain.value = 0; pg.connect(ambBus);
+      for (const [f, v] of [[220, 0.5], [329.6, 0.35], [440, 0.25], [554.4, 0.15]]) { const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f; const gg = AC.createGain(); gg.gain.value = v; const lfo = AC.createOscillator(); lfo.frequency.value = 0.07 + f / 4000; const lg = AC.createGain(); lg.gain.value = v * 0.6; lfo.connect(lg); lg.connect(gg.gain); o.connect(gg); gg.connect(pg); o.start(); lfo.start(); }
+      pad = { g: pg };
+    }
+    if (AC.state === 'suspended') AC.resume();
+    const b = AC.createBuffer(1, 1, 22050), src = AC.createBufferSource();
+    src.buffer = b; src.connect(AC.destination); src.start(0);
+  } catch (e) { /* 音が出せなくても遊べる */ }
+}
+for (const e of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(e, unlockAudio, { capture: true, passive: true });
+const canPlay = () => AC && save.sound && AC.state === 'running';
+function tone(f, dur, type, vol, f2, delay = 0) {
+  if (!canPlay() || !isFinite(f) || f <= 0) return;
+  try {
+    const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) { /* 鳴らせなくても続ける */ }
+}
+function noise(dur, freq, q, vol, delay = 0, type = 'bandpass', f2 = 0, attack = 0.01) {
+  if (!canPlay()) return;
+  try {
+    const t = AC.currentTime + delay, s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+    s.buffer = noiseBuf;
+    f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t, vr() * 1.5); s.stop(t + dur + 0.05);
+  } catch (e) { /* 鳴らせなくても続ける */ }
+}
+const lastSfx = {};
+function sfx(name, delay = 0) {
+  const now = performance.now();
+  if (lastSfx[name] && now - lastSfx[name] < 70) return;
+  lastSfx[name] = now;
+  switch (name) {
+    case 'hike': tone(1250, 0.09, 'sine', 0.12, 1700); tone(1700, 0.16, 'sine', 0.12, 2300, 0.11); break;
+    case 'whoa': tone(420, 0.35, 'sine', 0.12, 260); break;
+    case 'bark': for (let k = 0; k < 3; k++) { const dl = delay + k * 0.17 + vr() * 0.05; tone(560 + vr() * 160, 0.1, 'sawtooth', 0.07, 330, dl); noise(0.08, 1300, 1.4, 0.12, dl); } break;
+    case 'thud': tone(80, 0.25, 'sine', 0.45, 45); noise(0.25, 500, 0.8, 0.3, 0, 'lowpass', 200); break;
+    case 'crash': noise(0.9, 900, 0.6, 0.6, 0, 'lowpass', 220, 0.005); tone(70, 0.4, 'sine', 0.5, 40); noise(0.25, 2400, 1.0, 0.18, 0.03); sfx('yelp', 0.15); break;
+    case 'yelp': tone(900, 0.18, 'sawtooth', 0.05, 1300, delay); tone(1300, 0.25, 'sine', 0.06, 700, delay + 0.12); break;
+    case 'crack': for (let k = 0; k < 4; k++) { tone(2600 - k * 300, 0.5, 'sine', 0.07, 380, k * 0.09); noise(0.06, 3000, 1.5, 0.3, k * 0.09, 'highpass'); } noise(1.4, 160, 0.7, 0.5, 0, 'lowpass', 60, 0.02); break;
+    case 'crackSmall': tone(1800 + vr() * 1400, 0.35, 'sine', 0.05, 300); noise(0.05, 2800, 1.5, 0.2, 0, 'highpass'); break;
+    case 'splash': noise(0.9, 1100, 0.6, 0.6, 0, 'lowpass', 300, 0.004); noise(1.4, 500, 0.6, 0.3, 0.15, 'lowpass', 150); tone(60, 0.5, 'sine', 0.3, 35); break;
+    case 'escape': tone(523, 0.22, 'triangle', 0.1); tone(784, 0.35, 'triangle', 0.1, 0, 0.12); break;
+    case 'feed': noise(0.12, 1800, 2, 0.15); noise(0.12, 1500, 2, 0.13, 0.15); noise(0.12, 1700, 2, 0.12, 0.3); break;
+    case 'door': tone(120, 0.3, 'triangle', 0.15, 80); noise(0.2, 700, 1, 0.12, 0.05); break;
+    case 'bell': for (let k = 0; k < 3; k++) { tone(784, 1.6, 'sine', 0.14, 0, k * 0.55); tone(1176, 1.2, 'sine', 0.05, 0, k * 0.55); tone(1975, 0.6, 'sine', 0.025, 0, k * 0.55); } break;
+    case 'lost': tone(220, 1.2, 'sine', 0.14, 140); tone(165, 1.4, 'sine', 0.1, 110, 0.3); break;
+    case 'warn': tone(660, 0.1, 'square', 0.05); tone(660, 0.1, 'square', 0.05, 0, 0.16); break;
+    case 'paw': tone(70 + vr() * 15, 0.06, 'sine', 0.05, 50); break;
+    case 'pant': noise(0.07, 900 + vr() * 300, 1.2, 0.035); break;
+    case 'crackle': noise(0.02, 2500 + vr() * 1500, 2, 0.06 + vr() * 0.05, 0, 'bandpass'); break;
+  }
+}
+let pawT = 0, pantT = 0, crackleT = 0;
+function updAudio(dt) {
+  if (!AC || !wind) return;
+  try {
+    const t = AC.currentTime, g = G, on = gstate === 'play' || gstate === 'finish' ? 1 : 0.5;
+    const gust = 0.5 + 0.5 * Math.sin(g.vt * 0.31) * Math.sin(g.vt * 0.17 + 1);
+    wind.g.gain.setTargetAtTime((0.025 + 0.05 * gust + 0.32 * g.W + 0.06 * sstep(22, 40, g.sy || 0)) * (gstate === 'title' ? 0.6 : 1), t, 0.4);
+    wind.f.frequency.setTargetAtTime(170 + 120 * gust + 220 * g.W, t, 0.5);
+    const v = gstate === 'title' ? 0 : g.v;
+    runner.g.gain.setTargetAtTime(Math.min(0.06, v * 0.0055) * on * (g.crashT > 0 ? 0 : 1) * (1 + (g.pace <= 1 && g.grade < -0.04 ? 0.8 : 0)), t, 0.12);
+    runner.f.frequency.setTargetAtTime(260 + v * 22, t, 0.2);
+    rumble.g.gain.setTargetAtTime(g.crack.on ? 0.5 : 0, t, 0.2);
+    pad.g.gain.setTargetAtTime(0.012 * L.aur * on, t, 1.5);
+    pawT -= dt;
+    if (v > 1.5 && pawT <= 0) { pawT = 1 / Math.max(1.5, v / lerp(1.25, 3.3, sstep(3, 10.5, v))) / 2; sfx('paw'); }
+    pantT -= dt;
+    if (pantT <= 0) { pantT = lerp(0.6, 0.22, Math.max(1 - g.E / 100, sstep(2, 10, v))) * (0.8 + vr() * 0.4); if (gstate !== 'over') sfx('pant'); }
+    crackleT -= dt;
+    if (crackleT <= 0) { crackleT = 0.05 + vr() * 0.3; if (STATIC.hut && Math.hypot(STATIC.hut.x - (g.sx || 0), STATIC.hut.z - (g.sz || 0)) < 30) sfx('crackle'); }
+  } catch (e) { /* 音が出せなくても続ける */ }
+}
+
+// =============================================================================
+//  画面の表示
+// =============================================================================
+let toastT = 0;
+function toast(s) { const e = $('toast'); e.textContent = s; e.classList.add('on'); toastT = 2.4; }
+function setHint(h) { const e = $('hint'); if (e.dataset.h !== h) { e.dataset.h = h; e.textContent = h; } e.classList.toggle('on', !!h); $('steerhint').style.opacity = h ? '0' : ''; }
+const fmtT = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+const tempOf = (w) => 33 + 3.8 * (w / 100);
+const hudCache = {};
+function setText(id, s) { if (hudCache[id] !== s) { hudCache[id] = s; $(id).textContent = s; } }
+function updHud(dt) {
+  const g = G;
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('on'); }
+  if (hintT > 0) { hintT -= dt; if (hintT <= 0) setHint(''); }
+  $('bar-e').firstElementChild.style.width = `${g.E.toFixed(1)}%`;
+  $('bar-w').firstElementChild.style.width = `${g.warmth.toFixed(1)}%`;
+  setText('v-e', `${Math.round(g.E)}`);
+  setText('v-w', `${tempOf(g.warmth).toFixed(1)}℃`);
+  setText('fish', `${g.fish}`);
+  setText('clock', `${fmtT(g.t)}${g.W > 0.05 ? ' 吹雪' : L.cloud > 0.2 ? ' 雲' : ''}`);
+  const ck = `${g.crates}`;
+  if (hudCache.crates !== ck) { hudCache.crates = ck; $('crates').innerHTML = Array.from({ length: 6 }, (_, k) => `<span class="${k < g.crates ? '' : 'gone'}"></span>`).join(''); }
+  const pk = `${g.pace}`;
+  if (hudCache.pace !== pk) { hudCache.pace = pk; [...$('pace').children].forEach((e, k) => { e.classList.toggle('on', k === g.pace); e.classList.toggle('hot', k === 3 && g.pace === 3); }); }
+  // 警告
+  let w = '';
+  if (g.crashT <= 0) {
+    if (g.overrun > 0.15) w = 'そりが犬を押している!ペースを下げろ';
+    else if (g.crack.on) w = `割れ目が迫る ${Math.max(0, g.s - g.crack.cs).toFixed(0)}m`;
+    else if (g.warmth < 25 && gstate === 'play') w = `体温 ${tempOf(g.warmth).toFixed(1)}℃`;
+    else if (g.E < 12 && g.pace >= 2) w = '犬が限界だ';
+  }
+  const we = $('warn');
+  if (we.textContent !== w) we.textContent = w;
+  we.classList.toggle('on', !!w);
+  if (w && g.overrun > 0.15 && frameN % 40 === 0) sfx('warn');
+  // 分かれ道
+  const sl = g.s + LEAD_OFF;
+  let fk = 0;
+  if (!g.b1 && g.route.forks[0] - sl < 110) fk = 1;
+  else if (g.b1 && !g.b2 && g.route.forks[1] - sl < 110) fk = 2;
+  const fe = $('fork');
+  if (fk) {
+    const f = FORK[fk - 1], key = `${fk}`;
+    if (fe.dataset.k !== key) {
+      fe.dataset.k = key;
+      $('fork-l').innerHTML = `← ${BRANCH_TXT[f.left][0]}<small>${BRANCH_TXT[f.left][1]}</small>`;
+      $('fork-r').innerHTML = `${BRANCH_TXT[f.right][0]} →<small>${BRANCH_TXT[f.right][1]}</small>`;
+    }
+    $('fork-l').classList.toggle('pick', g.uLead < -0.25);
+    $('fork-r').classList.toggle('pick', g.uLead > 0.25);
+  }
+  fe.classList.toggle('on', !!fk && gstate === 'play');
+  if (frameN % 6 === 0) drawMap();
+}
+const mapC = $('map'), mx = mapC.getContext('2d');
+let mapBounds = null;
+function drawMap() {
+  const g = G, W = mapC.clientWidth || 86, H = mapC.clientHeight || 300, dpr = Math.min(2, devicePixelRatio || 1);
+  if (mapC.width !== Math.round(W * dpr) || mapC.height !== Math.round(H * dpr)) { mapC.width = Math.round(W * dpr); mapC.height = Math.round(H * dpr); }
+  if (!mapBounds) { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const nm of SEGNAMES) { const s = SEG[nm]; for (let k = 0; k < s.n; k += 8) { x0 = Math.min(x0, s.X[k]); x1 = Math.max(x1, s.X[k]); z0 = Math.min(z0, s.Z[k]); z1 = Math.max(z1, s.Z[k]); } } mapBounds = { x0: x0 - 30, x1: x1 + 30, z0, z1 }; }
+  const b = mapBounds, pad = 8, sc = Math.min((W - pad * 2) / (b.x1 - b.x0), (H - pad * 2 - 6) / (b.z1 - b.z0));
+  const ox = (W - (b.x1 - b.x0) * sc) / 2, P = (x, z) => [ox + (x - b.x0) * sc, H - pad - (z - b.z0) * sc];
+  mx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  mx.clearRect(0, 0, W, H);
+  // 湖
+  mx.fillStyle = 'rgba(60,90,120,.22)';
+  mx.beginPath(); const lc = P(LAKE.x, LAKE.z); mx.ellipse(lc[0], lc[1], LAKE.rx * sc, LAKE.rz * sc, 0, 0, TAU); mx.fill();
+  // 峠
+  mx.fillStyle = 'rgba(42,32,24,.5)'; const pk = P(-36, 1740); mx.beginPath(); mx.moveTo(pk[0] - 6, pk[1] + 4); mx.lineTo(pk[0], pk[1] - 4); mx.lineTo(pk[0] + 6, pk[1] + 4); mx.fill();
+  for (const nm of SEGNAMES) {
+    const s = SEG[nm], chosen = nm === 'A' || nm === 'B' || nm === 'C' || nm === g.b1 || nm === g.b2, other = (nm === 'L' || nm === 'S') ? g.b1 && g.b1 !== nm : (nm === 'P' || nm === 'V') ? g.b2 && g.b2 !== nm : false;
+    mx.strokeStyle = other ? 'rgba(42,32,24,.25)' : '#2a2018';
+    mx.lineWidth = chosen ? 1.8 : 1.1;
+    mx.setLineDash(chosen || other ? [] : [3, 2]);
+    mx.beginPath();
+    for (let k = 0; k < s.n; k += 6) { const p = P(s.X[k], s.Z[k]); k ? mx.lineTo(p[0], p[1]) : mx.moveTo(p[0], p[1]); }
+    const e = P(s.X[s.n - 1], s.Z[s.n - 1]); mx.lineTo(e[0], e[1]); mx.stroke();
+  }
+  mx.setLineDash([]);
+  // 小屋と村
+  if (STATIC.hut) { const h = P(STATIC.hut.x, STATIC.hut.z); mx.fillStyle = '#a3241c'; mx.fillRect(h[0] - 2.5, h[1] - 2.5, 5, 5); }
+  const v = P(0, 2392); mx.fillStyle = '#a3241c'; mx.beginPath(); mx.arc(v[0], v[1], 3.5, 0, TAU); mx.fill();
+  // 割れ目
+  if (g.crack.on) { const c = routeAt(g.route, g.crack.cs, {}), p = P(c.x, c.z); mx.fillStyle = '#2c4a63'; mx.beginPath(); mx.arc(p[0], p[1], 2.5, 0, TAU); mx.fill(); }
+  // 落とした荷
+  mx.fillStyle = 'rgba(120,80,40,.9)';
+  for (const c of g.lostCrates) { const p = P(c.x, c.z); mx.fillRect(p[0] - 1.5, p[1] - 1.5, 3, 3); }
+  // いまの場所
+  const me = P(g.sx ?? 0, g.sz ?? 0);
+  mx.fillStyle = '#a3241c'; mx.strokeStyle = '#ece2cb'; mx.lineWidth = 1.5;
+  mx.beginPath(); mx.arc(me[0], me[1], 4, 0, TAU); mx.fill(); mx.stroke();
+  // 嵐(上からかかる灰色)
+  const st = sstep(g.stormAt - 90, g.stormAt + 110, g.t);
+  if (st > 0) { const gr = mx.createLinearGradient(0, 0, 0, H * 0.6); gr.addColorStop(0, `rgba(60,70,85,${0.55 * st})`); gr.addColorStop(1, 'rgba(60,70,85,0)'); mx.fillStyle = gr; mx.fillRect(0, 0, W, H * 0.6 * (0.3 + 0.7 * st)); }
+}
+
+// =============================================================================
+//  操作
+// =============================================================================
+const keys = {};
+let touchSteer = 0, steerPtr = null;
+addEventListener('keydown', (e) => {
+  if (e.repeat && !['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(e.code)) return;
+  keys[e.code] = true;
+  if (gstate === 'title' || gstate === 'over') { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); startGame(); } return; }
+  if (gstate === 'pause') { if (e.code === 'KeyP' || e.code === 'Escape' || e.code === 'Space') togglePause(); return; }
+  if (e.code === 'ArrowUp' || e.code === 'KeyW') { e.preventDefault(); setPace(G.pace + 1); }
+  else if (e.code === 'ArrowDown' || e.code === 'KeyS') { e.preventDefault(); setPace(G.pace - 1); }
+  else if (e.code === 'KeyF') feed();
+  else if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  else if (e.code === 'KeyM') toggleSound();
+  if (['ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; touchSteer = 0; steerPtr = null; });
+const dot = $('steerdot');
+cvs.addEventListener('pointerdown', (e) => {
+  if (gstate === 'pause') { togglePause(); return; }
+  if (gstate !== 'play') return;
+  steerPtr = { id: e.pointerId, x0: e.clientX };
+  dot.style.display = 'block'; dot.style.left = `${e.clientX}px`; dot.style.top = `${e.clientY}px`; dot.firstElementChild.style.transform = 'translateX(0)';
+});
+addEventListener('pointermove', (e) => {
+  if (!steerPtr || steerPtr.id !== e.pointerId) return;
+  const dx = e.clientX - steerPtr.x0, r = Math.min(60, Math.max(36, cssW * 0.09));
+  touchSteer = clamp(dx / r, -1, 1);
+  dot.firstElementChild.style.transform = `translateX(${(touchSteer * 22).toFixed(1)}px)`;
+});
+const endSteer = (e) => { if (steerPtr && steerPtr.id === e.pointerId) { steerPtr = null; touchSteer = 0; dot.style.display = 'none'; } };
+addEventListener('pointerup', endSteer);
+addEventListener('pointercancel', endSteer);
+const press = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.classList.add('down'); fn(); }); for (const ev2 of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev2, () => b.classList.remove('down')); };
+press('b-up', () => setPace(G.pace + 1));
+press('b-dn', () => setPace(G.pace - 1));
+press('b-fish', () => feed());
+function toggleSound() {
+  save.sound = !save.sound; writeSave();
+  if (master) master.gain.setTargetAtTime(save.sound ? 0.9 : 0, AC.currentTime, 0.05);
+  $('b-snd').firstElementChild.textContent = save.sound ? '音' : '消音';
+}
+function togglePause() {
+  if (gstate === 'play') { gstate = 'pause'; $('pause').classList.remove('hidden'); }
+  else if (gstate === 'pause') { gstate = 'play'; $('pause').classList.add('hidden'); lastT = performance.now(); }
+}
+$('b-snd').addEventListener('click', (e) => { e.stopPropagation(); toggleSound(); });
+$('b-pause').addEventListener('click', (e) => { e.stopPropagation(); togglePause(); });
+$('pause').addEventListener('pointerdown', () => togglePause());
+$('b-start').addEventListener('click', () => startGame());
+$('b-again').addEventListener('click', () => startGame());
+function startGame() {
+  if (gstate === 'over') newRun();
+  if (gstate !== 'title' && gstate !== 'over') return;
+  $('title').classList.add('hidden'); $('result').classList.add('hidden');
+  gstate = 'play';
+  cam.ready = false;
+  for (const k in hudCache) delete hudCache[k];
+  sfx('bark');
+  setHint('');
+}
+function showResult() {
+  const g = G, ok = g.cause === '';
+  gstate = 'over';
+  $('result').classList.remove('hidden');
+  const st = $('stamp');
+  st.textContent = ok ? '配達済' : '遭難';
+  st.className = ok ? '' : 'fail';
+  const route = `${SEGJP.A} → ${g.b1 ? SEGJP[g.b1] : '?'} → ${SEGJP.B} → ${g.b2 ? SEGJP[g.b2] : '?'}${ok ? ' → 村' : ''}`;
+  const lost = g.lost.length ? g.lost.map((l) => l.where).join('・') + 'で落とした' : 'なし';
+  const rows = [
+    ['道', route],
+    ['時間', ok ? fmtT(g.t) : `${fmtT(g.t)}(${SEGJP[g.seg]}で力尽きた)`],
+    ['届けた荷', ok ? `${g.crates} / 6 箱` : `0 / 6 箱(残り ${g.crates} 箱は届かず)`],
+    ['落とした', lost],
+    ['犬のけが', g.injured.length ? g.injured.map((i) => DOG_NAMES[i]).join('・') : 'なし'],
+    ['体温', `${tempOf(g.warmth).toFixed(1)}℃`],
+  ];
+  $('res-lines').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  $('res-score').innerHTML = ok ? `配達点 ${g.score}${g.newBest ? '(この道の新記録)' : ''}<br><small style="font-size:12px;font-weight:600">荷 ${g.crates * 100} + 早さ ${g.score - g.crates * 100}</small>` : '配達点 0';
+  const untried = [];
+  for (const k of ['L', 'S', 'P', 'V']) if (!Object.keys(save.best).some((x) => x.includes(k))) untried.push(BRANCH_TXT[k][0]);
+  $('res-rec').innerHTML = (untried.length ? `まだ届けていない道: ${untried.join('・')}<br>` : '') + recText();
+  for (const k in hudCache) delete hudCache[k];
+}
+function recText() {
+  const keys2 = Object.keys(save.best);
+  if (!keys2.length) return save.runs ? `これまで ${save.runs} 回走った` : '';
+  return `これまで ${save.runs} 回・着いた ${save.arrived} 回 / いちばんの配達点 ${save.bestScore}`;
+}
+function showRec() {
+  const el = $('rec'), rows = [];
+  for (const a of ['L', 'S']) for (const b of ['P', 'V']) { const r = save.best[a + b]; rows.push(`<tr><td>${SEGJP[a]}→${SEGJP[b]}</td><td>${r ? `${r.score}点(${fmtT(r.t)}・${r.crates}箱)` : '―'}</td></tr>`); }
+  el.innerHTML = save.runs ? `${recText()}<table>${rows.join('')}</table>` : '';
+  if (save.runs) $('b-start').textContent = 'もう一度走る';
+}
+function endStep(dt) {
+  const g = G;
+  g.endT += dt;
+  if (gstate === 'finish') { g.v = Math.max(0, g.v - 3 * dt); g.s += g.v * dt; histFill(); g.uSled = uAt(g.s); g.pace = 0; }
+  else { g.v = Math.max(0, g.v - 5 * dt); g.s += g.v * dt; histFill(); g.uSled = uAt(g.s); }
+  if (g.endT > (gstate === 'finish' ? 3.2 : 3.6)) showResult();
+}
+
+// =============================================================================
+//  まわす
+// =============================================================================
+let acc = 0, lastT = performance.now(), fpsAcc = 0, fpsN = 0, goodT = 0, badN = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  try {
+    const sp = window.__simSpeed || 1;
+    if (gstate === 'play' || gstate === 'finish' || gstate === 'fail') {
+      acc += rdt * sp;
+      let n = 0;
+      const maxN = Math.ceil(sp * 7) + 2;
+      while (acc >= DT && n < maxN) {
+        if (window.__autoStep) window.__autoStep();
+        G.steer = clamp((keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0) + touchSteer, -1, 1);
+        if (gstate === 'play') step(DT);
+        else if (gstate === 'finish' || gstate === 'fail') endStep(DT);
+        else break;
+        acc -= DT; n++;
+        if (window.__noDraw && n % 6 === 0) updVisual(DT * 6);
+      }
+      if (acc > DT * maxN) acc = 0;
+    } else if (gstate === 'over' || gstate === 'title') { if (window.__autoStep) window.__autoStep(); }
+    if (gl && !window.__noDraw) {
+      updLighting();
+      updVisual(gstate === 'pause' ? 0 : rdt * (gstate === 'play' ? Math.min(sp, 3) : 1));
+      updCam(rdt);
+      pickLights();
+      render();
+    } else if (gl) { updLighting(); }
+    updAudio(rdt);
+    if (gstate !== 'title') updHud(rdt);
+    if (document.body.classList.contains('intro') !== (gstate === 'title')) document.body.classList.toggle('intro', gstate === 'title');
+  } catch (e) {
+    console.error(e);
+  }
+  fpsAcc += rdt; fpsN++;
+  if (window.__lockQ != null && window.__lockQ !== quality) { quality = window.__lockQ; resize(); }
+  if (fpsAcc > 0.5 && window.__lockQ == null) {
+    const ms = (fpsAcc / fpsN) * 1000;
+    if (ms > 25 && quality < QSTEPS.length - 1) { badN++; if (badN >= (quality === 0 ? 2 : 1)) { quality++; resize(); pLimit = Math.max(0.35, pLimit - 0.12); badN = 0; } goodT = 0; }
+    else if (ms < 14.5) { badN = 0; goodT += fpsAcc; if (goodT > 4 && quality > 0) { quality--; resize(); pLimit = Math.min(1, pLimit + 0.12); goodT = 0; } }
+    else { goodT = 0; badN = 0; }
+    fpsAcc = 0; fpsN = 0;
+  }
+}
+addEventListener('resize', () => { if (gl) resize(); });
+
+// =============================================================================
+//  テスト用の窓口(読み取りだけ)
+// =============================================================================
+window.gameTest = {
+  state: () => gstate,
+  score: () => G.score,
+  webgl: () => !!gl,
+  hdr: () => HDR,
+  sled: () => { const g = G; return { s: g.s, sLead: g.s + LEAD_OFF, u: g.uSled, uLead: g.uLead, v: g.v, pace: g.pace, steer: g.steer, E: g.E, warmth: g.warmth, temp: tempOf(g.warmth), crates: g.crates, fish: g.fish, injured: g.injured.slice(), t: g.t, b1: g.b1, b2: g.b2, seg: g.seg, grade: g.grade, resting: g.resting, atHut: g.atHut, crashT: g.crashT, crashKind: g.crashKind, wetT: g.wetT, overrun: g.overrun, push: g.push, eating: g.eatT > 0, deep: g.deep, W: g.W, night: g.night, x: g.sx, y: g.sy, z: g.sz }; },
+  route: () => { const r = G.route; return { key: r.key, len: r.len, finishS: r.finishS, forks: r.forks.slice(), forkSides: FORK.map((f) => ({ ...f })), hutS: r.hutS, lakeIn: r.lakeIn, lakeOut: r.lakeOut, segStart: { ...r.segStart } }; },
+  routes: () => Object.fromEntries(Object.entries(ROUTES).map(([k, r]) => [k, { len: r.len, finishS: r.finishS, hutS: r.hutS, lakeIn: r.lakeIn, lakeOut: r.lakeOut, forks: r.forks.slice(), segStart: { ...r.segStart } }])),
+  at: (s) => { const o = routeAt(G.route, s, {}); return { x: o.x, y: o.y, z: o.z, h: o.h, g: o.g, seg: o.seg, lake: o.lake, river: o.river }; },
+  obstacles: () => G.obsR.map((o) => ({ id: o.id, kind: o.kind, s: o.gs, u: o.u, rs: o.rs, ru: o.ru, hit: o.hit, seg: o.seg, x: o.x, z: o.z })),
+  allObstacles: () => G.obs.map((o) => ({ id: o.id, kind: o.kind, seg: o.seg, ls: +o.ls.toFixed(1), u: +o.u.toFixed(2) })),
+  crack: () => ({ ...G.crack }),
+  events: () => G.events.slice(),
+  stats: () => { const g = G; return { t: g.t, crates: g.crates, lost: g.lost.slice(), injured: g.injured.length, crashes: g.crashes, fed: g.fed, restT: g.restT, thinPass: g.thinPass, stormAt: g.stormAt, cause: g.cause, score: g.score, route: g.route.key, b1: g.b1, b2: g.b2, maxCrackGap: g.maxCrackGap, warmth: g.warmth, E: g.E }; },
+  dog: (i) => { const d = G.dogs[i]; return { x: d.x, y: d.y, z: d.z, yaw: d.yaw, ph: d.ph, u: d.pose.u.slice(), l: d.pose.l.slice(), bob: d.pose.bob, pitch: d.pose.pitch }; },
+  save: () => JSON.parse(JSON.stringify(save)),
+  toScreen: (x, y, z) => toScreen(x, y, z),
+  cam: () => ({ x: cam.x, y: cam.y, z: cam.z }),
+  particles: () => POOL.n,
+  quality: () => quality,
+  sound: () => !!save.sound,
+  light: () => ({ night: L.night, aur: L.aur, cloud: L.cloud, fogDen: L.fogDen, lamp: L.lamp, sunVis: L.sunVis }),
+};
+
+// =============================================================================
+//  はじめる
+// =============================================================================
+if (gl) {
+  try { initGL(); meshes.disc = upload(buildDisc()); } catch (e) { console.error(e); gl = null; }
+}
+newRun();
+if (!gl) $('nogl').classList.remove('hidden');
+if (isTouch) { quality = 1; if (gl) resize(); }
+$('b-snd').firstElementChild.textContent = save.sound ? '音' : '消音';
+showRec();
+updLighting();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
