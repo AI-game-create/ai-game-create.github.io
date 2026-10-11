@@ -24,7 +24,7 @@ import path from 'node:path';
 // ゲーム側は何もしなくてよい(Web Audio 以外で鳴らした音は入らない)。
 //
 // ショート用モード(環境変数 SHORT_VIDEO=1): 同じ setup / play で、YouTube ショート用に
-// 縦長 1080x1920・スマホの設定・20秒で撮り、上下にテロップを重ねて shorts/投稿日_N日目_タイトル.webm に保存する。
+// 縦長 1080x1920・スマホの設定・合計15秒前後(planShort)で撮り、上下にテロップを重ねて shorts/parts/ に場面ごとに保存する。
 // 夜の制作が終わったあとで、scripts/run_daily.ps1 がこのモードで「投稿用のプレイ動画を撮る」テストをもう一度走らせる。
 const SHORT = process.env.SHORT_VIDEO === '1';
 const REPO = path.join(__dirname, '..');
@@ -35,7 +35,8 @@ export type Clip = { readonly until: number; mark: () => void };
 // 場面ごとに撮る(オーナーの方針: 盛り上がる場面だけでは何のゲームか分からない。つかみで目を引き、後半で基本を見せる)。
 // 場面ごとに play-1.webm, play-2.webm, … を作る(ショート用モードでは shorts/parts/ に)。
 // つなぐのは、X 用は投稿のとき(GitHub Actions)、ショート用は夜の制作のあと(run_daily.ps1)。どちらも scripts/concat_video.py
-//   各場面: setup / play / seconds(X 用の長さ)/ shortSeconds(ショートでの長さ。省略すると seconds の1.5倍)/ focus / sound
+//   各場面: setup / play / seconds(X 用の長さ)/ shortSeconds(ショートでの長さの目安。省略すると seconds の1.5倍。
+//   ショートは合計15秒前後になるよう、planShort が縮める)/ focus / sound
 export type Scene = {
   setup: (page: Page) => Promise<void>;
   play: (page: Page, clip: Clip) => Promise<void>;
@@ -57,9 +58,23 @@ export async function recordScenes(browser: Browser, dir: string, scenes: Scene[
   } else {
     for (const f of fs.readdirSync(dir)) if (/^play(-\d+)?\.webm$/.test(f)) fs.rmSync(path.join(dir, f));
   }
-  for (const [i, sc] of scenes.entries()) {
-    await recordPlayVideo(browser, { ...sc, dir, part: i + 1 });
+  const plan = SHORT ? planShort(scenes) : scenes.map((s) => s.seconds);
+  for (const [i, len] of plan.entries()) {
+    await recordPlayVideo(browser, { ...scenes[i], ...(SHORT ? { shortSeconds: len } : {}), dir, part: i + 1 });
   }
+}
+
+// ショートは合計15秒前後にする(オーナーの方針 2026-10-12: 長いと視聴維持率が下がる)。
+// つかみ(1つ目の場面)は5秒まで。残りの場面は同じ割合で縮め、1つ3秒以上にする。入りきらなければ後ろの場面から外す
+const SHORT_TOTAL = 15;
+function planShort(scenes: Scene[]): number[] {
+  const base = scenes.map((s) => s.shortSeconds ?? Math.round(s.seconds * 1.5));
+  const hook = Math.min(base[0], 5);
+  let rest = base.slice(1);
+  while (rest.length > 1 && rest.length * 3 > SHORT_TOTAL - hook) rest = rest.slice(0, -1);
+  const sum = rest.reduce((a, b) => a + b, 0);
+  const k = sum > 0 ? Math.min(1, (SHORT_TOTAL - hook) / sum) : 1;
+  return [hook, ...rest.map((b) => Math.max(3, Math.round(b * k * 10) / 10))];
 }
 
 export async function recordPlayVideo(
