@@ -12,7 +12,7 @@
       "reposts": 0,
       "replies": 1,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "reply_tweet_id": "2104898292005949943"
   },
@@ -38,7 +38,7 @@
       "reposts": 0,
       "replies": 1,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "reply_tweet_id": "2105260854060974295"
@@ -56,7 +56,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -74,7 +74,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -92,7 +92,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -110,7 +110,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -134,7 +134,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     }
   },
   {
@@ -150,7 +150,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -173,7 +173,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "poll_result": {
       "status": "closed",
@@ -210,7 +210,7 @@
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -223,12 +223,12 @@
     "text": "【9日目】今日のゲームは「影焼きランタン」です🏮 夜の墓地でランタンをかかげ、群がる影を光で焼く3Dサバイバル。群れを引きつけてから火をつければ、炎が連鎖して一気に吹き飛ぶ。夜明けまで生きのびろ。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-07-kage-yaki-lantern/",
     "posted_at": "2026-10-07T20:40:14+09:00",
     "metrics": {
-      "impressions": 13,
+      "impressions": 14,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -241,12 +241,12 @@
     "text": "【10日目】今日のゲームは「荒海の救命艇」です🌊 日暮れの嵐の海で救命艇を操り、発炎筒を掲げて漂う人を引き上げて灯台まで連れ帰る3D。押し寄せる大波には舳先を向けて乗り越えろ。乗せすぎると沈む。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-08-storm-lifeboat/",
     "posted_at": "2026-10-08T20:40:50+09:00",
     "metrics": {
-      "impressions": 9,
+      "impressions": 10,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -259,12 +259,12 @@
     "text": "【11日目】今日のゲームは『夜盗の一手』です。こちらが一歩動くと見張りも一手動く、3Dの潜入パズル。床に落ちる灯りの帯と次の手の点線を読み、見張りを眠らせ、宝石を盗んで窓から逃げます。屋敷は毎回新しく作られます。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-09-yato-no-itte/",
     "posted_at": "2026-10-09T20:38:58+09:00",
     "metrics": {
-      "impressions": 2,
+      "impressions": 4,
       "likes": 0,
       "reposts": 0,
       "replies": 0,
       "bookmarks": 0,
-      "fetched_at": "2026-10-10T09:19:26+09:00"
+      "fetched_at": "2026-10-11T09:18:33+09:00"
     },
     "media": "video",
     "link": "body"
@@ -276,7 +276,14 @@
     "title": "沈没船の底へ",
     "text": "【12日目】今日のゲームは『沈没船の底へ』です。水深47mに眠る折れた貨客船を一人称で潜って探る3D。空気は深いほど、網袋が重いほど速く減ります。遺品を持ち帰って装備を買い、鉄格子を焼き切り、金庫に眠る沈没の理由へ。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-10-chinbotsusen/",
     "posted_at": "2026-10-10T20:38:58+09:00",
-    "metrics": null,
+    "metrics": {
+      "impressions": 1,
+      "likes": 0,
+      "reposts": 0,
+      "replies": 0,
+      "bookmarks": 0,
+      "fetched_at": "2026-10-11T09:18:33+09:00"
+    },
     "media": "video",
     "link": "body"
   }
