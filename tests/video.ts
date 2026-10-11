@@ -230,7 +230,7 @@ function shortInfo(dir: string) {
   const day = Math.round((Date.parse(`${date}T00:00:00Z`) - DAY_ONE) / 86400000) + 1;
   const file = `${date}_${day}日目_${title}`.replace(/[\\/:*?"<>|\s]+/g, '_');
   return {
-    top1: '1日1本ゲーム制作',
+    top1: '1日1本AIでゲーム制作',
     top2: `${day}日目『${title}』`,
     bottom: 'プロフィールのリンクから遊べます',
     out: path.join(REPO, 'shorts', `${file}.webm`),
