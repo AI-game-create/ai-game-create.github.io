@@ -1,0 +1,3026 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>汐見湾ナイトラン</title>
+<style>
+:root { --mag: #ff2e88; --cy: #2ef2ff; --amb: #ffb340; --ink: #f4f1ff; --red: #ff3b3b; --blu: #3b7bff; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #04050a; color: var(--ink);
+  font-family: "Arial Narrow", "Helvetica Neue", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  touch-action: none; user-select: none; -webkit-user-select: none; }
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.hud { position: fixed; pointer-events: none; z-index: 5; transition: opacity .3s; }
+body.intro .hud, body.intro #tc { opacity: 0; }
+.it { font-style: italic; font-weight: 900; letter-spacing: .02em; }
+
+/* お金(左上) */
+#cash { left: max(14px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); text-shadow: 0 2px 6px #000c; }
+#cash .lab { font-size: 11px; letter-spacing: .25em; opacity: .75; font-weight: 700; }
+#vault { font-size: 30px; line-height: 1; color: #fff; }
+#carry-row { margin-top: 6px; display: flex; align-items: baseline; gap: 8px; }
+#carry { font-size: 20px; color: var(--amb); }
+#chain { font-size: 13px; color: #000; background: var(--amb); padding: 1px 6px; transform: skewX(-12deg); display: none; }
+#carry-row.empty { opacity: .35; }
+
+/* 手配度(右上) */
+#wanted { right: max(14px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); text-align: right; }
+#stars { display: flex; gap: 5px; justify-content: flex-end; }
+#stars i { width: 22px; height: 22px; display: block; transform: skewX(-12deg); border: 2px solid #ffffff55; background: #0008; border-radius: 3px; }
+#stars i.on { border-color: #fff; background: linear-gradient(90deg, var(--red) 0 50%, var(--blu) 50% 100%); box-shadow: 0 0 10px #ff3b3baa, 0 0 18px #3b7bff88; }
+#stars.blink i.on { animation: blink .5s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+#evade { margin-top: 6px; font-size: 13px; font-weight: 700; text-shadow: 0 1px 4px #000; min-height: 16px; }
+#evade.seen { color: #ff8080; }
+#evade.lost { color: #9fffd0; }
+
+/* 速さ(右下) */
+#speed { right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); text-align: right; text-shadow: 0 2px 8px #000; }
+#kmh { font-size: 46px; line-height: .9; }
+#speed small { font-size: 12px; letter-spacing: .2em; opacity: .7; margin-left: 4px; }
+#carname { font-size: 12px; opacity: .8; margin-top: 4px; letter-spacing: .1em; }
+#hpbar { width: 150px; height: 6px; background: #ffffff22; margin: 5px 0 0 auto; transform: skewX(-20deg); overflow: hidden; }
+#hpbar b { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff5a3c, #ffd23c 40%, #9cff6a); transform-origin: left; }
+
+/* 仕事(上中央) */
+#job { left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); min-width: 230px; max-width: 70vw; text-align: center;
+  background: linear-gradient(90deg, #0000, #05060ecc 15% 85%, #0000); padding: 6px 30px 8px; display: none; }
+#job .k { font-size: 11px; letter-spacing: .3em; font-weight: 700; }
+#job .t { font-size: 15px; font-weight: 700; margin-top: 2px; }
+#job .bar { height: 3px; background: #ffffff22; margin-top: 6px; }
+#job .bar b { display: block; height: 100%; background: var(--cy); transform-origin: left; }
+#job.deliver .k { color: var(--cy); } #job.heist .k { color: #ff6060; } #job.heist .bar b { background: #ff6060; }
+
+/* 中央の大きな知らせ */
+#toast { left: 0; right: 0; top: 30%; text-align: center; font-size: 34px; text-shadow: 0 0 18px #000, 0 2px 4px #000; opacity: 0; }
+#toast small { display: block; font-size: 16px; font-style: normal; font-weight: 700; margin-top: 6px; letter-spacing: .05em; }
+#toast.show { animation: toast 2.4s ease-out forwards; }
+@keyframes toast { 0% { opacity: 0; transform: scale(1.25) skewX(-8deg); } 8% { opacity: 1; transform: scale(1) skewX(-8deg); } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(1) skewX(-8deg) translateY(-14px); } }
+#hint { left: 0; right: 0; bottom: max(18px, env(safe-area-inset-bottom)); text-align: center; font-size: 14px; font-weight: 700; text-shadow: 0 1px 4px #000, 0 0 10px #000; opacity: .95; padding: 0 180px; }
+#hint kbd { font-family: inherit; border: 1px solid #fff8; border-radius: 3px; padding: 0 5px; margin: 0 2px; background: #0006; }
+
+/* 確保のゲージ */
+#bust { left: 50%; top: 56%; transform: translate(-50%, 0); width: 220px; text-align: center; display: none; }
+#bust .lab { font-size: 14px; color: #ffb0b0; letter-spacing: .3em; text-shadow: 0 1px 4px #000; }
+#bust .bar { height: 8px; background: #0008; border: 1px solid #ff6b6b; margin-top: 4px; transform: skewX(-20deg); }
+#bust .bar b { display: block; height: 100%; background: #ff3b3b; transform-origin: left; }
+
+#map { position: fixed; left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); width: 168px; height: 168px; z-index: 5; pointer-events: none; transition: opacity .3s; }
+body.intro #map { opacity: 0; }
+
+#snd { position: fixed; z-index: 8; right: max(14px, env(safe-area-inset-right)); top: calc(max(12px, env(safe-area-inset-top)) + 54px); width: 48px; height: 44px;
+  background: #05060ecc; color: var(--ink); border: 1px solid #ffffff44; font: inherit; font-size: 13px; font-weight: 700; transform: skewX(-12deg); cursor: pointer; }
+
+/* スマホの操作 */
+#tc { position: fixed; inset: 0; z-index: 6; pointer-events: none; display: none; transition: opacity .3s; }
+body.touch #tc { display: block; }
+#tc button { position: absolute; pointer-events: auto; border: 2px solid #ffffff66; background: #05060e99; color: #fff; font: inherit; font-weight: 900; font-style: italic;
+  font-size: 16px; transform: skewX(-10deg); touch-action: none; }
+#tc button.on { background: #ffffff33; border-color: #fff; }
+#t-left, #t-right { bottom: max(18px, env(safe-area-inset-bottom)); width: 70px; height: 70px; font-size: 26px; }
+#t-left { left: max(14px, env(safe-area-inset-left)); }
+#t-right { left: calc(max(14px, env(safe-area-inset-left)) + 86px); }
+#t-gas { right: max(14px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); width: 80px; height: 110px; border-color: var(--cy) !important; }
+#t-brk { right: calc(max(14px, env(safe-area-inset-right)) + 116px); bottom: max(18px, env(safe-area-inset-bottom)); width: 64px; height: 64px; font-size: 13px; }
+#t-hb { right: calc(max(14px, env(safe-area-inset-right)) + 116px); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 76px); width: 64px; height: 50px; font-size: 12px; border-color: var(--mag) !important; }
+#t-act { right: max(14px, env(safe-area-inset-right)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 124px); width: 84px; height: 54px; font-size: 14px; border-color: var(--amb) !important; display: none; }
+#t-act.show { display: block; }
+body.touch #speed { bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 108px); }
+body.touch #map { bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 84px); width: 120px; height: 120px; }
+body.touch #hint { bottom: calc(max(18px, env(safe-area-inset-bottom)) + 156px); padding: 0 20px; font-size: 13px; }
+body.touch .ctl .kb, body:not(.touch) .ctl .tp { display: none; }
+body.touch #kmh { font-size: 34px; }
+
+/* タイトル・結果 */
+.ov { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; justify-content: flex-end; padding: max(24px, env(safe-area-inset-top)) max(26px, env(safe-area-inset-right)) max(30px, env(safe-area-inset-bottom)) max(26px, env(safe-area-inset-left));
+  background: linear-gradient(180deg, #04050a00 30%, #04050acc 75%, #04050af2); }
+.ov.hidden { display: none; }
+#title h1 { font-size: clamp(42px, 9vw, 96px); line-height: .92; font-style: italic; font-weight: 900; transform: skewX(-8deg); letter-spacing: -.01em;
+  text-shadow: 0 0 22px #ff2e88aa, 0 0 2px #fff; color: #fff; }
+#title h1 span { display: block; font-size: .42em; color: var(--cy); text-shadow: 0 0 16px #2ef2ffaa; letter-spacing: .12em; }
+#title .lead { margin-top: 14px; font-size: 16px; max-width: 640px; line-height: 1.6; font-weight: 600; text-shadow: 0 1px 6px #000; }
+#title .ctl { margin-top: 16px; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; max-width: 560px; opacity: .9; }
+#title .ctl b { color: var(--amb); font-weight: 800; white-space: nowrap; }
+#title .row { display: flex; align-items: center; gap: 18px; margin-top: 20px; flex-wrap: wrap; }
+.btn { pointer-events: auto; cursor: pointer; font: inherit; font-weight: 900; font-style: italic; font-size: 20px; color: #000; background: var(--cy); border: 0;
+  padding: 14px 34px; transform: skewX(-12deg); box-shadow: 0 0 24px #2ef2ff88; min-height: 52px; }
+.btn:active { transform: skewX(-12deg) scale(.97); }
+#best { font-size: 14px; opacity: .85; font-weight: 700; }
+#result { justify-content: center; align-items: center; text-align: center; background: radial-gradient(ellipse at center, #04050ab0, #04050af0 70%); }
+#stamp { font-size: clamp(54px, 13vw, 120px); font-weight: 900; font-style: italic; transform: rotate(-6deg) skewX(-8deg); border: 6px solid currentColor; padding: 0 24px; line-height: 1.1; }
+#stamp.busted { color: #ff4040; text-shadow: 0 0 24px #ff404088; } #stamp.wreck { color: #ffa030; text-shadow: 0 0 24px #ffa03088; }
+#why { margin-top: 14px; font-size: 15px; font-weight: 700; opacity: .9; }
+#rep { margin: 18px auto 0; display: grid; grid-template-columns: auto auto; gap: 6px 26px; font-size: 15px; text-align: left; }
+#rep dt { opacity: .7; } #rep dd { font-weight: 900; font-style: italic; text-align: right; }
+#rep .big { font-size: 26px; color: #fff; } #rep .lost { color: #ff8080; }
+#newrec { margin-top: 10px; color: var(--amb); font-weight: 900; font-style: italic; font-size: 18px; display: none; }
+#result .btn { margin-top: 22px; }
+#nogl { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 30px; z-index: 20; background: #04050a; font-size: 16px; line-height: 1.7; }
+.hidden { display: none !important; }
+@media (max-width: 640px) {
+  #vault { font-size: 24px; } #carry { font-size: 17px; }
+  #stars i { width: 17px; height: 17px; }
+  #title .ctl { font-size: 12px; } #title .lead { font-size: 14px; }
+  #job { min-width: 0; max-width: 56vw; padding: 4px 14px 6px; top: calc(max(12px, env(safe-area-inset-top)) + 0px); }
+  #job .t { font-size: 13px; }
+  #toast { font-size: 26px; }
+}
+@media (max-width: 640px) and (orientation: portrait) {
+  #job { top: calc(max(12px, env(safe-area-inset-top)) + 62px); max-width: 80vw; }
+}
+</style>
+</head>
+<body class="intro">
+<canvas id="gl"></canvas>
+<canvas id="map" width="336" height="336"></canvas>
+
+<div class="hud" id="cash">
+  <div class="lab">金庫</div>
+  <div id="vault" class="it">¥0</div>
+  <div id="carry-row" class="empty"><span class="lab">手持ち</span><span id="carry" class="it">¥0</span><span id="chain" class="it">×1.25</span></div>
+</div>
+<div class="hud" id="wanted">
+  <div id="stars"><i></i><i></i><i></i><i></i><i></i></div>
+  <div id="evade"></div>
+</div>
+<div class="hud" id="speed">
+  <div><span id="kmh" class="it">0</span><small>km/h</small></div>
+  <div id="carname">セダン</div>
+  <div id="hpbar"><b></b></div>
+</div>
+<div class="hud" id="job"><div class="k"></div><div class="t"></div><div class="bar"><b></b></div></div>
+<div class="hud it" id="toast"></div>
+<div class="hud" id="hint"></div>
+<div class="hud" id="bust"><div class="lab">確保されそう</div><div class="bar"><b></b></div></div>
+<button id="snd" type="button">音</button>
+
+<div id="tc">
+  <button id="t-left" type="button">◀</button>
+  <button id="t-right" type="button">▶</button>
+  <button id="t-hb" type="button">ドリフト</button>
+  <button id="t-brk" type="button">ブレーキ</button>
+  <button id="t-gas" type="button">アクセル</button>
+  <button id="t-act" type="button">乗りかえ</button>
+</div>
+
+<div class="ov" id="title">
+  <h1><span>SHIOMI BAY</span>汐見湾<br>ナイトラン</h1>
+  <p class="lead">雨上がりの夜の港町。光の柱で裏の仕事を受けて稼ぎ、手配がついたらパトカーの目の届かない所へ消える。稼ぎは隠れ家の金庫に入れるまで確定しない。捕まれば手持ちは全部没収。</p>
+  <div class="ctl">
+    <b class="kb">↑ / W</b><span class="kb">アクセル(↓ / S でブレーキ・バック)</span>
+    <b class="kb">← → / A D</b><span class="kb">ハンドル</span>
+    <b class="kb">Space</b><span class="kb">ドリフト(サイドブレーキ)</span>
+    <b class="kb">E</b><span class="kb">止まって近くの車に乗りかえる(見られていなければ手配が下がる)</span>
+    <b class="tp">操作</b><span class="tp">画面のボタン(◀ ▶・アクセル・ブレーキ・ドリフト)。止まると「乗りかえ」が出る(見られていなければ手配が下がる)</span>
+    <b>青い柱</b><span>運び — 時間内に荷物を届ける。ぶつけるほど報酬が減る</span>
+    <b>赤い柱</b><span>強奪 — 現金輸送車に3回体当たり。大金だが手配度が一気に上がる</span>
+    <b>橙の柱</b><span>隠れ家 — 手配のないときに止まると、手持ちを金庫へ(車も直る)</span>
+  </div>
+  <div class="row"><button class="btn" id="b-start" type="button">走り出す</button><span id="best"></span></div>
+</div>
+
+<div class="ov hidden" id="result">
+  <div id="stamp" class="busted">確保</div>
+  <div id="why"></div>
+  <dl id="rep"></dl>
+  <div id="newrec">自己最高!</div>
+  <div><button class="btn" id="b-retry" type="button">もう一晩</button></div>
+</div>
+<div id="nogl" class="hidden">この端末のブラウザでは 3D(WebGL2)が使えないため、遊べません。<br>新しめのブラウザ(Chrome・Safari・Edge など)で開いてください。</div>
+
+<script>
+'use strict';
+// =============================================================================
+//  汐見湾ナイトラン
+//  夜の港町を車で走り、仕事で稼ぎ、手配から逃げ切って隠れ家の金庫へ。
+//  座標: x 東 / z 南(南が海) / y 上。車の向き h: 前 = (cos h, sin h)。h が増えると右へ曲がる
+// =============================================================================
+const $ = (id) => document.getElementById(id);
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const vr = () => Math.random();
+const rr = (a, b) => a + Math.random() * (b - a);
+const ri = (a, b) => Math.floor(rr(a, b + 1));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
+const fmtY = (v) => '¥' + Math.round(v).toLocaleString('ja-JP');
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const DT = 1 / 60;
+if (isTouch) document.body.classList.add('touch');
+
+const SAVE_KEY = 'shiomi-nightrun-v1';
+const save = { best: 0, bestStars: 0, runs: 0, sound: true };
+try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s) Object.assign(save, s); } catch (e) { /* なし */ }
+function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* 保存できない */ } }
+
+// =============================================================================
+//  街(碁盤の目。南は海)
+// =============================================================================
+const NX = 7, NZ = 6, BW = 48, RW = 14, P = BW + RW, HR = RW / 2;
+const MAPX = NX * P, MAPZ = NZ * P;
+const HWYI = 4, HWY_X = HWYI * P, HWY_Y = 10, HWY_HW = 6.5;   // 南北に通る高架(下は空から見えない暗がり)
+const LANE = 1.9;   // ふつうの車が走る車線(中央線から左へ)
+const PARK_OFF = 5.7;
+let CITY = null;
+const cellKey = (i, j) => (j + 2) * 64 + (i + 2);
+
+function genCity() {
+  const C = { cells: new Map(), solids: [], pillars: [], buildings: [], signs: [], alleys: [], trees: [], park: null, hideout: null, parking: [] };
+  // 公園を1つ(海ぞいの内側の区画)。車で突っ切れる近道
+  const parkI = ri(1, NX - 2), parkJ = NZ - 1;
+  for (let j = -1; j < NZ; j++) for (let i = -1; i <= NX; i++) {
+    const outer = i < 0 || j < 0 || i >= NX;
+    const x0 = i * P + HR, x1 = (i + 1) * P - HR, z0 = j * P + HR, z1 = (j + 1) * P - HR;
+    const b = { i, j, x0, x1, z0, z1, outer, solids: [], pillars: [], alley: null, park: false, hide: false };
+    if (!outer && i === parkI && j === parkJ) {
+      b.park = true; C.park = b;
+      for (let k = 0; k < 14; k++) { const t = { x: rr(x0 + 5, x1 - 5), z: rr(z0 + 5, z1 - 5), r: 0.55 }; if (C.trees.every((o) => Math.hypot(o.x - t.x, o.z - t.z) > 6)) { C.trees.push(t); b.pillars.push(t); } }
+    } else if (!outer && vr() < 0.34) {
+      // 路地: 区画のまん中を細い道が通る
+      const ax = vr() < 0.5 ? 'x' : 'z', aw = 7;
+      if (ax === 'x') { const m = (z0 + z1) / 2; b.solids.push({ x0, x1, z0, z1: m - aw / 2 }, { x0, x1, z0: m + aw / 2, z1 }); b.alley = { ax, x0, x1, z0: m - aw / 2, z1: m + aw / 2 }; }
+      else { const m = (x0 + x1) / 2; b.solids.push({ x0, x1: m - aw / 2, z0, z1 }, { x0: m + aw / 2, x1, z0, z1 }); b.alley = { ax, x0: m - aw / 2, x1: m + aw / 2, z0, z1 }; }
+      C.alleys.push(b.alley);
+    } else b.solids.push({ x0, x1, z0, z1 });
+    for (const s of b.solids) C.solids.push(s);
+    C.cells.set(cellKey(i, j), b);
+  }
+  // 海ぞいの遊歩道(南の端の壁)
+  C.seawall = { x0: -200, x1: MAPX + 200, z0: MAPZ + HR, z1: MAPZ + 80 };
+  // 高架の柱(道のまん中)
+  for (let j = -1; j <= NZ; j++) for (const dz of [-15, 15]) {
+    const p = { x: HWY_X, z: j * P + P / 2 + dz, r: 0.95 };
+    if (p.z > MAPZ + HR) continue;
+    C.pillars.push(p);
+    const b = C.cells.get(cellKey(HWYI, Math.floor(p.z / P)));
+    if (b) b.pillars.push(p); else (C.extraP || (C.extraP = [])).push(p);
+  }
+  // ビル
+  const dcx = MAPX * rr(0.35, 0.65), dcz = MAPZ * 0.35;
+  for (const b of C.cells.values()) {
+    if (b.park) continue;
+    for (const s of b.solids) {
+      const w = s.x1 - s.x0, d = s.z1 - s.z0, inset = 2.6;
+      const along = w >= d ? 'x' : 'z', len = Math.max(w, d);
+      const n = len > 40 ? ri(2, 3) : len > 22 ? ri(1, 2) : 1;
+      for (let k = 0; k < n; k++) {
+        let bx0, bx1, bz0, bz1;
+        if (along === 'x') { bx0 = s.x0 + (w * k) / n; bx1 = s.x0 + (w * (k + 1)) / n; bz0 = s.z0; bz1 = s.z1; }
+        else { bz0 = s.z0 + (d * k) / n; bz1 = s.z0 + (d * (k + 1)) / n; bx0 = s.x0; bx1 = s.x1; }
+        // 道に面する側だけ下げる(区画の内側はくっつける)
+        const ins = (v, edge) => (Math.abs(v - edge) < 0.01 ? inset : 0.4);
+        bx0 += ins(bx0, b.x0); bx1 -= ins(bx1, b.x1); bz0 += ins(bz0, b.z0); bz1 -= ins(bz1, b.z1);
+        if (bx1 - bx0 < 6 || bz1 - bz0 < 6) continue;
+        const cx = (bx0 + bx1) / 2, cz = (bz0 + bz1) / 2;
+        const down = Math.max(0, 1 - Math.hypot(cx - dcx, (cz - dcz) * 1.2) / 260);
+        let h = rr(10, 26) + down * down * rr(20, 70);
+        if (cz > MAPZ - P) h *= 0.75;
+        if (b.outer) h = rr(18, 40) + down * 30;
+        if (vr() < 0.06 && down > 0.4) h = rr(85, 120);
+        const bd = { x0: bx0, x1: bx1, z0: bz0, z1: bz1, h, seed: vr(), style: vr() < 0.22 ? 2 : vr() < 0.6 ? 1 : 0, tone: vr(), shop: vr() < 0.55, blk: b };
+        C.buildings.push(bd);
+      }
+    }
+  }
+  // 隠れ家: 内側の区画の、道に面した一辺
+  const cand = [...C.cells.values()].filter((b) => !b.outer && !b.park && !b.alley && b.j < NZ - 1 && Math.abs(b.i * P + P / 2 - HWY_X) > P * 0.6);
+  const hb = pick(cand); hb.hide = true;
+  const side = pick(['n', 's', 'w', 'e']);
+  const hx = (hb.x0 + hb.x1) / 2, hz = (hb.z0 + hb.z1) / 2;
+  const H = { blk: hb, side, w: 0, d: 0 };
+  if (side === 'n') Object.assign(H, { x: hx, z: hb.z0 - 3.4, hw: 5, hd: 3.2, nx: 0, nz: -1, dx: hx, dz: hb.z0 + 2.6 });
+  if (side === 's') Object.assign(H, { x: hx, z: hb.z1 + 3.4, hw: 5, hd: 3.2, nx: 0, nz: 1, dx: hx, dz: hb.z1 - 2.6 });
+  if (side === 'w') Object.assign(H, { x: hb.x0 - 3.4, z: hz, hw: 3.2, hd: 5, nx: -1, nz: 0, dx: hb.x0 + 2.6, dz: hz });
+  if (side === 'e') Object.assign(H, { x: hb.x1 + 3.4, z: hz, hw: 3.2, hd: 5, nx: 1, nz: 0, dx: hb.x1 - 2.6, dz: hz });
+  C.hideout = H;
+  // 看板(ビルの角・道に面した壁)
+  for (const bd of C.buildings) {
+    if (bd.blk.outer && vr() < 0.6) continue;
+    const faces = [];
+    if (Math.abs(bd.z0 - bd.blk.z0 - 2.6) < 0.1) faces.push('n');
+    if (Math.abs(bd.blk.z1 - bd.z1 - 2.6) < 0.1) faces.push('s');
+    if (Math.abs(bd.x0 - bd.blk.x0 - 2.6) < 0.1) faces.push('w');
+    if (Math.abs(bd.blk.x1 - bd.x1 - 2.6) < 0.1) faces.push('e');
+    for (const f of faces) {
+      if (vr() < 0.55) C.signs.push({ bd, face: f, kind: 'blade', t: vr() < 0.5 ? 0.12 : 0.88, cell: ri(0, 15), col: pick(NEON), y: rr(4.5, 7), hgt: rr(4, 8), flick: vr() });
+      if (bd.shop && vr() < 0.7) C.signs.push({ bd, face: f, kind: 'shop', t: rr(0.3, 0.7), cell: ri(0, 15), col: pick(NEON), y: 3.5, hgt: 1.2, flick: vr() });
+      if (bd.h > 22 && vr() < 0.18) C.signs.push({ bd, face: f, kind: 'board', t: 0.5, cell: ri(0, 15), col: pick(NEON), y: bd.h + 0.8, hgt: 5, flick: vr() });
+    }
+  }
+  // 路上の駐車(乗りかえに使える)
+  for (let k = 0; k < 34; k++) {
+    const s = randomSpot(PARK_OFF, 10);
+    if (!s) continue;
+    if (Math.hypot(s.x - H.x, s.z - H.z) < 14) continue;
+    if (C.parking.some((q) => Math.hypot(q.x - s.x, q.z - s.z) < 9)) continue;
+    C.parking.push(s);
+  }
+  return C;
+}
+const NEON = [[1, 0.12, 0.5], [0.1, 0.85, 1], [1, 0.55, 0.08], [0.2, 1, 0.45], [0.62, 0.3, 1], [1, 0.12, 0.1], [0.92, 0.92, 1]];
+
+// 道の上のランダムな場所(左側の端から off m)。dir: 車の向き
+function randomSpot(off, margin = 12) {
+  for (let k = 0; k < 40; k++) {
+    const hor = vr() < 0.5;
+    let i, j, x, z, h;
+    const t = rr(HR + margin, P - HR - margin), side = vr() < 0.5 ? 1 : -1;
+    if (hor) { i = ri(0, NX - 1); j = ri(0, NZ); x = i * P + t; z = j * P + side * off; h = side > 0 ? Math.PI : 0; }
+    else { i = ri(0, NX); j = ri(0, NZ - 1); x = i * P + side * off; z = j * P + t; h = side > 0 ? Math.PI / 2 : -Math.PI / 2; }
+    // 左側通行: 東へ向かう車は北側(z が小さい側)、南へ向かう車は東側を走る
+    return { x, z, h, hor };
+  }
+  return null;
+}
+
+// =============================================================================
+//  当たり判定・見通し・道の網
+// =============================================================================
+const blockAt = (x, z) => CITY.cells.get(cellKey(Math.floor(x / P), Math.floor(z / P)));
+function isSolid(x, z, pad = 0) {
+  if (x < -HR - pad || x > MAPX + HR + pad || z < -HR - pad || z > MAPZ + HR + pad) return true;
+  const b = blockAt(x, z);
+  if (!b) return false;
+  for (const s of b.solids) if (x > s.x0 - pad && x < s.x1 + pad && z > s.z0 - pad && z < s.z1 + pad) return true;
+  return false;
+}
+// 円と街の当たり。一番深い接触を返す
+const _hit = { nx: 0, nz: 0, pen: 0 };
+function circleWorld(x, z, r) {
+  let best = 0;
+  const test = (s) => {
+    const qx = clamp(x, s.x0, s.x1), qz = clamp(z, s.z0, s.z1);
+    let dx = x - qx, dz = z - qz;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= r * r) return;
+    let nx, nz, pen;
+    if (d2 > 1e-8) { const d = Math.sqrt(d2); nx = dx / d; nz = dz / d; pen = r - d; }
+    else {
+      const l = x - s.x0, rgt = s.x1 - x, t = z - s.z0, btm = s.z1 - z, m = Math.min(l, rgt, t, btm);
+      if (m === l) { nx = -1; nz = 0; } else if (m === rgt) { nx = 1; nz = 0; } else if (m === t) { nx = 0; nz = -1; } else { nx = 0; nz = 1; }
+      pen = m + r;
+    }
+    if (pen > best) { best = pen; _hit.nx = nx; _hit.nz = nz; _hit.pen = pen; }
+  };
+  const testC = (p) => {
+    const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz, rs = r + p.r;
+    if (d2 >= rs * rs || d2 < 1e-8) return;
+    const d = Math.sqrt(d2), pen = rs - d;
+    if (pen > best) { best = pen; _hit.nx = dx / d; _hit.nz = dz / d; _hit.pen = pen; }
+  };
+  const b = blockAt(x, z);
+  if (b) { for (const s of b.solids) test(s); for (const p of b.pillars) testC(p); }
+  if (CITY.extraP) for (const p of CITY.extraP) testC(p);
+  if (z > MAPZ) test(CITY.seawall);
+  // 街の外へは出られない
+  const L = -HR, R = MAPX + HR, T = -HR;
+  if (x - r < L) { const pen = L - (x - r); if (pen > best) { best = pen; _hit.nx = 1; _hit.nz = 0; _hit.pen = pen; } }
+  if (x + r > R) { const pen = x + r - R; if (pen > best) { best = pen; _hit.nx = -1; _hit.nz = 0; _hit.pen = pen; } }
+  if (z - r < T) { const pen = T - (z - r); if (pen > best) { best = pen; _hit.nx = 0; _hit.nz = 1; _hit.pen = pen; } }
+  return best > 0 ? _hit : null;
+}
+// 2点のあいだにビルがないか(地面の高さの見通し)
+function segBox(x0, z0, x1, z1, s) {
+  let t0 = 0, t1 = 1;
+  const dx = x1 - x0, dz = z1 - z0;
+  for (const [p, d, lo, hi] of [[x0, dx, s.x0, s.x1], [z0, dz, s.z0, s.z1]]) {
+    if (Math.abs(d) < 1e-9) { if (p < lo || p > hi) return false; }
+    else { let a = (lo - p) / d, c = (hi - p) / d; if (a > c) { const q = a; a = c; c = q; } t0 = Math.max(t0, a); t1 = Math.min(t1, c); if (t0 > t1) return false; }
+  }
+  return true;
+}
+function los(x0, z0, x1, z1) {
+  const i0 = Math.floor(Math.min(x0, x1) / P), i1 = Math.floor(Math.max(x0, x1) / P);
+  const j0 = Math.floor(Math.min(z0, z1) / P), j1 = Math.floor(Math.max(z0, z1) / P);
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const b = CITY.cells.get(cellKey(i, j));
+    if (!b) continue;
+    for (const s of b.solids) if (segBox(x0, z0, x1, z1, s)) return false;
+  }
+  return true;
+}
+const underHwy = (x, z) => Math.abs(x - HWY_X) < HWY_HW + 0.5 && z > -HR && z < MAPZ + HR;
+const inAlley = (x, z) => CITY.alleys.some((a) => x > a.x0 && x < a.x1 && z > a.z0 && z < a.z1);
+const inPark = (x, z) => { const b = CITY.park; return b && x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1; };
+const nodeOf = (x, z) => [clamp(Math.round(x / P), 0, NX), clamp(Math.round(z / P), 0, NZ)];
+function bfs(a, b) {
+  const W = NX + 1, H = NZ + 1, id = (i, j) => j * W + i, prev = new Int32Array(W * H).fill(-2);
+  const q = [id(a[0], a[1])]; prev[q[0]] = -1;
+  const goal = id(b[0], b[1]);
+  for (let qi = 0; qi < q.length; qi++) {
+    const c = q[qi];
+    if (c === goal) break;
+    const ci = c % W, cj = (c / W) | 0;
+    const nb = [[ci + 1, cj], [ci - 1, cj], [ci, cj + 1], [ci, cj - 1]];
+    for (let k = nb.length - 1; k > 0; k--) { const r = Math.floor(vr() * (k + 1)); const t = nb[k]; nb[k] = nb[r]; nb[r] = t; }
+    for (const [ni, nj] of nb) { if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue; const n = id(ni, nj); if (prev[n] !== -2) continue; prev[n] = c; q.push(n); }
+  }
+  const path = [];
+  for (let c = goal; c >= 0; c = prev[c]) path.unshift([c % W, (c / W) | 0]);
+  return path;
+}
+
+// =============================================================================
+//  車
+// =============================================================================
+const TYPES = {
+  sedan: { name: 'セダン', len: 4.6, wid: 1.9, hgt: 1.45, vmax: 41, acc: 9.5, brk: 22, grip: 1.0, mass: 1.4, hp: 100, steer: 1.0 },
+  sports: { name: 'スポーツカー', len: 4.4, wid: 1.95, hgt: 1.2, vmax: 52, acc: 13.5, brk: 26, grip: 1.2, mass: 1.2, hp: 70, steer: 1.08 },
+  van: { name: 'バン', len: 5.0, wid: 2.05, hgt: 2.1, vmax: 33, acc: 7, brk: 18, grip: 0.82, mass: 2.3, hp: 175, steer: 0.88 },
+  taxi: { name: 'タクシー', len: 4.6, wid: 1.85, hgt: 1.5, vmax: 39, acc: 9, brk: 22, grip: 0.95, mass: 1.4, hp: 100, steer: 1.0 },
+  police: { name: 'パトカー', len: 4.8, wid: 1.95, hgt: 1.5, vmax: 36, acc: 9.2, brk: 24, grip: 1.1, mass: 1.6, hp: 120, steer: 1.05 },
+  armored: { name: '現金輸送車', len: 5.6, wid: 2.2, hgt: 2.4, vmax: 31, acc: 6.5, brk: 16, grip: 0.9, mass: 3.6, hp: 9999, steer: 0.85 },
+};
+const PAINT = {
+  sedan: [[0.5, 0.52, 0.55], [0.06, 0.065, 0.07], [0.5, 0.05, 0.04], [0.08, 0.14, 0.3], [0.72, 0.72, 0.7], [0.2, 0.22, 0.19], [0.32, 0.3, 0.27]],
+  sports: [[0.8, 0.04, 0.03], [0.95, 0.55, 0.02], [0.04, 0.28, 0.7], [0.05, 0.05, 0.06], [0.88, 0.88, 0.9], [0.1, 0.5, 0.2]],
+  van: [[0.85, 0.85, 0.83], [0.3, 0.32, 0.35], [0.15, 0.24, 0.2]],
+  taxi: [[0.9, 0.6, 0.04], [0.06, 0.22, 0.13]],
+  police: [[0.03, 0.03, 0.035]],
+  armored: [[0.34, 0.37, 0.35]],
+};
+let carId = 0;
+function mkCar(type, x, z, h, role) {
+  const T = TYPES[type];
+  const c = { id: ++carId, type, T, role, x, z, h, vx: 0, vz: 0, w: 0, steer: 0, thr: 0, brk: 0, hand: false, hp: T.hp, color: pick(PAINT[type]),
+    ai: freshAI(), burning: false, fuse: 0, exploded: false, exT: 0, y: 0, vy: 0, roll: 0, pitch: 0, rollV: 0, pitchV: 0, broll: 0, bpitch: 0,
+    slip: 0, vmaxK: 1, hits: 0, sirenPh: vr() * 10, dmgT: 0, lastHit: -9 };
+  return c;
+}
+function freshAI() { return { a: null, b: null, n: null, cruise: rr(10, 14), dazed: 0, stuck: 0, rev: 0, mode: 'patrol', los: false, losT: vr() * 0.25, path: null, pathT: 0, flee: false, honkT: 0, wander: null }; }
+const spd = (c) => Math.hypot(c.vx, c.vz);
+const fwdSpd = (c) => c.vx * Math.cos(c.h) + c.vz * Math.sin(c.h);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+
+function carPhys(c, dt) {
+  const T = c.T;
+  const fx = Math.cos(c.h), fz = Math.sin(c.h), rx = -fz, rz = fx;
+  let vf = c.vx * fx + c.vz * fz, vs = c.vx * rx + c.vz * rz;
+  const dead = c.hp <= 0 || c.exploded;
+  const vmax = T.vmax * c.vmaxK;
+  const thr = dead ? 0 : c.thr, brk = dead ? 0.35 : c.brk;
+  if (thr > 0) {
+    if (vf < -0.5) vf += T.brk * thr * dt;
+    else if (vf < vmax) vf += T.acc * thr * Math.max(0.12, 1 - Math.max(0, vf) / vmax) * dt;
+  }
+  if (brk > 0) {
+    if (vf > 0.5) vf = Math.max(0, vf - T.brk * brk * dt);
+    else if (!dead) vf = Math.max(-vmax * 0.3, vf - T.acc * 0.6 * brk * dt);
+    else vf *= Math.exp(-dt * 3);
+  }
+  vf -= vf * ((thr > 0 ? 0.04 : 0.22) + Math.abs(vf) * 0.0022) * dt;
+  if (c.hand) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 3.5 * dt);
+  // 横すべり: タイヤが横へ出せる力に上限があるので、速いほど・サイドブレーキほど流れる
+  const gripMax = (c.hand ? 4.2 : 17) * T.grip * (dead ? 0.6 : 1);
+  vs += clamp(-vs * 14, -gripMax, gripMax) * dt;
+  c.slip = Math.abs(vs);
+  const sp = Math.abs(vf);
+  const rate = T.steer * (2.35 / (1 + sp * 0.06)) * (c.hand ? 1.5 : 1);
+  const targetW = c.steer * rate * Math.min(1, sp / 4.5) * (vf < -0.3 ? -1 : 1);
+  c.w += (targetW - c.w) * Math.min(1, dt * (c.hand ? 4.5 : 8));
+  c.h += c.w * dt;
+  c.vx = fx * vf + rx * vs; c.vz = fz * vf + rz * vs;
+  c.x += c.vx * dt; c.z += c.vz * dt;
+  // 車体の傾き(見た目)
+  const lat = -c.w * vf, lon = thr * T.acc * 0.4 - brk * (vf > 0.5 ? T.brk * 0.5 : 0);
+  c.broll += (clamp(lat * 0.006, -0.07, 0.07) - c.broll) * Math.min(1, dt * 6);
+  c.bpitch += (clamp(lon * 0.004, -0.05, 0.04) - c.bpitch) * Math.min(1, dt * 6);
+}
+function carCircles(c) {
+  const off = c.T.len / 2 - c.T.wid / 2, fx = Math.cos(c.h) * off, fz = Math.sin(c.h) * off;
+  return [c.x + fx, c.z + fz, c.x - fx, c.z - fz, c.T.wid / 2 + 0.05];
+}
+function carWorld(c) {
+  const cc = carCircles(c), r = cc[4];
+  for (let k = 0; k < 2; k++) {
+    const px = cc[k * 2], pz = cc[k * 2 + 1];
+    const hit = circleWorld(px, pz, r);
+    if (!hit) continue;
+    const nx = hit.nx, nz = hit.nz;
+    c.x += nx * hit.pen; c.z += nz * hit.pen;
+    const vn = c.vx * nx + c.vz * nz;
+    if (vn < 0) {
+      c.vx -= 1.3 * vn * nx; c.vz -= 1.3 * vn * nz;
+      const tx = -nz, tz = nx, vt = c.vx * tx + c.vz * tz;
+      c.vx -= tx * vt * 0.12; c.vz -= tz * vt * 0.12;
+      const ox = px - c.x, oz = pz - c.z;
+      c.w = clamp(c.w + (ox * nz - oz * nx) * vn * 0.05, -4, 4);
+      impact(c, -vn, px - nx * r, pz - nz * r, null);
+    }
+  }
+}
+function carPair(a, b) {
+  if (Math.abs(a.x - b.x) > 6.5 || Math.abs(a.z - b.z) > 6.5) return;
+  if (a.exploded && a.y > 0.8 || b.exploded && b.y > 0.8) return;
+  const ca = carCircles(a), cb = carCircles(b), rs = ca[4] + cb[4];
+  const ma = a.T.mass * (a.role === 'parked' ? 1.6 : 1), mb = b.T.mass * (b.role === 'parked' ? 1.6 : 1);
+  const ia = 1 / ma, ib = 1 / mb;
+  let hitV = 0, hx = 0, hz = 0;
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+    const dx = ca[i * 2] - cb[j * 2], dz = ca[i * 2 + 1] - cb[j * 2 + 1], d2 = dx * dx + dz * dz;
+    if (d2 >= rs * rs || d2 < 1e-6) continue;
+    const d = Math.sqrt(d2), nx = dx / d, nz = dz / d, pen = rs - d;
+    a.x += nx * pen * ia / (ia + ib); a.z += nz * pen * ia / (ia + ib);
+    b.x -= nx * pen * ib / (ia + ib); b.z -= nz * pen * ib / (ia + ib);
+    const vn = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
+    if (vn < 0) {
+      const J = -1.3 * vn / (ia + ib);
+      a.vx += nx * J * ia; a.vz += nz * J * ia; b.vx -= nx * J * ib; b.vz -= nz * J * ib;
+      const oax = ca[i * 2] - a.x, oaz = ca[i * 2 + 1] - a.z, obx = cb[j * 2] - b.x, obz = cb[j * 2 + 1] - b.z;
+      a.w = clamp(a.w + (oax * nz - oaz * nx) * J * ia * 0.12, -4, 4);
+      b.w = clamp(b.w - (obx * nz - obz * nx) * J * ib * 0.12, -4, 4);
+      if (-vn > hitV) { hitV = -vn; hx = cb[j * 2] + nx * cb[4]; hz = cb[j * 2 + 1] + nz * cb[4]; }
+    }
+  }
+  if (hitV > 0) { impact(a, hitV, hx, hz, b); impact(b, hitV, hx, hz, a); }
+}
+function impact(c, sp, x, z, other) {
+  const pl = G.car;
+  if (sp > 2.5) {
+    const n = Math.min(26, Math.floor(sp * 0.9));
+    for (let k = 0; k < n; k++) emit(x, rr(0.3, 1.0), z, rr(-1, 1) * sp * 0.35 + c.vx * 0.3, rr(1, 5), rr(-1, 1) * sp * 0.35 + c.vz * 0.3, rr(0.3, 0.8), rr(0.05, 0.1), 0);
+    if (c === pl || other === pl || dist(c, CAM_T) < 60) sfxCrash(sp, x, z, other ? 1 : 0);
+    if (c === pl && sp > 6) { G.fx.shake = Math.min(1.2, G.fx.shake + sp * 0.03); G.stats.crashes++; }
+  }
+  if (sp > 4 && c.T.hp < 5000) {
+    let dmg = (sp - 4) * 2.6 / (c.T.mass / 1.4);
+    if (c === pl) dmg *= 0.62;
+    else if (other === pl) dmg *= c.role === 'police' ? 1.25 : 1;
+    else dmg *= 0.35;
+    const before = c.hp;
+    c.hp = Math.max(0, c.hp - dmg);
+    c.dmgT = 0.3;
+    if (c === pl) { G.fx.hurt = Math.min(1, G.fx.hurt + dmg / 40); if (G.jobs.active && G.jobs.active.kind === 'deliver') G.jobs.active.dmg += dmg; }
+    if (before > 0 && c.hp <= 0 && c.role === 'police') { G.stats.policeWrecked++; logEv('copDown', { byMe: other === pl }); if (gstate === 'play' && other === pl) addStars(G.stars < 5 ? 1 : 0, 'パトカーをつぶした'); }
+  }
+  if (!other || c !== pl || gstate !== 'play') return;
+  if (other.role === 'police' && sp > 5 && G.t - (G.crimeT.pol || -9) > 2.5) { G.crimeT.pol = G.t; if (G.stars === 0) addStars(1, 'パトカーに体当たり'); else if (G.t - (G.crimeT.polUp || -99) > 12 && G.stars < 3) { G.crimeT.polUp = G.t; addStars(1, 'パトカーに体当たり'); } }
+  if (other.role === 'traffic' && sp > 6) { other.ai.dazed = 4.5; if (witnessed(70)) crime('ram'); }
+  if (other.role === 'van' && sp > 6 && G.t - other.lastHit > 0.6) {
+    other.lastHit = G.t; other.hits++; other.ai.flee = true; other.ai.cruise = 18.5;
+    G.fx.shake = Math.min(1.4, G.fx.shake + 0.4); sfx('metal');
+    const a = G.jobs.active;
+    if (a && a.van === other && other.hits < 3) toast(`あと ${3 - other.hits} 回`, '現金輸送車に体当たり', 1);
+    logEv('vanHit', { hits: other.hits });
+  }
+}
+
+// =============================================================================
+//  ふつうの車・パトカーの運転
+// =============================================================================
+const segDir = (a, b) => [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])];
+function chooseNext(a, b) {
+  const opts = [];
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const n = [b[0] + di, b[1] + dj];
+    if (n[0] < 0 || n[1] < 0 || n[0] > NX || n[1] > NZ) continue;
+    if (n[0] === a[0] && n[1] === a[1]) continue;
+    opts.push(n);
+  }
+  const d = segDir(a, b);
+  const st = opts.find((n) => n[0] - b[0] === d[0] && n[1] - b[1] === d[1]);
+  if (st && vr() < 0.5) return st;
+  return opts.length ? pick(opts) : a.slice();
+}
+function initRoute(c) {
+  const fx = Math.cos(c.h), fz = Math.sin(c.h);
+  let a, b;
+  if (Math.abs(fx) > Math.abs(fz)) {
+    const j = clamp(Math.round(c.z / P), 0, NZ), s = Math.sign(fx);
+    let ib = s > 0 ? Math.ceil(c.x / P + 0.05) : Math.floor(c.x / P - 0.05);
+    ib = clamp(ib, 0, NX); let ia = ib - s;
+    if (ia < 0 || ia > NX) { ia = ib; ib = ib - s; }
+    a = [ia, j]; b = [ib, j];
+  } else {
+    const i = clamp(Math.round(c.x / P), 0, NX), s = Math.sign(fz);
+    let jb = s > 0 ? Math.ceil(c.z / P + 0.05) : Math.floor(c.z / P - 0.05);
+    jb = clamp(jb, 0, NZ); let ja = jb - s;
+    if (ja < 0 || ja > NZ) { ja = jb; jb = jb - s; }
+    a = [i, ja]; b = [i, jb];
+  }
+  c.ai.a = a; c.ai.b = b; c.ai.n = chooseNext(a, b);
+}
+function laneFollow(c, look, off, depth = 0) {
+  const ai = c.ai, a = ai.a, b = ai.b, n = ai.n;
+  const d = segDir(a, b), lx = d[1], lz = -d[0];
+  const ax = a[0] * P, az = a[1] * P;
+  const t = (c.x - ax) * d[0] + (c.z - az) * d[1];
+  const d2 = segDir(b, n), turning = d2[0] !== d[0] || d2[1] !== d[1];
+  if (t > (turning ? P - off - 1 : P) && depth < 2) { ai.a = b; ai.b = n; ai.n = chooseNext(b, n); return laneFollow(c, look, off, depth + 1); }
+  const lat = (c.x - ax) * lx + (c.z - az) * lz;
+  const tt = t + look;
+  let tx, tz;
+  if (tt <= P - (turning ? off + 2 : 0)) { tx = ax + d[0] * tt + lx * off; tz = az + d[1] * tt + lz * off; }
+  else { const o2 = Math.max(tt - P, 2.5), bx = b[0] * P, bz = b[1] * P; tx = bx + d2[0] * o2 + d2[1] * off; tz = bz + d2[1] * o2 - d2[0] * off; }
+  return { tx, tz, t, turning, toNode: P - t, lat };
+}
+function steerTo(c, tx, tz, vWant) {
+  const want = Math.atan2(tz - c.z, tx - c.x);
+  const d = angDiff(c.h, want);
+  c.steer = clamp(d * 2.4, -1, 1);
+  const v = fwdSpd(c);
+  const vw = vWant * (Math.abs(d) > 0.7 ? 0.5 : 1);
+  if (v < vw - 1) { c.thr = clamp((vw - v) / 4, 0.25, 1); c.brk = 0; }
+  else if (v > vw + 2) { c.thr = 0; c.brk = clamp((v - vw) / 8, 0.1, 1); }
+  else { c.thr = 0.2; c.brk = 0; }
+  c.hand = false;
+  return d;
+}
+function aheadBlock(c, range) {
+  const fx = Math.cos(c.h), fz = Math.sin(c.h);
+  let m = range;
+  for (const o of G.cars) {
+    if (o === c) continue;
+    const dx = o.x - c.x, dz = o.z - c.z;
+    if (Math.abs(dx) > range || Math.abs(dz) > range) continue;
+    const f = dx * fx + dz * fz;
+    if (f <= 0 || f > m) continue;
+    if (Math.abs(-dx * fz + dz * fx) < 2.5) m = f;
+  }
+  return m;
+}
+function unstick(c, dt) {
+  const ai = c.ai;
+  if (ai.rev > 0) { ai.rev -= dt; c.thr = 0; c.brk = 1; c.steer = -ai.revSteer; return true; }
+  if (c.thr > 0.2 && spd(c) < 0.8) ai.stuck += dt; else ai.stuck = Math.max(0, ai.stuck - dt);
+  if (ai.stuck > 1.3) { ai.stuck = 0; ai.rev = 1.1; ai.revSteer = c.steer || 1; }
+  return false;
+}
+function trafficAI(c, dt) {
+  const ai = c.ai;
+  if (c.hp <= 0) { c.thr = 0; c.brk = 0.6; c.steer = 0; return; }
+  if (ai.dazed > 0) { ai.dazed -= dt; c.thr = 0; c.brk = 1; c.steer = 0; if (ai.dazed <= 0) initRoute(c); return; }
+  if (!ai.a) initRoute(c);
+  if (unstick(c, dt)) return;
+  const lf = laneFollow(c, 7 + spd(c) * 0.45, LANE);
+  if (Math.abs(lf.lat - LANE) > 9 || lf.t < -12) { initRoute(c); return; }
+  let vWant = ai.cruise;
+  if (lf.turning && lf.toNode < 24) vWant = Math.min(vWant, ai.flee ? 11 : 7.5);
+  const blk = aheadBlock(c, 18);
+  if (blk < 18) vWant = Math.min(vWant, Math.max(0, (blk - 6) * 1.3));
+  steerTo(c, lf.tx, lf.tz, vWant);
+  if (vWant < 0.5) { c.thr = 0; c.brk = 1; ai.stuck = 0; }
+  if (vWant < 0.5 && blk < 9 && G.car && dist(c, G.car) < 12) { ai.honkT -= dt; if (ai.honkT <= 0) { ai.honkT = rr(2.5, 5); sfxHonk(c); } }
+}
+function policeAI(c, dt) {
+  const ai = c.ai, pl = G.car;
+  if (c.hp <= 0) { c.thr = 0; c.brk = 0.6; c.steer = 0; return; }
+  c.vmaxK = (1 + 0.05 * G.stars) * (1 + Math.min(0.15, G.banked / 600000));
+  const dx = pl.x - c.x, dz = pl.z - c.z, d = Math.hypot(dx, dz);
+  ai.losT -= dt;
+  if (ai.losT <= 0) { ai.losT = 0.25; ai.los = d < 160 && los(c.x, c.z, pl.x, pl.z); }
+  if (ai.mode === 'patrol') {
+    c.vmaxK = 1;
+    if (!ai.a) initRoute(c);
+    if (unstick(c, dt)) return;
+    const lf = laneFollow(c, 7 + spd(c) * 0.45, LANE);
+    if (Math.abs(lf.lat - LANE) > 9 || lf.t < -12) { initRoute(c); return; }
+    let vWant = 12.5;
+    if (lf.turning && lf.toNode < 24) vWant = 7.5;
+    const blk = aheadBlock(c, 18);
+    if (blk < 18) vWant = Math.min(vWant, Math.max(0, (blk - 6) * 1.3));
+    steerTo(c, lf.tx, lf.tz, vWant);
+    if (vWant < 0.5) { c.thr = 0; c.brk = 1; ai.stuck = 0; }
+    return;
+  }
+  if (ai.mode === 'block') {
+    c.thr = 0; c.brk = 1; c.steer = 0;
+    if (G.stars > 0 && d < 30 && ai.los) ai.mode = 'chase';
+    return;
+  }
+  if (unstick(c, dt)) return;
+  let tx, tz, vWant = c.T.vmax * c.vmaxK;
+  if ((ai.los && d < 140) || d < 16) {
+    const lead = clamp(d / 40, 0, 0.9);
+    tx = pl.x + pl.vx * lead; tz = pl.z + pl.vz * lead; ai.path = null; ai.wander = null;
+    // 止まった相手には、ぶつけずに寄せて止める
+    if (d < 24 && spd(pl) < 5) vWant = clamp((d - 7) * 0.7, 0.5, 6);
+  } else {
+    const goalP = ai.wander || G.lastKnown;
+    ai.pathT -= dt;
+    if (!ai.path || ai.pathT <= 0) { ai.path = bfs(nodeOf(c.x, c.z), nodeOf(goalP.x, goalP.z)); ai.pathT = 1.5; }
+    while (ai.path.length > 1 && Math.hypot(ai.path[0][0] * P - c.x, ai.path[0][1] * P - c.z) < 10) ai.path.shift();
+    const nd = ai.path[0];
+    const nx2 = ai.path[1] || nd;
+    const sd = segDir(nd, nx2);
+    tx = nd[0] * P + sd[1] * 2.5; tz = nd[1] * P - sd[0] * 2.5;
+    if (ai.path.length <= 1 && Math.hypot(tx - c.x, tz - c.z) < 12) {
+      // 見失った場所に着いた: まわりを探す
+      const n0 = nodeOf(G.lastKnown.x, G.lastKnown.z);
+      ai.wander = { x: clamp(n0[0] + ri(-2, 2), 0, NX) * P, z: clamp(n0[1] + ri(-2, 2), 0, NZ) * P };
+      ai.path = null;
+    }
+    vWant *= 0.75;
+  }
+  const ang = steerTo(c, tx, tz, vWant);
+  if (Math.abs(ang) > 2.0 && fwdSpd(c) < 9 && d > 8) { c.thr = 0; c.brk = 1; c.steer = -Math.sign(ang); }
+}
+
+// =============================================================================
+//  手配
+// =============================================================================
+function logEv(type, o = {}) { G.events.push(Object.assign({ t: +G.t.toFixed(2), type }, o)); if (G.events.length > 400) G.events.shift(); }
+function witnessed(range) {
+  const pl = G.car;
+  for (const c of G.cars) {
+    if (c.role !== 'police' || c.hp <= 0) continue;
+    const d = dist(c, pl);
+    if (d < range && los(c.x, c.z, pl.x, pl.z)) return true;
+  }
+  return !!(G.heli && G.heli.sees);
+}
+function addStars(n, why) {
+  if (n <= 0 || gstate !== 'play') return;
+  const before = G.stars;
+  G.stars = clamp(G.stars + n, 0, 5);
+  if (G.stars === before) return;
+  G.maxStars = Math.max(G.maxStars, G.stars);
+  G.stats.starsUp++;
+  G.evadeT = 0; G.seen = true;
+  G.lastKnown = { x: G.car.x, z: G.car.z };
+  toast(`手配度 ${'★'.repeat(G.stars)}`, why, 2);
+  sfx('alarm');
+  logEv('stars', { stars: G.stars, why });
+  if (before === 0) for (const c of G.cars) if (c.role === 'police' && c.hp > 0 && dist(c, G.car) < 220) c.ai.mode = 'chase';
+  G.spawnT = Math.min(G.spawnT, 0.6);
+}
+function crime(kind) {
+  if (kind === 'ram') { if (G.t - (G.crimeT.ram || -99) > 6) { G.crimeT.ram = G.t; if (G.stars < 2) addStars(1, '一般の車にぶつけるのを見られた'); } }
+}
+function clearWanted(why) {
+  G.stars = 0; G.evadeT = 0; G.bust = 0; G.seen = false; G.stats.evaded++;
+  for (const c of G.cars) if (c.role === 'police') { if (c.ai.mode !== 'patrol') { c.ai.mode = 'patrol'; c.ai.a = null; c.ai.path = null; } }
+  toast('逃げ切った', why || 'パトカーが引き上げていく', 3);
+  sfx('clear');
+  logEv('clear');
+}
+const evadeNeed = () => 5 + G.stars * 2.5;
+const BUST_T = 3;
+function stepWanted(dt) {
+  const pl = G.car, v = spd(pl);
+  if (G.stars === 0) {
+    G.bust = Math.max(0, G.bust - dt);
+    // 巡回のパトカーに見られる: スピードの出しすぎ・運んでいる荷物
+    let near = 999, seeing = false;
+    for (const c of G.cars) {
+      if (c.role !== 'police' || c.hp <= 0) continue;
+      const d = dist(c, pl);
+      if (d < near && c.ai.los) { near = d; seeing = true; }
+    }
+    if (seeing && near < 28 && v > 30) { addStars(1, 'スピード違反を見られた'); return; }
+    const carrying = G.jobs.active && G.jobs.active.kind === 'deliver';
+    if (seeing && near < 30 && carrying) G.susT += dt; else G.susT = Math.max(0, G.susT - dt * 0.5);
+    if (G.susT > 2.0) { G.susT = 0; addStars(1, '荷物を怪しまれた'); }
+    return;
+  }
+  let seen = false, near = 999;
+  for (const c of G.cars) {
+    if (c.role !== 'police' || c.hp <= 0) continue;
+    const d = dist(c, pl);
+    if (d < near && spd(c) < 5) near = d;
+    if (d < 12 || (c.ai.los && d < 95)) seen = true;
+  }
+  if (G.heli && G.heli.sees) seen = true;
+  G.seen = seen;
+  if (seen) { G.lastKnown = { x: pl.x, z: pl.z }; G.evadeT = Math.max(0, G.evadeT - dt * 2); }
+  else { const dark = underHwy(pl.x, pl.z) || inAlley(pl.x, pl.z) || inPark(pl.x, pl.z); G.evadeT += dt * (dark ? 1.7 : 1); }
+  if (G.evadeT >= evadeNeed()) { clearWanted(); return; }
+  // 確保: 止まった自分のそばに、止まったパトカーがいる
+  if (near < 7 && v < 3) G.bust += dt; else G.bust = Math.max(0, G.bust - dt * 1.2);
+  if (G.jack && near < 10) G.bust += dt * 0.8;
+  if (G.bust >= BUST_T) endRun('busted');
+}
+const patrolCount = () => Math.min(6, 2 + Math.floor(G.banked / 60000));
+function spawnPolice(mode) {
+  const pl = G.car, cands = [];
+  for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) {
+    const x = i * P, z = j * P, d = Math.hypot(x - pl.x, z - pl.z);
+    if (d < (mode === 'patrol' ? 90 : 95) || d > 215) continue;
+    if (d < 160 && los(x, z, pl.x, pl.z)) continue;
+    if (G.cars.some((c) => Math.abs(c.x - x) < 9 && Math.abs(c.z - z) < 9)) continue;
+    cands.push([i, j]);
+  }
+  if (!cands.length) return null;
+  const [i, j] = pick(cands);
+  const x = i * P, z = j * P;
+  let h;
+  if (mode === 'chase') { const a = Math.atan2(pl.z - z, pl.x - x); h = Math.round(a / (Math.PI / 2)) * (Math.PI / 2); }
+  else h = pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]);
+  const fx = Math.round(Math.cos(h)), fz = Math.round(Math.sin(h));
+  if (i + fx < 0 || i + fx > NX || j + fz < 0 || j + fz > NZ) h += Math.PI;
+  const c = mkCar('police', x + Math.round(Math.sin(h)) * 2.5, z - Math.round(Math.cos(h)) * 2.5, h, 'police');
+  c.ai.mode = mode;
+  c.vx = Math.cos(h) * 12; c.vz = Math.sin(h) * 12;
+  G.cars.push(c);
+  return c;
+}
+function makeRoadblock() {
+  const pl = G.car, v = spd(pl);
+  if (v < 8) return;
+  const fx = pl.vx / v, fz = pl.vz / v;
+  let best = null, bs = 0.75;
+  for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) {
+    const x = i * P, z = j * P, d = Math.hypot(x - pl.x, z - pl.z);
+    if (d < 75 || d > 150) continue;
+    const al = ((x - pl.x) * fx + (z - pl.z) * fz) / d;
+    if (al > bs) { bs = al; best = [x, z]; }
+  }
+  if (!best) return;
+  const [x, z] = best;
+  const alongX = Math.abs(x - pl.x) > Math.abs(z - pl.z);
+  const s = alongX ? Math.sign(x - pl.x) : Math.sign(z - pl.z);
+  for (const o of [-3.3, 3.3]) {
+    const bx = alongX ? x - s * 14 : x + o, bz = alongX ? z + o : z - s * 14;
+    if (isSolid(bx, bz, 1)) continue;
+    const c = mkCar('police', bx, bz, alongX ? Math.PI / 2 + (o > 0 ? 0.25 : -0.25) : (o > 0 ? 0.25 : -0.25), 'police');
+    c.ai.mode = 'block';
+    G.cars.push(c);
+  }
+  logEv('roadblock');
+}
+function manageCops(dt) {
+  const pl = G.car;
+  const cops = G.cars.filter((c) => c.role === 'police');
+  const alive = cops.filter((c) => c.hp > 0);
+  G.spawnT -= dt;
+  if (G.stars > 0 && gstate === 'play') {
+    for (const c of alive) if (c.ai.mode === 'patrol' && dist(c, pl) < 95 && c.ai.los) c.ai.mode = 'chase';
+    const chasers = alive.filter((c) => c.ai.mode === 'chase').length;
+    const want = [0, 1, 2, 3, 5, 6][G.stars];
+    if (chasers < want && G.spawnT <= 0) { spawnPolice('chase'); G.spawnT = 2.6; }
+    if (G.stars >= 3) { G.roadT -= dt; if (G.roadT <= 0) { G.roadT = 15; makeRoadblock(); } }
+    if (G.stars >= 4 && !G.heli) { G.heli = { x: pl.x - 120, z: pl.z - 80, y: 46, sx: pl.x, sz: pl.z, sees: false, leave: false, h: 0, blades: 0 }; logEv('heli'); toast('ヘリが来た', '高架の下なら空から見えない', 1); }
+  } else if (G.spawnT <= 0) {
+    G.spawnT = 3;
+    if (alive.filter((c) => c.ai.mode === 'patrol').length < patrolCount()) spawnPolice('patrol');
+  }
+  if (G.heli && G.stars < 4) G.heli.leave = true;
+  // 遠くて見えないパトカー・残がいを片づける
+  for (const c of cops) {
+    const d = dist(c, pl);
+    const drop = (c.hp <= 0 && d > 140 && c.exploded && c.exT > 12) || (c.ai.mode === 'block' && d > 230) || (G.stars === 0 && c.ai.mode !== 'patrol' && d > 200) ||
+      (c.ai.mode === 'patrol' && d > 170 && alive.filter((o) => o.ai.mode === 'patrol').length > patrolCount() + 1) || (c.ai.mode === 'chase' && d > 300);
+    if (drop && !c.ai.los) removeCar(c);
+  }
+}
+function removeCar(c) { const k = G.cars.indexOf(c); if (k >= 0) G.cars.splice(k, 1); }
+function stepHeli(dt) {
+  const H = G.heli, pl = G.car;
+  if (!H) return;
+  H.blades += dt * 30;
+  let tx, tz;
+  if (H.leave) { tx = H.x + (H.x - pl.x) * 2 + 1; tz = H.z - 200; }
+  else if (H.sees) { tx = pl.x; tz = pl.z; }
+  else { tx = G.lastKnown.x + Math.sin(G.t * 0.4) * 30; tz = G.lastKnown.z + Math.cos(G.t * 0.33) * 30; }
+  const dx = tx - H.x, dz = tz - H.z, d = Math.hypot(dx, dz), sp = 23;
+  if (d > 1) { H.x += dx / d * Math.min(d, sp * dt); H.z += dz / d * Math.min(d, sp * dt); H.h = Math.atan2(dz, dx); }
+  // 探照灯は、見えていれば自機へ、見えなければ見失った場所のまわりを探る
+  const seeTarget = H.sees || (Math.hypot(pl.x - H.sx, pl.z - H.sz) < 16 && !underHwy(pl.x, pl.z));
+  let sx = seeTarget ? pl.x + pl.vx * 0.15 : G.lastKnown.x + Math.sin(G.t * 1.1) * 18, sz = seeTarget ? pl.z + pl.vz * 0.15 : G.lastKnown.z + Math.cos(G.t * 0.9) * 18;
+  const ox = sx - H.x, oz = sz - H.z, od = Math.hypot(ox, oz);
+  if (od > 34) { sx = H.x + ox / od * 34; sz = H.z + oz / od * 34; }
+  const ddx = sx - H.sx, ddz = sz - H.sz, dd = Math.hypot(ddx, ddz), ss = 30;
+  if (dd > 0.01) { H.sx += ddx / dd * Math.min(dd, ss * dt); H.sz += ddz / dd * Math.min(dd, ss * dt); }
+  H.sees = !H.leave && Math.hypot(pl.x - H.sx, pl.z - H.sz) < 9 && !underHwy(pl.x, pl.z);
+  if (H.leave && Math.hypot(H.x - pl.x, H.z - pl.z) > 320) G.heli = null;
+}
+
+// =============================================================================
+//  仕事
+// =============================================================================
+let jobId = 0;
+const DLABEL = { normal: '運び', rush: '急ぎの運び', fragile: '壊れ物の運び' };
+const payK = () => 1 + Math.min(0.5, G.banked / 400000);
+function fillOffers() {
+  const J = G.jobs, pl = G.car;
+  for (let tries = 0; J.offers.length < 3 && tries < 40; tries++) {
+    const hasD = J.offers.some((o) => o.kind === 'deliver'), hasH = J.offers.some((o) => o.kind === 'heist');
+    const kind = !hasD ? 'deliver' : !hasH && J.heistCD <= 0 && vr() < 0.7 ? 'heist' : 'deliver';
+    const s = randomSpot(4.3, 14);
+    if (!s) continue;
+    const dp = Math.hypot(s.x - pl.x, s.z - pl.z);
+    if (dp < 50 || (dp > 230 && tries < 30)) continue;
+    const H = CITY.hideout;
+    if (Math.hypot(s.x - H.x, s.z - H.z) < 40) continue;
+    if (J.offers.some((o) => Math.hypot(o.x - s.x, o.z - s.z) < 60)) continue;
+    J.offers.push({ id: ++jobId, kind, x: s.x, z: s.z });
+  }
+}
+function acceptJob(o) {
+  const J = G.jobs, pl = G.car;
+  J.offers.splice(J.offers.indexOf(o), 1);
+  if (o.kind === 'deliver') {
+    let s = null;
+    for (let k = 0; k < 60; k++) { const q = randomSpot(4.3, 14); if (!q) continue; const d = Math.hypot(q.x - pl.x, q.z - pl.z); if (d > 150 && d < 320) { s = q; break; } }
+    if (!s) s = randomSpot(4.3, 14);
+    const m = Math.abs(s.x - pl.x) + Math.abs(s.z - pl.z);
+    // 2件目からは、急ぎ便(時間が短く報酬が高い)・壊れ物(報酬が高いが、強くぶつけると壊れる)がまざる
+    const r = G.jobsDone === 0 ? 1 : vr();
+    const variant = r < 0.28 ? 'rush' : r < 0.55 ? 'fragile' : 'normal';
+    const timeMax = Math.round((14 + m / 15.5) * (variant === 'rush' ? 0.74 : 1));
+    const pay0 = Math.round(((7000 + m * 28) * payK() * (variant === 'rush' ? 1.6 : variant === 'fragile' ? 1.45 : 1)) / 100) * 100;
+    J.active = { kind: 'deliver', id: o.id, tx: s.x, tz: s.z, left: timeMax, timeMax, pay0, dmg: 0, dist: m, variant };
+    toast(DLABEL[variant], `${Math.round(m)}m 先へ ${timeMax}秒で${variant === 'fragile' ? ' ・強くぶつけると壊れる' : ''}`, 1);
+    logEv('accept', { kind: 'deliver', variant });
+  } else {
+    const cands = [];
+    for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) { const d = Math.hypot(i * P - pl.x, j * P - pl.z); if (d > 45 && d < 90) cands.push([i, j]); }
+    const [i, j] = pick(cands.length ? cands : [[0, 0]]);
+    const h = pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]);
+    const van = mkCar('armored', i * P + Math.round(Math.sin(h)) * LANE, j * P - Math.round(Math.cos(h)) * LANE, h, 'van');
+    van.ai.cruise = 12.5; van.color = PAINT.armored[0];
+    G.cars.push(van);
+    J.active = { kind: 'heist', id: o.id, van, phase: 'hunt', left: 85, timeMax: 85, cash: Math.round(((40000 + vr() * 16000) * payK()) / 100) * 100, bag: null };
+    toast('強奪', '赤い印の現金輸送車に3回体当たり', 1);
+    logEv('accept', { kind: 'heist' });
+  }
+  sfx('accept');
+}
+function failJob(why) {
+  const a = G.jobs.active;
+  if (a && a.van) { a.van.role = 'traffic'; a.van.ai.flee = false; }
+  G.jobs.active = null;
+  toast('失敗', why, 1);
+  sfx('fail');
+  logEv('fail', { why });
+}
+function stepJobs(dt) {
+  const J = G.jobs, pl = G.car, v = spd(pl);
+  J.heistCD -= dt;
+  if (!J.active) {
+    for (const o of J.offers) if (Math.hypot(o.x - pl.x, o.z - pl.z) < 6.5 && v < 16 && !G.jack && pl.hp > 0) { acceptJob(o); break; }
+  } else if (J.active.kind === 'deliver') {
+    const a = J.active;
+    a.left -= dt;
+    if (a.variant === 'fragile' && a.dmg > 40) failJob('荷物が壊れた — ぶつけすぎ');
+    else if (Math.hypot(a.tx - pl.x, a.tz - pl.z) < 7 && v < 15 && !G.jack) {
+      const dk = a.variant === 'fragile' ? Math.min(0.9, a.dmg / 45) : Math.min(0.6, a.dmg / 100);
+      const pay = Math.round((a.pay0 * (1 - dk) + a.pay0 * 0.35 * (a.left / a.timeMax)) / 100) * 100;
+      G.carried += pay; G.chain++; G.jobsDone++; G.stats.delivers++;
+      J.active = null;
+      toast(`+${fmtY(pay)}`, a.dmg > 15 ? '届けた(荷が傷んで減額)' : '届けた — 手持ちに入った', 1);
+      sfx('cash');
+      for (let k = 0; k < 30; k++) emit(pl.x, 1.2, pl.z, rr(-3, 3), rr(2, 6), rr(-3, 3), rr(0.6, 1.2), 0.09, 6);
+      logEv('deliver', { pay });
+    } else if (a.left <= 0) failJob('時間切れ — 荷物は届かなかった');
+  } else {
+    const a = J.active, van = a.van;
+    a.left -= dt;
+    if (a.phase === 'hunt') {
+      if (van.hits >= 3) {
+        a.phase = 'grab'; van.ai.dazed = 999; van.role = 'parked';
+        const bx = van.x - Math.cos(van.h) * 4.2, bz = van.z - Math.sin(van.h) * 4.2;
+        a.bag = { x: bx, z: bz };
+        for (let k = 0; k < 40; k++) emit(van.x, 1.4, van.z, rr(-6, 6), rr(1, 7), rr(-6, 6), rr(0.4, 1), 0.08, 0);
+        G.flashes.push({ x: van.x, y: 2, z: van.z, col: [6, 5, 3], r: 22, t: 0.4, max: 0.4 });
+        sfx('burst');
+        toast('扉が開いた', '現金を拾え', 1);
+        logEv('vanOpen');
+      } else if (a.left <= 0 || dist(van, pl) > 330) failJob('現金輸送車に逃げられた');
+    } else if (a.phase === 'grab') {
+      if (Math.hypot(a.bag.x - pl.x, a.bag.z - pl.z) < 4.2 && !G.jack) {
+        G.carried += a.cash; G.chain++; G.jobsDone++; G.stats.heists++;
+        J.active = null; J.heistCD = 35;
+        toast(`+${fmtY(a.cash)}`, '奪った! 逃げろ', 1);
+        sfx('cash');
+        for (let k = 0; k < 50; k++) emit(pl.x, 1.2, pl.z, rr(-4, 4), rr(2, 7), rr(-4, 4), rr(0.6, 1.4), 0.1, 6);
+        logEv('heist', { pay: a.cash });
+        addStars(2, '現金輸送車を襲った');
+      } else if (a.left <= -30) failJob('現金を拾えなかった');
+    }
+  }
+  fillOffers();
+}
+function stepHideout(dt) {
+  const H = CITY.hideout, pl = G.car;
+  const inside = Math.abs(pl.x - H.x) < H.hw + 1 && Math.abs(pl.z - H.z) < H.hd + 1;
+  G.atHide = inside;
+  if (!inside || G.jack || pl.hp <= 0) return;
+  if (G.stars > 0) return;
+  if (spd(pl) > 6) return;
+  if (G.carried <= 0 && pl.hp >= pl.T.hp) return;
+  const bonus = G.carried > 0 ? Math.round(G.carried * Math.min(1, 0.25 * (G.chain - 1)) / 100) * 100 : 0;
+  const got = G.carried + bonus;
+  G.banked += got; G.stats.banks++;
+  pl.hp = pl.T.hp;
+  if (got > 0) {
+    toast(`金庫へ ${fmtY(got)}`, bonus > 0 ? `${G.chain}件まとめて 上乗せ ${fmtY(bonus)}` : '車も直した', 3); sfx('bank'); logEv('bank', { got, bonus, chain: G.chain });
+    for (let k = 0; k < Math.min(90, 30 + got / 2000); k++) emit(pl.x + rr(-1, 1), 1.2, pl.z + rr(-1, 1), rr(-4, 4), rr(3, 9), rr(-4, 4), rr(0.8, 1.6), rr(0.08, 0.14), 6);
+    G.flashes.push({ x: H.dx + H.nx * 3, y: 3, z: H.dz + H.nz * 3, col: [8, 5, 1.2], r: 26, t: 0.9, max: 0.9 });
+    G.fx.gold = 1;
+  }
+  else { toast('整備した', '車が直った', 1); sfx('accept'); }
+  G.carried = 0; G.chain = 0;
+}
+
+// =============================================================================
+//  乗りかえ・人影
+// =============================================================================
+function jackCandidate() {
+  const me = G.car;
+  if (!me) return null;
+  const range = me.hp <= 0 ? 14 : 8.5;
+  let best = null, bd = range;
+  for (const c of G.cars) {
+    if (c === me || c.hp <= 0 || c.exploded) continue;
+    if (c.role !== 'traffic' && c.role !== 'parked') continue;
+    if (spd(c) > 5) continue;
+    const d = dist(c, me);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+function canJack() { return gstate === 'play' && G.car && !G.jack && (spd(G.car) < 5 || G.car.hp <= 0) && !!jackCandidate(); }
+function tryJack() {
+  if (!canJack()) return;
+  const me = G.car, c = jackCandidate();
+  G.jack = { from: me, to: c, t: 0, dur: 0.6 + dist(me, c) * 0.05, driver: c.role === 'traffic' };
+  sfx('door');
+  logEv('jackStart');
+}
+function stepJack(dt) {
+  const J = G.jack;
+  J.t += dt;
+  J.from.thr = 0; J.from.brk = 1; J.to.thr = 0; J.to.brk = 1; J.to.ai.dazed = Math.max(J.to.ai.dazed, 1);
+  if (J.t < J.dur) return;
+  const old = J.from, nw = J.to;
+  old.role = 'parked'; old.ai = freshAI(); old.thr = 0; old.brk = 1;
+  nw.role = 'player'; nw.ai = freshAI();
+  G.car = nw; G.jack = null; G.stats.jacks++;
+  if (J.driver) G.peds.push({ x: nw.x - Math.sin(nw.h) * 1.4, z: nw.z + Math.cos(nw.h) * 1.4, h: nw.h + Math.PI / 2, t: 0, life: 3.5 });
+  sfx('door2');
+  const w = witnessed(70);
+  if (G.stars > 0) {
+    if (!G.seen && !w) {
+      if (G.t - (G.crimeT.drop || -99) > 8) {
+        G.crimeT.drop = G.t;
+        G.stars--; logEv('jackDrop', { stars: G.stars });
+        if (G.stars === 0) clearWanted('車を替えて、追っ手をまいた');
+        else toast(`手配度 ${'★'.repeat(G.stars)}`, '車を替えた — 手配が一段下がった', 1);
+      }
+    } else if (G.t - (G.crimeT.jackSeen || -99) > 8) { G.crimeT.jackSeen = G.t; addStars(1, '乗りかえを見られた'); }
+  } else if (w) addStars(1, '車を盗むところを見られた');
+  logEv('jack', { car: nw.type, seen: w });
+}
+function stepPeds(dt) {
+  for (let k = G.peds.length - 1; k >= 0; k--) {
+    const p = G.peds[k];
+    p.t += dt;
+    p.x += Math.cos(p.h) * 4.2 * dt; p.z += Math.sin(p.h) * 4.2 * dt;
+    if (isSolid(p.x, p.z, 0.3)) p.h += Math.PI / 2;
+    if (p.t > p.life) G.peds.splice(k, 1);
+  }
+}
+
+// =============================================================================
+//  粒(火花・炎・煙・閃光・お金)
+// =============================================================================
+const PMAX = 1600, PF = 10;
+const PD = new Float32Array(PMAX * PF);
+let PN = 0;
+// 種類: 0 火花 / 1 炎 / 2 煙 / 3 閃光 / 4 ガラス / 6 お金のきらめき / 7 水しぶき
+function emit(x, y, z, vx, vy, vz, life, size, type) {
+  if (PN >= PMAX) return;
+  const o = PN++ * PF;
+  PD[o] = x; PD[o + 1] = y; PD[o + 2] = z; PD[o + 3] = vx; PD[o + 4] = vy; PD[o + 5] = vz; PD[o + 6] = life; PD[o + 7] = life; PD[o + 8] = size; PD[o + 9] = type;
+}
+function updParticles(dt) {
+  for (let i = 0; i < PN; i++) {
+    const o = i * PF;
+    PD[o + 6] -= dt;
+    if (PD[o + 6] <= 0) { PN--; if (i < PN) PD.copyWithin(o, PN * PF, PN * PF + PF); i--; continue; }
+    const ty = PD[o + 9];
+    if (ty === 0 || ty === 4 || ty === 6 || ty === 7) { PD[o + 4] -= 9.8 * dt; if (PD[o + 1] < 0.03) { PD[o + 1] = 0.03; PD[o + 4] *= -0.35; PD[o + 3] *= 0.6; PD[o + 5] *= 0.6; } }
+    else if (ty === 1) { PD[o + 4] += 2.5 * dt; PD[o + 3] *= 0.97; PD[o + 5] *= 0.97; }
+    else if (ty === 2) { PD[o + 4] += (1.2 - PD[o + 4]) * dt; PD[o + 3] *= 0.985; PD[o + 5] *= 0.985; PD[o + 8] += dt * 0.6; }
+    PD[o] += PD[o + 3] * dt; PD[o + 1] += PD[o + 4] * dt; PD[o + 2] += PD[o + 5] * dt;
+  }
+}
+function explode(c) {
+  if (c.exploded) return;
+  c.exploded = true; c.burning = false; c.exT = 0;
+  c.vy = 7; c.rollV = rr(-3, 3); c.pitchV = rr(-2, 2);
+  const x = c.x, z = c.z;
+  for (let k = 0; k < 60; k++) emit(x, rr(0.5, 2), z, rr(-9, 9), rr(2, 12), rr(-9, 9), rr(0.5, 1.3), rr(0.4, 0.9), 1);
+  for (let k = 0; k < 50; k++) emit(x, 1, z, rr(-16, 16), rr(3, 14), rr(-16, 16), rr(0.4, 1.1), 0.07, 0);
+  for (let k = 0; k < 30; k++) emit(x, rr(1, 3), z, rr(-3, 3), rr(1, 4), rr(-3, 3), rr(2.5, 4.5), rr(0.8, 1.6), 2);
+  for (let k = 0; k < 24; k++) emit(x, 1.2, z, rr(-10, 10), rr(2, 8), rr(-10, 10), rr(0.6, 1.4), 0.05, 4);
+  emit(x, 1.5, z, 0, 0, 0, 0.35, 9, 3);
+  G.flashes.push({ x, y: 3, z, col: [30, 14, 4], r: 48, t: 0.9, max: 0.9 });
+  sfxBoom(x, z);
+  logEv('explode', { role: c.role, car: c.type });
+  for (const o of G.cars) {
+    if (o === c) continue;
+    const dx = o.x - x, dz = o.z - z, d = Math.hypot(dx, dz);
+    if (d > 13 || d < 0.01) continue;
+    const k = 1 - d / 13;
+    o.vx += dx / d * 16 * k / o.T.mass; o.vz += dz / d * 16 * k / o.T.mass; o.w += rr(-2, 2) * k;
+    if (o.T.hp < 5000) { const before = o.hp; o.hp = Math.max(o === G.car ? 0 : Math.min(before, 8), o.hp - (o === G.car ? 30 : 40) * k); if (before > 0 && o.hp <= 0 && o.role === 'police') G.stats.policeWrecked++; }
+    if (o === G.car) { G.fx.hurt = 1; G.fx.shake = 1.5; }
+  }
+  const dc = G.car ? dist(c, G.car) : 99;
+  G.fx.shake = Math.min(1.6, G.fx.shake + Math.max(0, 1.4 - dc / 40));
+  if (c === G.car && !G.jack) endRun('wreck');
+}
+function stepBodies(dt) {
+  for (const c of G.cars) {
+    if (c.hp <= 0 && !c.burning && !c.exploded) { c.burning = true; c.fuse = c === G.car ? 5 : rr(3, 5.5); logEv('burn', { role: c.role }); if (c === G.car) toast('車が燃えている!', isTouch ? '止まって「乗りかえ」' : '止まって E で近くの車へ', 1); }
+    if (c.burning && !c.exploded) {
+      c.fuse -= dt;
+      if (vr() < dt * 40) emit(c.x + rr(-0.8, 0.8), 1.2, c.z + rr(-0.8, 0.8), rr(-0.5, 0.5), rr(1, 3), rr(-0.5, 0.5), rr(0.4, 0.9), rr(0.3, 0.6), 1);
+      if (vr() < dt * 14) emit(c.x, 1.6, c.z, rr(-0.5, 0.5), rr(1, 2), rr(-0.5, 0.5), rr(2, 3.5), rr(0.6, 1.1), 2);
+      if (c.fuse <= 0) explode(c);
+    } else if (!c.exploded && c.hp < c.T.hp * 0.35 && vr() < dt * (c.hp < c.T.hp * 0.18 ? 10 : 4)) {
+      emit(c.x + Math.cos(c.h) * c.T.len * 0.4, 1.0, c.z + Math.sin(c.h) * c.T.len * 0.4, rr(-0.3, 0.3), rr(0.8, 1.6), rr(-0.3, 0.3), rr(1.2, 2.2), rr(0.3, 0.6), 2);
+    }
+    if (c.exploded) {
+      c.exT += dt;
+      if (c.y > 0 || c.vy > 0) { c.vy -= 16 * dt; c.y += c.vy * dt; c.roll += c.rollV * dt; c.pitch += c.pitchV * dt; if (c.y <= 0) { c.y = 0; c.vy = Math.abs(c.vy) > 3 ? -c.vy * 0.25 : 0; c.rollV *= 0.4; c.pitchV *= 0.4; } }
+      if (c.exT < 14 && vr() < dt * 8) emit(c.x + rr(-1, 1), 1, c.z + rr(-1, 1), rr(-0.3, 0.3), rr(0.8, 1.8), rr(-0.3, 0.3), rr(2, 3.5), rr(0.5, 1), c.exT < 6 && vr() < 0.5 ? 1 : 2);
+    }
+    if (c.dmgT > 0) c.dmgT -= dt;
+    // タイヤのきしみ・煙
+    if (c.slip > 6 && spd(c) > 8 && vr() < dt * c.slip * 0.8) emit(c.x - Math.cos(c.h) * 1.6, 0.25, c.z - Math.sin(c.h) * 1.6, rr(-0.5, 0.5), rr(0.3, 0.8), rr(-0.5, 0.5), rr(0.8, 1.4), rr(0.25, 0.45), 2);
+    if (c.slip > 4 && spd(c) > 10 && vr() < dt * 18 && c === G.car) emit(c.x - Math.cos(c.h) * 1.6, 0.1, c.z - Math.sin(c.h) * 1.6, rr(-1, 1) - c.vx * 0.1, rr(0.6, 1.6), rr(-1, 1) - c.vz * 0.1, rr(0.3, 0.6), 0.04, 7);
+  }
+  for (let k = G.flashes.length - 1; k >= 0; k--) { G.flashes[k].t -= dt; if (G.flashes[k].t <= 0) G.flashes.splice(k, 1); }
+}
+
+// =============================================================================
+//  ゲームの進行
+// =============================================================================
+let G = null, gstate = 'title';
+const TRAFFIC_N = 24;
+const CAM_T = { x: 0, z: 0 };
+function spawnTraffic(far) {
+  const pl = G.car;
+  for (let k = 0; k < 20; k++) {
+    const s = randomSpot(LANE, 6);
+    if (!s) continue;
+    if (pl && Math.hypot(s.x - pl.x, s.z - pl.z) < (far ? 110 : 25)) continue;
+    if (G.cars.some((c) => Math.abs(c.x - s.x) < 10 && Math.abs(c.z - s.z) < 10)) continue;
+    const r = vr(), type = r < 0.55 ? 'sedan' : r < 0.72 ? 'taxi' : r < 0.88 ? 'van' : 'sports';
+    const c = mkCar(type, s.x, s.z, s.h, 'traffic');
+    c.vx = Math.cos(s.h) * 8; c.vz = Math.sin(s.h) * 8;
+    G.cars.push(c);
+    return c;
+  }
+  return null;
+}
+function newRun() {
+  CITY = genCity();
+  G = { t: 0, cars: [], car: null, banked: 0, carried: 0, chain: 0, jobsDone: 0, stars: 0, maxStars: 0, seen: false, evadeT: 0, lastKnown: { x: 0, z: 0 }, bust: 0,
+    heli: null, roadT: 4, spawnT: 0, jobs: { offers: [], active: null, heistCD: 12 }, flashes: [], peds: [], events: [], cause: '', endT: 0, jack: null,
+    fx: { shake: 0, hurt: 0, flash: 0 }, crimeT: {}, susT: 0, atHide: false, trafT: 0,
+    stats: { policeWrecked: 0, jacks: 0, crashes: 0, lost: 0, heists: 0, delivers: 0, starsUp: 0, evaded: 0, banks: 0 } };
+  PN = 0;
+  const H = CITY.hideout;
+  const hh = { n: Math.PI, s: 0, w: Math.PI / 2, e: -Math.PI / 2 }[H.side];
+  const me = mkCar('sedan', H.x, H.z, hh, 'player');
+  me.color = [0.55, 0.06, 0.08];
+  G.cars.push(me); G.car = me;
+  for (const s of CITY.parking) { const r = vr(); const c = mkCar(r < 0.5 ? 'sedan' : r < 0.65 ? 'sports' : r < 0.85 ? 'van' : 'taxi', s.x, s.z, s.h, 'parked'); G.cars.push(c); }
+  for (let k = 0; k < TRAFFIC_N; k++) spawnTraffic(false);
+  for (let k = 0; k < patrolCount(); k++) spawnPolice('patrol');
+  fillOffers();
+  CAM_T.x = me.x; CAM_T.z = me.z;
+  if (gl) buildCityMeshes();
+  drawMapBase();
+}
+function manageTraffic(dt) {
+  G.trafT -= dt;
+  if (G.trafT > 0) return;
+  G.trafT = 1;
+  const pl = G.car;
+  for (const c of G.cars.slice()) {
+    if (c === pl) continue;
+    const d = dist(c, pl);
+    if ((c.role === 'traffic' || c.role === 'parked') && (c.exploded || c.hp <= 0) && c.exT > 15 && d > 120) removeCar(c);
+    else if (c.role === 'van' && (!G.jobs.active || G.jobs.active.van !== c) && d > 200) removeCar(c);
+  }
+  const n = G.cars.filter((c) => c.role === 'traffic').length;
+  if (n < TRAFFIC_N) spawnTraffic(true);
+}
+function endRun(kind) {
+  if (gstate !== 'play') return;
+  G.cause = kind; gstate = 'over'; G.endT = 0; G.stats.lost = G.carried;
+  if (G.jack) G.jack = null;
+  toast(kind === 'busted' ? '確保' : '大破', G.carried > 0 ? `手持ち ${fmtY(G.carried)} を失った` : '', 3);
+  sfx(kind === 'busted' ? 'busted' : 'wreck');
+  logEv('end', { kind });
+}
+function step(dt) {
+  G.t += dt;
+  const pl = G.car;
+  if (gstate === 'play' && !G.jack) applyInput(pl, dt);
+  else { pl.thr = 0; pl.brk = 1; pl.hand = false; pl.steer *= 0.9; }
+  if (G.jack) stepJack(dt);
+  for (const c of G.cars) {
+    if (c === G.car) continue;
+    if (c.role === 'traffic' || c.role === 'van') trafficAI(c, dt);
+    else if (c.role === 'police') policeAI(c, dt);
+    else { c.thr = 0; c.brk = 1; c.steer = 0; c.hand = false; }
+  }
+  const cars = G.cars;
+  for (const c of cars) { if (c.role === 'parked' && !c.exploded && c.vx * c.vx + c.vz * c.vz < 0.0025 && Math.abs(c.w) < 0.01) { c.vx = c.vz = c.w = 0; continue; } carPhys(c, dt); }
+  for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) carPair(cars[i], cars[j]);
+  for (const c of cars) carWorld(c);
+  stepBodies(dt);
+  if (gstate === 'play') { stepWanted(dt); stepJobs(dt); stepHideout(dt); }
+  if (gstate !== 'title') { manageCops(dt); stepHeli(dt); }
+  manageTraffic(dt);
+  stepPeds(dt);
+  updParticles(dt);
+  G.fx.shake = Math.max(0, G.fx.shake - dt * 2.2);
+  G.fx.hurt = Math.max(0, G.fx.hurt - dt * 1.5);
+  G.fx.gold = Math.max(0, (G.fx.gold || 0) - dt * 1.1);
+  if (gstate === 'over') { G.endT += dt; if (G.endT > 3.0) showResult(); }
+}
+
+// =============================================================================
+//  行列
+// =============================================================================
+const M4 = {
+  id: () => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; },
+  mul(a, b, o = new Float32Array(16)) {
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    return o;
+  },
+  persp(fy, asp, n, f) { const m = new Float32Array(16), t = 1 / Math.tan(fy / 2); m[0] = t / asp; m[5] = t; m[10] = (f + n) / (n - f); m[11] = -1; m[14] = (2 * f * n) / (n - f); return m; },
+  look(e, c, u) {
+    let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2];
+    let l = Math.hypot(zx, zy, zz) || 1; zx /= l; zy /= l; zz /= l;
+    let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx;
+    l = Math.hypot(xx, xy, xz) || 1; xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    const m = new Float32Array(16);
+    m[0] = xx; m[4] = xy; m[8] = xz; m[1] = yx; m[5] = yy; m[9] = yz; m[2] = zx; m[6] = zy; m[10] = zz;
+    m[12] = -(xx * e[0] + xy * e[1] + xz * e[2]); m[13] = -(yx * e[0] + yy * e[1] + yz * e[2]); m[14] = -(zx * e[0] + zy * e[1] + zz * e[2]); m[15] = 1;
+    return m;
+  },
+  inv(m) {
+    const o = new Float32Array(16);
+    const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3], a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+    const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11], a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
+    const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
+    const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
+    const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+    let d = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+    if (!d) return M4.id();
+    d = 1 / d;
+    o[0] = (a11 * b11 - a12 * b10 + a13 * b09) * d; o[1] = (a02 * b10 - a01 * b11 - a03 * b09) * d;
+    o[2] = (a31 * b05 - a32 * b04 + a33 * b03) * d; o[3] = (a22 * b04 - a21 * b05 - a23 * b03) * d;
+    o[4] = (a12 * b08 - a10 * b11 - a13 * b07) * d; o[5] = (a00 * b11 - a02 * b08 + a03 * b07) * d;
+    o[6] = (a32 * b02 - a30 * b05 - a33 * b01) * d; o[7] = (a20 * b05 - a22 * b02 + a23 * b01) * d;
+    o[8] = (a10 * b10 - a11 * b08 + a13 * b06) * d; o[9] = (a01 * b08 - a00 * b10 - a03 * b06) * d;
+    o[10] = (a30 * b04 - a31 * b02 + a33 * b00) * d; o[11] = (a21 * b02 - a20 * b04 - a23 * b00) * d;
+    o[12] = (a11 * b07 - a10 * b09 - a12 * b06) * d; o[13] = (a00 * b09 - a01 * b07 + a02 * b06) * d;
+    o[14] = (a31 * b01 - a30 * b03 - a32 * b00) * d; o[15] = (a20 * b03 - a21 * b01 + a22 * b00) * d;
+    return o;
+  },
+};
+// 車などの置き方: 前 = (cos h, sin h)、右 = (-sin h, cos h)。ロールは前の軸、ピッチは右の軸まわり
+function placeM(x, y, z, h, pitch = 0, roll = 0, sx = 1, sy = 1, sz = 1) {
+  const ch = Math.cos(h), shh = Math.sin(h), cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+  // ローカル: x 前・y 上・z 右
+  const F = [ch, 0, shh], U = [0, 1, 0], R = [-shh, 0, ch];
+  // ピッチ(右の軸まわり): 前と上を回す
+  const F1 = [F[0] * cp + U[0] * sp, F[1] * cp + U[1] * sp, F[2] * cp + U[2] * sp];
+  const U1 = [U[0] * cp - F[0] * sp, U[1] * cp - F[1] * sp, U[2] * cp - F[2] * sp];
+  // ロール(前の軸まわり): 上と右を回す
+  const U2 = [U1[0] * cr + R[0] * sr, U1[1] * cr + R[1] * sr, U1[2] * cr + R[2] * sr];
+  const R2 = [R[0] * cr - U1[0] * sr, R[1] * cr - U1[1] * sr, R[2] * cr - U1[2] * sr];
+  const m = new Float32Array(16);
+  m[0] = F1[0] * sx; m[1] = F1[1] * sx; m[2] = F1[2] * sx;
+  m[4] = U2[0] * sy; m[5] = U2[1] * sy; m[6] = U2[2] * sy;
+  m[8] = R2[0] * sz; m[9] = R2[1] * sz; m[10] = R2[2] * sz;
+  m[12] = x; m[13] = y; m[14] = z; m[15] = 1;
+  return m;
+}
+
+// =============================================================================
+//  シェーダー
+// =============================================================================
+const SH_HEAD = '#version 300 es\nprecision highp float;\nprecision highp int;\n';
+const GLSL_CONST = `const float P = ${P}.0, HR = ${HR}.0, NXf = ${NX}.0, NZf = ${NZ}.0, HWX = ${HWY_X}.0, HWW = ${HWY_HW}, HWI = ${HWYI}.0, MAPZf = ${MAPZ}.0;`;
+const GLSL_COMMON = `${GLSL_CONST}
+uniform vec3 uCam; uniform float uT;
+uniform vec3 uFogC; uniform float uFogK;
+float h12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+vec3 fogMix(vec3 c, float d) { return mix(c, uFogC, 1.0 - exp(-d * uFogK)); }
+vec3 skyEnv(vec3 R) {
+  float y = R.y;
+  vec3 c = mix(vec3(0.05, 0.032, 0.04), vec3(0.008, 0.011, 0.024), smoothstep(0.0, 0.5, y));
+  c = mix(c, vec3(0.006, 0.005, 0.006), smoothstep(0.0, -0.3, y));
+#ifndef LOWQ
+  float az = atan(R.z, R.x);
+  float lights = step(0.86, h12(floor(vec2(az * 40.0, y * 60.0)))) * smoothstep(0.35, 0.0, abs(y - 0.08));
+  c += lights * mix(vec3(1.2, 0.7, 0.35), vec3(0.5, 0.8, 1.2), h12(floor(vec2(az * 40.0, y * 60.0)) + 3.1)) * 0.9;
+#endif
+  return c;
+}`;
+const VS_WORLD = `layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=2) in vec3 aC; layout(location=3) in vec4 aM;
+uniform mat4 uVP, uM;
+out vec3 vW; out vec3 vN; out vec3 vC; out vec4 vM; out vec3 vL;
+void main() { vec4 w = uM * vec4(aP, 1.0); vW = w.xyz; vN = mat3(uM) * aN; vC = aC; vM = aM; vL = aP; gl_Position = uVP * w; }`;
+const FS_WORLD = `${GLSL_COMMON}
+in vec3 vW; in vec3 vN; in vec3 vC; in vec4 vM; in vec3 vL;
+out vec4 o;
+uniform vec4 uL[16]; uniform vec4 uLC[16]; uniform int uNL;
+uniform vec3 uHP, uHD, uHC; uniform float uHCos;
+uniform vec3 uKP, uKD, uKC; uniform float uKCos;
+uniform vec3 uAmbS, uAmbG;
+uniform sampler2D uNoise, uSign, uRefl;
+uniform vec2 uRes; uniform float uReflOn, uClip;
+uniform vec4 uTint; uniform float uPolPh, uBrake, uHaz, uDmg, uLampOn;
+vec3 gD, gS;
+void pl(vec3 p, vec3 n, vec3 v, vec3 lp, vec3 col, float rad, float shin) {
+  vec3 L = lp - p; float d2 = dot(L, L), r2 = rad * rad;
+  if (d2 > r2) return;
+  float d = sqrt(d2); L /= d;
+  float f = 1.0 - d2 / r2; f *= f;
+  float att = f / (1.0 + d2 * 0.08);
+  float nl = max(dot(n, L), 0.0);
+  gD += col * nl * att;
+  vec3 H = normalize(L + v);
+  gS += col * pow(max(dot(n, H), 0.0), shin) * att * (0.3 + 0.7 * nl) * (shin * 0.04 + 0.4);
+}
+void spot(vec3 p, vec3 n, vec3 v, vec3 sp, vec3 sd, vec3 col, float cosc, float range, float shin) {
+  vec3 L = sp - p; float d2 = dot(L, L);
+  if (d2 > range * range) return;
+  float d = sqrt(d2); L /= d;
+  float cone = smoothstep(cosc, cosc + (1.0 - cosc) * 0.6, dot(-L, sd));
+  if (cone <= 0.0) return;
+  float att = cone / (1.0 + d2 * 0.03) * (1.0 - d2 / (range * range));
+  float nl = max(dot(n, L), 0.0);
+  gD += col * nl * att;
+  vec3 H = normalize(L + v);
+  gS += col * pow(max(dot(n, H), 0.0), shin) * att * nl * (shin * 0.04 + 0.4);
+}
+void lamps(vec3 p, vec3 n, vec3 v, float shin) {
+  float j = floor(p.z / P + 0.5), i = floor(p.x / P);
+  if (j >= 0.0 && j <= NZf && i >= 0.0 && i < NXf && abs(p.z - j * P) < 36.0) {
+    float lx = (i + 0.5) * P; vec3 c = vec3(1.0, 0.5, 0.17) * 7.5;
+    pl(p, n, v, vec3(lx, 7.3, j * P - 5.4), c, 30.0, shin);
+    pl(p, n, v, vec3(lx, 7.3, j * P + 5.4), c, 30.0, shin);
+  }
+  float i2 = floor(p.x / P + 0.5), j2 = floor(p.z / P);
+  if (i2 >= 0.0 && i2 <= NXf && j2 >= 0.0 && j2 < NZf && abs(i2 - HWI) > 0.5 && abs(p.x - i2 * P) < 36.0) {
+    float lz = (j2 + 0.5) * P; vec3 c = vec3(0.72, 0.85, 1.0) * 6.5;
+    pl(p, n, v, vec3(i2 * P - 5.4, 7.3, lz), c, 30.0, shin);
+    pl(p, n, v, vec3(i2 * P + 5.4, 7.3, lz), c, 30.0, shin);
+  }
+#ifndef LOWQ
+  vec2 nd = clamp(floor(p.xz / P + 0.5), vec2(0.0), vec2(NXf, NZf)) * P;
+  pl(p, n, v, vec3(nd.x + 1.5, 8.6, nd.y + 1.5), vec3(1.0, 0.82, 0.62) * 7.0, 26.0, shin);
+#endif
+  if (abs(p.x - HWX) < 26.0 && p.z > -HR && p.z < MAPZf + HR) {
+    float lz = floor(p.z / 15.0 + 0.5) * 15.0;
+    pl(p, n, v, vec3(HWX, 9.0, lz), vec3(0.5, 0.75, 1.0) * 2.2, 17.0, shin);
+  }
+}
+void main() {
+  vec3 n = normalize(vN);
+  vec3 V = uCam - vW; float dist = length(V); vec3 v = V / max(dist, 1e-4);
+  float k = vM.x;
+  vec3 alb = vC, em = vec3(0.0), rfl = vec3(0.0);
+  float shin = 16.0, sk = 0.04;
+  vec2 suv = gl_FragCoord.xy / uRes;
+  if (k < 0.5) {
+    alb *= 0.75 + 0.5 * texture(uNoise, vW.xz * 0.11 + vW.y * 0.07).r;
+  } else if (k < 1.5) {
+    float seed = vM.y, style = vM.z, top = vM.w;
+    float u = abs(n.x) > 0.5 ? vW.z : vW.x;
+    float fh = 3.5, cw = 2.2 + fract(seed * 7.31) * 1.6;
+    vec2 g = vec2(u / cw, (vW.y - 0.15) / fh);
+    vec2 cell = floor(g), f = fract(g);
+    float win = style > 1.5 ? step(0.18, f.y) * step(f.y, 0.92) * step(0.04, f.x) : step(0.16, f.x) * step(f.x, 0.84) * step(0.25, f.y) * step(f.y, 0.85);
+    float above = step(4.0, vW.y) * step(vW.y, top - 1.2);
+    win *= above;
+    float hs = h12(cell * vec2(1.0, 7.0) + seed * 113.0 + floor(n.xz * 2.0 + 2.0) * 17.0);
+    float litP = 0.16 + fract(seed * 3.7) * 0.42;
+    float on = step(hs, litP);
+    vec3 wc = mix(vec3(1.0, 0.55, 0.24), vec3(0.55, 0.72, 1.0), step(0.7, fract(hs * 13.7)));
+    if (style > 1.5) wc = mix(wc, vec3(0.4, 0.8, 1.0), 0.4);
+    wc *= 0.2 + pow(fract(hs * 29.3), 2.0) * 1.0;
+    // 部屋の奥行き(下ほど暗い・カーテンの影)
+    float blind = (0.35 + 0.65 * smoothstep(0.15, 0.95, f.y)) * (0.75 + 0.25 * step(0.5, fract(f.x * 2.0 + hs * 7.0)));
+#ifdef LOWQ
+    float aa = clamp(dist * 0.012 - 0.3, 0.0, 1.0);
+#else
+    float aa = clamp(max(fwidth(g.x), fwidth(g.y)) * 1.2, 0.0, 1.0);
+#endif
+    float cover = style > 1.5 ? 0.72 : 0.4;
+    float winA = mix(win, above * cover, aa);
+    float onA = mix(win * on, above * litP * cover, aa);
+    em = wc * onA * blind * 1.05;
+    vec3 wall = alb * (0.6 + 0.55 * texture(uNoise, vec2(u, vW.y) * 0.05).g);
+    alb = mix(wall, vec3(0.012, 0.014, 0.018), winA);
+    shin = mix(12.0, 120.0, winA); sk = mix(0.03, 0.6, winA * (1.0 - onA));
+    if (vW.y < 3.9 && style > 0.5 && fract(seed * 5.13) > 0.3) {
+      float sf = step(0.45, vW.y) * step(vW.y, 3.3);
+      float mul = step(0.06, fract(u / 4.0));
+      float sh = h12(vec2(floor(u / 4.0), seed * 50.0));
+      vec3 sc = mix(vec3(1.0, 0.7, 0.4), vec3(0.6, 0.85, 1.0), step(0.5, fract(seed * 9.1)));
+      sc = mix(sc, vec3(1.0, 0.35, 0.55), step(0.8, fract(seed * 23.7)));
+      float inner = 0.55 + 0.45 * smoothstep(0.45, 3.3, vW.y);
+      em += sc * sf * mul * 0.5 * (0.3 + 0.7 * sh) * inner * step(0.25, sh);
+      alb = mix(alb, vec3(0.01), sf);
+    }
+    vec3 R = reflect(-v, n); float fr = 0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    rfl = skyEnv(R) * fr * winA * (1.0 - onA) * 0.8;
+  } else if (k < 3.5) {
+    bool road = k < 2.5;
+    vec4 nz = texture(uNoise, vW.xz * 0.045);
+    float grain = texture(uNoise, vW.xz * 0.7).g;
+    float mk = 0.0; vec3 mc = vec3(0.5);
+    float pud;
+    if (road) {
+      alb = vec3(0.05, 0.05, 0.055) * (0.65 + 0.7 * grain);
+      float jz = floor(vW.z / P + 0.5) * P, ix = floor(vW.x / P + 0.5) * P;
+      float dz = abs(vW.z - jz), dx = abs(vW.x - ix);
+      bool onX = dz < HR, onZ = dx < HR;
+      if (onX != onZ) {
+        float a = onX ? dz : dx, s = onX ? vW.x : vW.z, e = onX ? dx : dz, c2 = onX ? vW.z : vW.x;
+        bool zebra = e > HR + 0.8 && e < HR + 4.4;
+        if (zebra) mk = step(fract(c2 / 1.1), 0.5) * step(a, 6.2);
+        else {
+          float yl = step(0.1, a) * step(a, 0.24);
+          if (yl > 0.0) { mk = yl; mc = vec3(0.85, 0.55, 0.1); }
+          mk = max(mk, step(abs(a - 3.6), 0.07) * step(fract(s / 8.0), 0.5));
+          mk = max(mk, step(abs(a - 6.6), 0.08));
+          if (e > HR + 4.7 && e < HR + 5.1 && a < 6.2) mk = 1.0;
+        }
+        mk *= 0.55 + 0.45 * smoothstep(0.2, 0.6, texture(uNoise, vW.xz * 0.3).b);
+      }
+      pud = smoothstep(0.56, 0.66, nz.a);
+    } else {
+      vec2 tl = abs(fract(vW.xz / 1.5) - 0.5);
+      float joint = 1.0 - step(0.03, min(0.5 - tl.x, 0.5 - tl.y));
+      alb = vec3(0.13, 0.125, 0.12) * (0.75 + 0.5 * grain) * (1.0 - joint * 0.4);
+      pud = smoothstep(0.62, 0.7, nz.a) * 0.7;
+    }
+    float wet = 0.6 + 0.4 * pud;
+    alb = mix(alb, mc, mk * 0.8);
+    alb *= 1.0 - 0.45 * wet;
+    float rough = mix(road ? 0.28 : 0.4, 0.035, pud) + mk * 0.25;
+    shin = 2.0 / (rough * rough + 0.002);
+    sk = mix(0.12, 1.0, wet);
+    float fr = 0.03 + 0.97 * pow(1.0 - max(v.y, 0.0), 5.0);
+    vec3 R = skyEnv(reflect(-v, vec3(0.0, 1.0, 0.0)));
+    if (uReflOn > 0.5) {
+      vec2 jit = (texture(uNoise, vW.xz * 0.35).rg - 0.5) * (0.003 + rough * 0.05);
+      float spread = rough * 0.04 + 0.0015;
+      vec3 acc = vec3(0.0);
+      for (int t = 0; t < 4; t++) acc += texture(uRefl, suv + jit + vec2(0.0, (float(t) - 1.5) * spread)).rgb;
+      R = acc * 0.25;
+    }
+    rfl = R * fr * mix(0.3, 1.0, pud) * (1.0 - mk * 0.6) * (road ? 1.0 : 0.6);
+  } else if (k < 4.5) {
+    float ty = vM.y, f = 1.0;
+    if (ty > 0.5 && ty < 1.5) f = step(0.6, fract(uT * 0.55 + vM.z)) + 0.04;
+    else if (ty > 1.5 && ty < 2.5) f = 0.9 + 0.1 * sin(uT * 37.0 + vM.z * 40.0) - 0.85 * step(0.985, h12(vec2(floor(uT * 9.0), vM.z * 91.0)));
+    else if (ty > 2.5 && ty < 3.5) { float ph = fract(uPolPh); float on = vM.z < 0.5 ? step(ph, 0.5) : step(0.5, ph); f = uLampOn * on * (0.55 + 0.45 * step(0.5, fract(uPolPh * 6.0))) + 0.05; }
+    else if (ty > 3.5 && ty < 4.5) f = 0.35 + uBrake * 1.3;
+    else if (ty > 5.5 && ty < 6.5) f = uHaz * step(0.5, fract(uT * 1.6)) + 0.1;
+    else if (ty > 6.5) f = uLampOn * 0.85 + 0.15;
+    o = vec4(fogMix(vC * f, dist), 1.0);
+    return;
+  } else if (k < 6.5) {
+    vec3 R = reflect(-v, n); float fr = 0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    if (k < 5.5) {
+      alb = uTint.rgb * (1.0 - uDmg * 0.55 * texture(uNoise, vW.xz * 0.9 + vW.y * 0.5).g);
+      shin = 90.0; sk = 0.55 * (1.0 - uDmg * 0.6);
+      rfl = skyEnv(R) * fr * 1.1;
+    } else {
+      alb = vec3(0.012, 0.014, 0.018); shin = 160.0; sk = 0.9;
+      rfl = skyEnv(R) * (0.12 + 0.88 * fr);
+    }
+  } else if (k < 7.5) {
+    float m = texture(uSign, vM.zw).r;
+    float f = 0.92 + 0.08 * sin(uT * 31.0 + vM.y * 60.0) - 0.9 * step(0.992, h12(vec2(floor(uT * 7.0), vM.y * 77.0)));
+    o = vec4(fogMix(vC * (m * 3.0 * f + 0.04) + vec3(0.006), dist), 1.0);
+    return;
+  } else if (k < 8.5) {
+    alb = vec3(0.02); shin = 8.0; sk = 0.05;
+  } else {
+    alb = vec3(0.02, 0.045, 0.02) * (0.5 + texture(uNoise, vW.xz * 0.2).r);
+    shin = 6.0;
+  }
+  gD = vec3(0.0); gS = vec3(0.0);
+  lamps(vW, n, v, shin);
+#ifdef LOWQ
+  for (int i = 0; i < 2; i++) { if (i >= uNL) break; pl(vW, n, v, uL[i].xyz, uLC[i].rgb, uL[i].w, shin); }
+#else
+  for (int i = 0; i < 16; i++) { if (i >= uNL) break; pl(vW, n, v, uL[i].xyz, uLC[i].rgb, uL[i].w, shin); }
+#endif
+  if (uHCos < 0.999) spot(vW, n, v, uHP, uHD, uHC, uHCos, 70.0, shin);
+  if (uKCos < 0.999) spot(vW, n, v, uKP, uKD, uKC, uKCos, 130.0, shin);
+  vec3 amb = mix(uAmbG, uAmbS, n.y * 0.5 + 0.5);
+  if (abs(vW.x - HWX) < HWW && vW.y < 9.0 && vW.z > -HR && vW.z < MAPZf + HR) amb *= 0.35;
+  vec3 col = alb * (amb + gD) + gS * sk + em + rfl;
+  o = vec4(fogMix(col, dist), 1.0);
+}`;
+const FS_WATER = `${GLSL_COMMON}
+in vec3 vW; in vec3 vN; in vec3 vC; in vec4 vM; in vec3 vL;
+out vec4 o;
+uniform sampler2D uNoise, uRefl; uniform vec2 uRes; uniform float uReflOn;
+void main() {
+  vec3 V = uCam - vW; float d = length(V); vec3 v = V / d;
+  vec2 q = vW.xz;
+  vec3 a = texture(uNoise, q * 0.018 + vec2(uT * 0.011, uT * 0.006)).rgb - 0.5;
+  vec3 b = texture(uNoise, q * 0.07 - vec2(uT * 0.017, -uT * 0.012)).rgb - 0.5;
+  float fade = exp(-d * 0.004);
+  vec3 n = normalize(vec3((a.r + b.g * 0.7) * 0.5 * fade, 1.0, (a.g + b.r * 0.7) * 0.5 * fade));
+  float fr = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+  vec3 R = skyEnv(reflect(-v, n));
+  if (uReflOn > 0.5) { vec2 suv = gl_FragCoord.xy / uRes + n.xz * vec2(0.05, 0.14); R = texture(uRefl, suv).rgb * 0.9; }
+  vec3 col = vec3(0.002, 0.005, 0.008) + R * fr;
+  o = vec4(fogMix(col, d * 0.7), 1.0);
+}`;
+const VS_FULL = `layout(location=0) in vec2 aP; out vec2 vUV; void main() { vUV = aP * 0.5 + 0.5; gl_Position = vec4(aP, 0.0, 1.0); }`;
+// 空は最後に、何も描かれていない所(いちばん奥)だけに描く
+const VS_SKY = `layout(location=0) in vec2 aP; out vec2 vUV; void main() { vUV = aP * 0.5 + 0.5; gl_Position = vec4(aP, 1.0, 1.0); }`;
+const FS_SKY = `${GLSL_COMMON}
+in vec2 vUV; out vec4 o;
+uniform mat4 uInvVP; uniform sampler2D uNoise;
+void main() {
+  vec4 a = uInvVP * vec4(vUV * 2.0 - 1.0, -1.0, 1.0), b = uInvVP * vec4(vUV * 2.0 - 1.0, 1.0, 1.0);
+  vec3 d = normalize(b.xyz / b.w - a.xyz / a.w);
+  float y = d.y;
+  vec3 c = mix(vec3(0.075, 0.042, 0.05), vec3(0.006, 0.008, 0.02), smoothstep(-0.02, 0.45, y));
+  // 街明かりに照らされた低い雲
+  if (y > 0.0) {
+    vec2 cu = d.xz / (y + 0.06) * 0.06 + vec2(uT * 0.0016, uT * 0.0009);
+    float cl = texture(uNoise, cu).a * 0.6 + texture(uNoise, cu * 2.7 + 0.3).b * 0.4;
+    cl = smoothstep(0.42, 0.8, cl);
+    float hz = exp(-y * 4.0);
+    vec3 moonD = normalize(vec3(-0.45, 0.32, -0.83));
+    float md = dot(d, moonD);
+    c += vec3(1.6, 1.55, 1.4) * smoothstep(0.9993, 0.9996, md) * (1.0 - cl * 0.85);
+    c += vec3(0.05, 0.055, 0.07) * pow(max(md, 0.0), 60.0) * (0.5 + cl);
+    float st = step(0.996, h12(floor(d.xz / (y + 0.25) * 420.0))) * (1.0 - cl) * smoothstep(0.1, 0.4, y);
+    c += vec3(0.6, 0.65, 0.8) * st * 0.6;
+    c = mix(c, vec3(0.1, 0.055, 0.05) * (0.35 + hz * 0.9), cl * 0.85);
+  }
+  // 湾の向こうの街並み(南)
+  if (d.z > 0.15 && y > -0.02 && y < 0.07) {
+    float az = atan(d.x, d.z);
+    float col = floor(az * 90.0);
+    float hgt = 0.004 + 0.02 * h12(vec2(col, 1.7)) * smoothstep(1.2, 0.0, abs(az + 0.15)) + 0.012 * step(0.93, h12(vec2(col, 5.1)));
+    if (y < hgt) {
+      vec2 w = vec2(az * 900.0, y * 1100.0);
+      float lit = step(0.72, h12(floor(w))) * step(0.3, fract(w.x)) * step(0.35, fract(w.y));
+      c = vec3(0.008, 0.008, 0.013) + lit * mix(vec3(1.4, 0.8, 0.4), vec3(0.6, 0.85, 1.3), h12(floor(w) + 2.0)) * 0.9;
+      if (y > hgt - 0.0012 && h12(vec2(col, 9.0)) > 0.8) c += vec3(3.0, 0.1, 0.05) * step(0.6, fract(uT * 0.5 + h12(vec2(col, 3.0))));
+    } else c += vec3(0.07, 0.04, 0.035) * exp(-(y - hgt) * 60.0);
+  }
+  if (y < -0.02) c = vec3(0.004, 0.005, 0.007);
+  o = vec4(mix(c, uFogC, 0.25 * exp(-abs(y) * 20.0)), 1.0);
+}`;
+const VS_SPR = `layout(location=0) in vec3 aP; layout(location=1) in vec3 aC; layout(location=2) in float aS; layout(location=3) in float aB;
+uniform mat4 uVP; uniform float uPS, uMaxPt, uT, uFogK;
+out vec3 vC;
+void main() {
+  vec4 p = uVP * vec4(aP, 1.0);
+  gl_Position = p;
+  gl_PointSize = clamp(aS * uPS / max(p.w, 0.1), 1.5, uMaxPt);
+  float bl = aB < 0.0 ? 1.0 : step(0.55, fract(uT * 0.55 + aB));
+  vC = aC * bl * exp(-p.w * uFogK * 0.8);
+}`;
+const FS_SPR = `in vec3 vC; out vec4 o;
+void main() { vec2 q = gl_PointCoord - 0.5; float d2 = dot(q, q) * 4.0; float a = exp(-d2 * 5.0) * 0.5 + exp(-d2 * 40.0) * 1.6; o = vec4(vC * a, 0.0); }`;
+const VS_PART = `layout(location=0) in vec3 aP; layout(location=1) in vec4 aC; layout(location=2) in float aS;
+uniform mat4 uVP; uniform float uPS, uMaxPt;
+out vec4 vC;
+void main() { vec4 p = uVP * vec4(aP, 1.0); gl_Position = p; gl_PointSize = clamp(aS * uPS / max(p.w, 0.1), 1.0, uMaxPt); vC = aC; }`;
+const FS_PART = `in vec4 vC; out vec4 o;
+void main() { vec2 q = gl_PointCoord - 0.5; float d = length(q) * 2.0; if (d > 1.0) discard; float a = smoothstep(1.0, 0.0, d);
+  if (vC.a < 0.0) o = vec4(vC.rgb * a * a, 0.0); else o = vec4(vC.rgb * a * vC.a, a * vC.a); }`;
+const FS_BEAM = `${GLSL_COMMON}
+in vec3 vW; in vec3 vN; in vec3 vC; in vec4 vM; in vec3 vL;
+out vec4 o;
+uniform vec3 uBC; uniform float uMode, uNear;
+void main() {
+  vec3 V = uCam - vW; float d = length(V); vec3 v = V / d;
+  float a;
+  if (uMode < 0.5) { float y = clamp(vL.y, 0.0, 1.0); a = pow(1.0 - y, 1.7) * (0.2 + 0.8 * pow(abs(dot(normalize(vN), v)), 1.6)); }
+  else if (uMode < 1.5) { float r = length(vL.xz); a = smoothstep(1.0, 0.85, r) * (0.25 + 0.75 * smoothstep(0.7, 0.95, r)); }
+  else { float y = clamp(-vL.y, 0.0, 1.0); a = (0.4 + 0.6 * pow(abs(dot(normalize(vN), v)), 2.0)) * (1.0 - y * 0.7) * smoothstep(0.0, 0.08, y); }
+  o = vec4(uBC * a * uNear * exp(-d * uFogK * 0.6), 0.0);
+}`;
+const VS_BLOB = `layout(location=0) in vec2 aP; uniform mat4 uVP, uM; out vec2 vQ;
+void main() { vQ = aP; gl_Position = uVP * uM * vec4(aP.x, 0.0, aP.y, 1.0); }`;
+const FS_BLOB = `in vec2 vQ; out vec4 o; uniform float uK;
+void main() { vec2 q = abs(vQ) - vec2(0.62, 0.45); float d = length(max(q, 0.0)) / 0.4; float s = 1.0 - uK * (1.0 - smoothstep(0.0, 1.0, d)); o = vec4(vec3(s), 1.0); }`;
+const FS_DOWN = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc; uniform vec2 uTx; uniform float uTh;
+void main() {
+  vec3 c = (texture(uSrc, vUV + uTx * vec2(-1.0, -1.0)).rgb + texture(uSrc, vUV + uTx * vec2(1.0, -1.0)).rgb + texture(uSrc, vUV + uTx * vec2(-1.0, 1.0)).rgb + texture(uSrc, vUV + uTx * vec2(1.0, 1.0)).rgb) * 0.25;
+  if (uTh > 0.0) { float b = max(c.r, max(c.g, c.b)); c *= max(b - uTh, 0.0) / max(b, 1e-4); }
+  o = vec4(min(c, vec3(80.0)), 1.0);
+}`;
+const FS_UP = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc; uniform vec2 uTx; uniform float uK;
+void main() {
+  vec3 c = texture(uSrc, vUV).rgb * 4.0;
+  c += (texture(uSrc, vUV + vec2(uTx.x, 0.0)).rgb + texture(uSrc, vUV - vec2(uTx.x, 0.0)).rgb + texture(uSrc, vUV + vec2(0.0, uTx.y)).rgb + texture(uSrc, vUV - vec2(0.0, uTx.y)).rgb) * 2.0;
+  c += texture(uSrc, vUV + uTx).rgb + texture(uSrc, vUV - uTx).rgb + texture(uSrc, vUV + vec2(uTx.x, -uTx.y)).rgb + texture(uSrc, vUV + vec2(-uTx.x, uTx.y)).rgb;
+  o = vec4(c / 16.0 * uK, 1.0);
+}`;
+const FS_COMP = `in vec2 vUV; out vec4 o; uniform sampler2D uSrc, uBloom; uniform float uExp, uBloomK, uGrain, uVig, uHasBloom, uSpeed, uHurt, uBW, uPolR, uPolB, uGold; uniform vec2 uRes;
+vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+float h12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+void main() {
+  vec2 q = vUV - 0.5;
+  vec3 c;
+  if (uSpeed > 0.01) {
+    c = vec3(0.0);
+    for (int i = 0; i < 5; i++) { float s = 1.0 - float(i) * uSpeed * 0.01 * smoothstep(0.1, 0.7, length(q) * 1.6); c += texture(uSrc, 0.5 + q * s).rgb; }
+    c *= 0.2;
+  } else {
+    float ca = 0.0012 * length(q);
+    vec2 dir = normalize(q + 1e-5);
+    c = vec3(texture(uSrc, vUV + dir * ca).r, texture(uSrc, vUV).g, texture(uSrc, vUV - dir * ca).b);
+  }
+  if (uHasBloom > 0.5) c += texture(uBloom, vUV).rgb * uBloomK;
+  vec2 qa = q; qa.x *= uRes.x / uRes.y;
+  float e = pow(length(qa), 2.0);
+  c += vec3(1.0, 0.05, 0.05) * uPolR * e * 0.2 + vec3(0.05, 0.15, 1.0) * uPolB * e * 0.2;
+  c *= uExp;
+  c = aces(c);
+  c = pow(c, vec3(1.0 / 2.2));
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(c, vec3(l), uBW);
+  c *= 1.0 - uVig * pow(length(qa) * 1.05, 2.4);
+  c = mix(c, vec3(0.5, 0.02, 0.0), uHurt * 0.45 * smoothstep(0.25, 0.9, length(qa)));
+  c = mix(c, c * vec3(1.2, 1.08, 0.82) + vec3(0.1, 0.07, 0.0), uGold * 0.6);
+  c += (h12(vUV * uRes + uGrain) - 0.5) * 0.03;
+  o = vec4(c, 1.0);
+}`;
+
+// =============================================================================
+//  WebGL の道具
+// =============================================================================
+const cvs = $('gl');
+let gl = null, HDR = false;
+try { gl = cvs.getContext('webgl2', { antialias: false, alpha: false, depth: true, powerPreference: 'high-performance' }); } catch (e) { gl = null; }
+function mkProg(vsrc, fsrc, name, defs = '') {
+  const mk = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, SH_HEAD + defs + src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(`${name} のシェーダー: ${gl.getShaderInfoLog(s)}`);
+    return s;
+  };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vsrc));
+  gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fsrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`${name} のリンク: ${gl.getProgramInfoLog(p)}`);
+  const u = {};
+  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i), key = info.name.replace(/\[0\]$/, ''); u[key] = { loc: gl.getUniformLocation(p, info.name), type: info.type, size: info.size }; }
+  return { p, u, name };
+}
+let curProg = null;
+function use(pr) { if (curProg !== pr) { gl.useProgram(pr.p); curProg = pr; } }
+function setU(pr, vals) {
+  use(pr);
+  for (const k in vals) {
+    const e = pr.u[k];
+    if (!e) continue;
+    const v = vals[k], l = e.loc;
+    switch (e.type) {
+      case gl.FLOAT: e.size > 1 ? gl.uniform1fv(l, v) : gl.uniform1f(l, v); break;
+      case gl.FLOAT_VEC2: gl.uniform2fv(l, v); break;
+      case gl.FLOAT_VEC3: gl.uniform3fv(l, v); break;
+      case gl.FLOAT_VEC4: gl.uniform4fv(l, v); break;
+      case gl.FLOAT_MAT4: gl.uniformMatrix4fv(l, false, v); break;
+      default: gl.uniform1i(l, v);
+    }
+  }
+}
+const VSTRIDE = 13;
+function MB() { return { v: [], idx: [], n: 0 }; }
+function vtx(m, x, y, z, nx, ny, nz, c, mt) { m.v.push(x, y, z, nx, ny, nz, c[0], c[1], c[2], mt[0], mt[1], mt[2], mt[3]); return m.n++; }
+function quad(m, a, b, c, d, n, col, mt, uv) {
+  const i = m.n;
+  const ps = [a, b, c, d];
+  for (let k = 0; k < 4; k++) { const p = ps[k]; vtx(m, p[0], p[1], p[2], n[0], n[1], n[2], col, uv ? [mt[0], mt[1], uv[k][0], uv[k][1]] : mt); }
+  m.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+}
+function quadN(m, a, b, c, d, ctr, col, mt) {
+  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], wx = d[0] - a[0], wy = d[1] - a[1], wz = d[2] - a[2];
+  let nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+  const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+  if ((a[0] - ctr[0]) * nx + (a[1] - ctr[1]) * ny + (a[2] - ctr[2]) * nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+  quad(m, a, b, c, d, [nx, ny, nz], col, mt);
+}
+function box(m, x0, y0, z0, x1, y1, z1, col, mt, o = {}) {
+  if (!o.noTop) quad(m, [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0], o.topCol || col, o.topMt || mt);
+  if (o.bottom) quad(m, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], o.botCol || col, o.botMt || mt);
+  const sm = o.sideMt || mt;
+  quad(m, [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0], col, sm);
+  quad(m, [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0], [-1, 0, 0], col, sm);
+  quad(m, [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1], [0, 0, 1], col, sm);
+  quad(m, [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0], [0, 0, -1], col, sm);
+}
+function cylZ(m, cx, cy, cz, r, hw, seg, col, mt) {
+  // z 軸向きの円柱(車輪)
+  for (let k = 0; k < seg; k++) {
+    const a0 = (k / seg) * TAU, a1 = ((k + 1) / seg) * TAU;
+    const x0 = cx + Math.cos(a0) * r, y0 = cy + Math.sin(a0) * r, x1 = cx + Math.cos(a1) * r, y1 = cy + Math.sin(a1) * r;
+    const am = (a0 + a1) / 2;
+    quad(m, [x0, y0, cz - hw], [x1, y1, cz - hw], [x1, y1, cz + hw], [x0, y0, cz + hw], [Math.cos(am), Math.sin(am), 0], col, mt);
+    for (const s of [-1, 1]) { const i = m.n; vtx(m, cx, cy, cz + s * hw, 0, 0, s, col, mt); vtx(m, x0, y0, cz + s * hw, 0, 0, s, col, mt); vtx(m, x1, y1, cz + s * hw, 0, 0, s, col, mt); m.idx.push(i, i + 1, i + 2); }
+  }
+}
+function cylY(m, r, h, seg, open, cone) {
+  for (let k = 0; k < seg; k++) {
+    const a0 = (k / seg) * TAU, a1 = ((k + 1) / seg) * TAU, am = (a0 + a1) / 2;
+    if (cone) quad(m, [0, 0, 0], [0, 0, 0], [Math.cos(a1) * r, -h, Math.sin(a1) * r], [Math.cos(a0) * r, -h, Math.sin(a0) * r], [Math.cos(am), 0.3, Math.sin(am)], [1, 1, 1], [0, 0, 0, 0]);
+    else quad(m, [Math.cos(a0) * r, 0, Math.sin(a0) * r], [Math.cos(a1) * r, 0, Math.sin(a1) * r], [Math.cos(a1) * r, h, Math.sin(a1) * r], [Math.cos(a0) * r, h, Math.sin(a0) * r], [Math.cos(am), 0, Math.sin(am)], [1, 1, 1], [0, 0, 0, 0]);
+  }
+}
+function upload(m) {
+  if (!m || !m.n) return null;
+  const vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  const vb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(m.v), gl.STATIC_DRAW);
+  const S = VSTRIDE * 4;
+  [[0, 3, 0], [1, 3, 3], [2, 3, 6], [3, 4, 9]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, S, off * 4); });
+  const ib = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(m.idx), gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  return { vao, vb, ib, n: m.idx.length };
+}
+function freeMesh(m) { if (!m) return; gl.deleteVertexArray(m.vao); gl.deleteBuffer(m.vb); gl.deleteBuffer(m.ib); }
+function drawMesh(m) { if (!m) return; gl.bindVertexArray(m.vao); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0); }
+function makeTex(w, h, data, opt = {}) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  if (data instanceof HTMLCanvasElement) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, opt.ifmt || gl.RGBA8, w, h, 0, opt.fmt || gl.RGBA, opt.type || gl.UNSIGNED_BYTE, data);
+  const mip = opt.mip !== false && data;
+  if (mip) gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, opt.wrap === false ? gl.CLAMP_TO_EDGE : gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, opt.wrap === false ? gl.CLAMP_TO_EDGE : gl.REPEAT);
+  return t;
+}
+function noiseData(N) {
+  // 繰り返しのつながる値ノイズ(乱数の種は固定。遊びの乱数を使わない)
+  let s = 12345;
+  const rnd = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
+  const lat = {};
+  const L = (per) => { if (!lat[per]) { const g = new Float32Array(per * per); for (let i = 0; i < g.length; i++) g[i] = rnd(); lat[per] = g; } return lat[per]; };
+  const vn = (u, v, per, off) => {
+    const g = L(per), x = u * per + off, y = v * per + off * 0.7;
+    const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const i0 = ((x0 % per) + per) % per, j0 = ((y0 % per) + per) % per, i1 = (i0 + 1) % per, j1 = (j0 + 1) % per;
+    return lerp(lerp(g[j0 * per + i0], g[j0 * per + i1], sx), lerp(g[j1 * per + i0], g[j1 * per + i1], sx), sy);
+  };
+  const fbm = (u, v, base, oct, off) => { let t = 0, a = 0.5, n = 0; for (let o = 0; o < oct; o++) { t += vn(u, v, base << o, off * (o + 1)) * a; n += a; a *= 0.5; } return t / n; };
+  const d = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = x / N, v = y / N, i = (y * N + x) * 4;
+    d[i] = fbm(u, v, 4, 4, 0) * 255; d[i + 1] = fbm(u, v, 16, 3, 3) * 255; d[i + 2] = fbm(u, v, 8, 3, 7) * 255; d[i + 3] = fbm(u, v, 4, 4, 11) * 255;
+  }
+  return d;
+}
+const SIGN_H = ['BAR', 'HOTEL', '24H', 'CLUB', 'OPEN', 'LIVE', 'GARAGE', 'MOTEL', 'CAFE', 'JAZZ', 'DINER', 'PARKING', 'BOWL', 'NOODLE', 'KARAOKE', 'LOUNGE'];
+const SIGN_V = ['麺処', '酒場', '汐見', '質屋', '薬', '珈琲', '焼肉', 'カラオケ', '宿', '湯', '寿司', '占い', '餃子', '居酒屋', '旅館', '整体'];
+function signAtlas() {
+  const cv = document.createElement('canvas');
+  cv.width = 1024; cv.height = 1024;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, 1024, 1024);
+  x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#fff'; x.strokeStyle = '#fff';
+  x.shadowColor = '#fff';
+  for (let k = 0; k < 16; k++) {
+    const cx = (k % 4) * 256 + 128, cy = Math.floor(k / 4) * 128 + 64, w = SIGN_H[k];
+    x.shadowBlur = 10; x.lineWidth = 5;
+    x.strokeRect(cx - 118, cy - 54, 236, 108);
+    x.font = `900 ${Math.min(76, 330 / w.length)}px "Arial Narrow", Arial, sans-serif`;
+    x.fillText(w, cx, cy + 3);
+  }
+  for (let k = 0; k < 16; k++) {
+    const cx = k * 64 + 32, w = SIGN_V[k], n = w.length, step = Math.min(96, 440 / n);
+    x.shadowBlur = 8; x.lineWidth = 4;
+    x.strokeRect(cx - 28, 520, 56, 496);
+    x.font = `900 ${Math.floor(step * 0.62)}px "Hiragino Sans", "Yu Gothic", sans-serif`;
+    for (let c = 0; c < n; c++) x.fillText(w[c], cx, 768 - ((n - 1) / 2 - c) * step);
+  }
+  return cv;
+}
+
+// =============================================================================
+//  街の形を作る
+// =============================================================================
+const MT = { con: [0, 0, 0, 0], road: [2, 0, 0, 0], walk: [3, 0, 0, 0], grass: [9, 0, 0, 0], rub: [8, 0, 0, 0], paint: [5, 0, 0, 0], glass: [6, 0, 0, 0] };
+const em = (ty, ph = 0) => [4, ty, ph, 0];
+let CH = [], FARM = null, SEAM = null, HWYM = null, sprStatic = null, sprStaticN = 0, STATIC_LIGHTS = [];
+const SODIUM = [1.0, 0.52, 0.18], LED = [0.72, 0.85, 1.0];
+function buildCityMeshes() {
+  for (const c of CH) { freeMesh(c.up); freeMesh(c.lo); freeMesh(c.gr); }
+  CH = [];
+  [FARM, SEAM, HWYM].forEach(freeMesh);
+  const spr = [];
+  const S = (x, y, z, c, s, b = -1) => spr.push(x, y, z, c[0], c[1], c[2], s, b);
+  STATIC_LIGHTS = [];
+  const chunks = new Map();
+  // 2×2 区画ずつにまとめる(描く回数を減らす)
+  const getCh = (x, z) => {
+    const i = Math.floor(Math.floor(x / P + 1) / 2), j = Math.floor(Math.floor(z / P + 1) / 2), k = cellKey(i, j);
+    let c = chunks.get(k);
+    if (!c) { c = { i, j, up: MB(), lo: MB(), gr: MB(), x: (i * 2) * P, z: (j * 2) * P }; chunks.set(k, c); }
+    return c;
+  };
+  // 遠く・軽い画質でも残す大事な形(ビルの箱・光るもの)は、細部を省いた版(lo)にも入れる
+  const both = (x, z, fn) => { const c = getCh(x, z); fn(c.up); fn(c.lo); };
+  // 道(区画ごと)
+  for (let j = -1; j <= NZ; j++) for (let i = -1; i <= NX; i++) {
+    const x0 = Math.max(i * P, -HR), x1 = Math.min((i + 1) * P, MAPX + HR), z0 = Math.max(j * P, -HR), z1 = Math.min((j + 1) * P, MAPZ + HR);
+    if (x1 <= x0 || z1 <= z0) continue;
+    const g = getCh((x0 + x1) / 2, (z0 + z1) / 2).gr;
+    quad(g, [x0, 0, z0], [x0, 0, z1], [x1, 0, z1], [x1, 0, z0], [0, 1, 0], [1, 1, 1], MT.road);
+  }
+  // 歩道のかたまり・公園
+  for (const b of CITY.cells.values()) {
+    const g = getCh((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2).gr;
+    if (b.park) {
+      quad(g, [b.x0, 0.03, b.z0], [b.x0, 0.03, b.z1], [b.x1, 0.03, b.z1], [b.x1, 0.03, b.z0], [0, 1, 0], [1, 1, 1], MT.grass);
+      const u = getCh(b.x0 + 1, b.z0 + 1).up;
+      for (const t of CITY.trees) {
+        box(u, t.x - 0.18, 0, t.z - 0.18, t.x + 0.18, 2.4, t.z + 0.18, [0.09, 0.06, 0.04], MT.con);
+        const r = 1.6 + (t.x * 7.3 % 1) * 0.8;
+        both(b.x0 + 1, b.z0 + 1, (m) => box(m, t.x - r, 2.2, t.z - r, t.x + r, 4.6, t.z + r, [0.03, 0.07, 0.035], MT.con));
+        box(u, t.x - r * 0.6, 4.4, t.z - r * 0.6, t.x + r * 0.6, 5.6, t.z + r * 0.6, [0.035, 0.08, 0.04], MT.con);
+      }
+      for (let k = 0; k < 4; k++) {
+        const lx = lerp(b.x0 + 8, b.x1 - 8, k / 3), lz = (b.z0 + b.z1) / 2 + (k % 2 ? 6 : -6);
+        box(u, lx - 0.08, 0, lz - 0.08, lx + 0.08, 3.2, lz + 0.08, [0.06, 0.06, 0.06], MT.con);
+        both(lx, lz, (m) => box(m, lx - 0.22, 3.2, lz - 0.22, lx + 0.22, 3.6, lz + 0.22, [5, 3.6, 2], em(0)));
+        S(lx, 3.4, lz, [1.0, 0.7, 0.4], 1.6);
+        STATIC_LIGHTS.push({ x: lx, y: 3.4, z: lz, col: [2.2, 1.5, 0.8], r: 11 });
+      }
+      continue;
+    }
+    for (const s of b.solids) box(g, s.x0, 0, s.z0, s.x1, 0.15, s.z1, [0.22, 0.22, 0.22], MT.con, { topMt: MT.walk });
+    if (b.alley) {
+      const a = b.alley, ax = (a.x0 + a.x1) / 2, az = (a.z0 + a.z1) / 2;
+      const u = getCh(ax, az).up;
+      const bx = a.ax === 'x' ? ax : a.x0 + 0.3, bz = a.ax === 'x' ? a.z0 + 0.3 : az;
+      const ph = vr();
+      both(ax, az, (m) => box(m, bx - 0.15, 4.2, bz - 0.15, bx + 0.15, 4.5, bz + 0.15, [4, 2.6, 1.1], em(2, ph)));
+      STATIC_LIGHTS.push({ x: bx, y: 4.2, z: bz, col: [1.6, 1.0, 0.45], r: 11 });
+      S(bx, 4.35, bz, [0.9, 0.6, 0.3], 0.9);
+    }
+  }
+  // 海ぞいの遊歩道と手すり
+  {
+    const z0 = MAPZ + HR, z1 = z0 + 6;
+    for (let x = -120; x < MAPX + 120; x += 62) {
+      const g = getCh(clamp(x + 31, -1, MAPX + 1), MAPZ + 10).gr;
+      box(g, x, 0, z0, x + 62, 0.15, z1, [0.22, 0.22, 0.22], MT.con, { topMt: MT.walk });
+      quad(g, [x, 0.15, z1], [x + 62, 0.15, z1], [x + 62, -2, z1], [x, -2, z1], [0, 0, 1], [0.12, 0.12, 0.13], MT.con);
+      const u = getCh(clamp(x + 31, -1, MAPX + 1), MAPZ + 10).up;
+      box(u, x, 1.0, z1 - 0.35, x + 62, 1.08, z1 - 0.25, [0.35, 0.36, 0.38], MT.con, { bottom: true });
+      // 手すりの柱は、細い柱を1本ずつではなく、すき間のある1枚の板として描く(三角形を減らす)
+      quad(u, [x, 0.15, z1 - 0.3], [x + 62, 0.15, z1 - 0.3], [x + 62, 1.0, z1 - 0.3], [x, 1.0, z1 - 0.3], [0, 0, 1], [0.12, 0.12, 0.13], MT.con);
+      for (let px = x; px < x + 62; px += 7.75) box(u, px - 0.05, 0.15, z1 - 0.35, px + 0.05, 1.0, z1 - 0.25, [0.3, 0.3, 0.32], MT.con, { noTop: true });
+      for (let px = x + 9; px < x + 62; px += 18) {
+        box(u, px - 0.07, 0.15, z1 - 1.2, px + 0.07, 4, z1 - 1.06, [0.07, 0.07, 0.08], MT.con, { noTop: true });
+        const gx = px, gz = z1;
+        both(clamp(x + 31, -1, MAPX + 1), MAPZ + 10, (m) => box(m, gx - 0.25, 4, gz - 1.38, gx + 0.25, 4.45, gz - 0.88, [6, 5.2, 4], em(0)));
+        S(px, 4.22, z1 - 1.13, [1.0, 0.9, 0.75], 2.0);
+      }
+    }
+  }
+  // 街灯
+  const lampPole = (px, pz, hx, hz, col) => {
+    const u = getCh(px, pz).up;
+    box(u, px - 0.1, 0.15, pz - 0.1, px + 0.1, 7.6, pz + 0.1, [0.08, 0.08, 0.09], MT.con, { noTop: true });
+    box(u, Math.min(px, hx) - 0.06, 7.45, Math.min(pz, hz) - 0.06, Math.max(px, hx) + 0.06, 7.6, Math.max(pz, hz) + 0.06, [0.08, 0.08, 0.09], MT.con, { bottom: true });
+    both(px, pz, (m) => box(m, hx - 0.35, 7.2, hz - 0.35, hx + 0.35, 7.42, hz + 0.35, [col[0] * 9, col[1] * 9, col[2] * 9], em(0), { bottom: true, noTop: true }));
+    S(hx, 7.25, hz, col, 3.2);
+  };
+  for (let j = 0; j <= NZ; j++) for (let i = 0; i < NX; i++) {
+    const lx = (i + 0.5) * P;
+    lampPole(lx, j * P - HR - 0.7, lx, j * P - 5.4, SODIUM);
+    lampPole(lx, j * P + HR + 0.7, lx, j * P + 5.4, SODIUM);
+  }
+  for (let i = 0; i <= NX; i++) for (let j = 0; j < NZ; j++) {
+    if (i === HWYI) continue;
+    const lz = (j + 0.5) * P;
+    lampPole(i * P - HR - 0.7, lz, i * P - 5.4, lz, LED);
+    lampPole(i * P + HR + 0.7, lz, i * P + 5.4, lz, LED);
+  }
+  for (let j = 0; j <= NZ; j++) for (let i = 0; i <= NX; i++) {
+    const px = i * P + HR + 0.8, pz = j * P + HR + 0.8;
+    if (j === NZ) continue;
+    const u = getCh(px, pz).up;
+    box(u, px - 0.13, 0.15, pz - 0.13, px + 0.13, 8.9, pz + 0.13, [0.07, 0.07, 0.08], MT.con, { noTop: true });
+    box(u, i * P + 1.2, 8.75, j * P + 1.2, px, 8.9, pz, [0.07, 0.07, 0.08], MT.con, { bottom: true });
+    both(px, pz, (m) => box(m, i * P + 1.1, 8.45, j * P + 1.1, i * P + 1.9, 8.75, j * P + 1.9, [8, 6.5, 5], em(0), { bottom: true, noTop: true }));
+    S(i * P + 1.5, 8.5, j * P + 1.5, [1.0, 0.82, 0.62], 3.4);
+  }
+  // ビル
+  const TONES = [[0.3, 0.29, 0.27], [0.2, 0.22, 0.25], [0.36, 0.33, 0.28], [0.16, 0.16, 0.18], [0.27, 0.24, 0.23]];
+  for (const bd of CITY.buildings) {
+    const cx = (bd.x0 + bd.x1) / 2, cz = (bd.z0 + bd.z1) / 2, u = getCh(cx, cz).up;
+    const col = TONES[Math.floor(bd.tone * TONES.length)];
+    const fm = [1, bd.seed, bd.style, bd.h];
+    both(cx, cz, (m) => box(m, bd.x0, 0.15, bd.z0, bd.x1, bd.h, bd.z1, col, fm, { topCol: [0.06, 0.06, 0.065], topMt: MT.con }));
+    // 屋上
+    box(u, bd.x0, bd.h, bd.z0, bd.x1, bd.h + 0.9, bd.z0 + 0.3, col, MT.con);
+    box(u, bd.x0, bd.h, bd.z1 - 0.3, bd.x1, bd.h + 0.9, bd.z1, col, MT.con);
+    const nr = 1 + Math.floor(bd.seed * 3);
+    for (let k = 0; k < nr; k++) {
+      const w = 1.5 + ((bd.seed * 31 + k * 7.7) % 1) * 3, rx = lerp(bd.x0 + 2, bd.x1 - 2 - w, (bd.seed * 13 + k * 0.37) % 1), rz = lerp(bd.z0 + 2, bd.z1 - 2 - w, (bd.seed * 17 + k * 0.53) % 1);
+      box(u, rx, bd.h, rz, rx + w, bd.h + 1.2 + k, rz + w, [0.1, 0.1, 0.11], MT.con);
+    }
+    if (bd.h > 42) {
+      for (const [ax, az] of [[bd.x0 + 0.4, bd.z0 + 0.4], [bd.x1 - 0.4, bd.z1 - 0.4]]) {
+        box(u, ax - 0.2, bd.h + 0.9, az - 0.2, ax + 0.2, bd.h + 1.3, az + 0.2, [10, 0.4, 0.2], em(1, bd.seed), { noTop: true });
+        S(ax, bd.h + 1.1, az, [1.0, 0.05, 0.02], 3.5, bd.seed);
+      }
+      if (bd.h > 80) { box(u, cx - 0.15, bd.h, cz - 0.15, cx + 0.15, bd.h + 14, cz + 0.15, [0.15, 0.15, 0.15], MT.con); S(cx, bd.h + 14.2, cz, [1.0, 0.05, 0.02], 5, bd.seed + 0.5); }
+    }
+  }
+  // 看板
+  const faceInfo = (bd, f) => {
+    if (f === 'n') return { x: (t) => lerp(bd.x0, bd.x1, t), z: () => bd.z0, nx: 0, nz: -1, tx: 1, tz: 0, len: bd.x1 - bd.x0 };
+    if (f === 's') return { x: (t) => lerp(bd.x1, bd.x0, t), z: () => bd.z1, nx: 0, nz: 1, tx: -1, tz: 0, len: bd.x1 - bd.x0 };
+    if (f === 'w') return { x: () => bd.x0, z: (t) => lerp(bd.z1, bd.z0, t), nx: -1, nz: 0, tx: 0, tz: -1, len: bd.z1 - bd.z0 };
+    return { x: () => bd.x1, z: (t) => lerp(bd.z0, bd.z1, t), nx: 1, nz: 0, tx: 0, tz: 1, len: bd.z1 - bd.z0 };
+  };
+  for (const sg of CITY.signs) {
+    const F = faceInfo(sg.bd, sg.face), bx = F.x(sg.t), bz = F.z(sg.t), u = getCh(bx, bz).up;
+    const c = sg.col;
+    if (sg.kind === 'blade') {
+      if (sg.y + sg.hgt > sg.bd.h - 1) continue;
+      const k = sg.cell, u0 = k / 16, u1 = (k + 1) / 16;
+      const x0 = bx + F.nx * 0.2, z0 = bz + F.nz * 0.2, x1 = bx + F.nx * 1.5, z1 = bz + F.nz * 1.5, y0 = sg.y, y1 = sg.y + sg.hgt;
+      const nn = [F.tx, 0, F.tz];
+      for (const s of [1, -1]) for (const um of [u, getCh(bx, bz).lo]) {
+        const ox = F.tx * 0.06 * s, oz = F.tz * 0.06 * s;
+        quad(um, [x0 + ox, y1, z0 + oz], [x1 + ox, y1, z1 + oz], [x1 + ox, y0, z1 + oz], [x0 + ox, y0, z0 + oz], [nn[0] * s, 0, nn[2] * s], [c[0] * 2.2, c[1] * 2.2, c[2] * 2.2], [7, sg.flick, 0, 0],
+          s > 0 ? [[u0, 0.5], [u1, 0.5], [u1, 1], [u0, 1]] : [[u1, 0.5], [u0, 0.5], [u0, 1], [u1, 1]]);
+      }
+      box(u, Math.min(x0, x1) - 0.04, y1, Math.min(z0, z1) - 0.04, Math.max(x0, x1) + 0.04, y1 + 0.1, Math.max(z0, z1) + 0.04, [0.08, 0.08, 0.08], MT.con);
+      S((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, [c[0] * 0.5, c[1] * 0.5, c[2] * 0.5], sg.hgt * 1.2);
+    } else {
+      const k = sg.cell, u0 = (k % 4) * 0.25, v0 = Math.floor(k / 4) * 0.125;
+      const w = sg.kind === 'board' ? Math.min(14, F.len * 0.7) : Math.min(5.5, F.len * 0.5), hh = sg.kind === 'board' ? w / 2 : sg.hgt;
+      const off = sg.kind === 'board' ? -1.0 : 0.12;
+      const cxp = bx + F.nx * off, czp = bz + F.nz * off, y0 = sg.y, y1 = sg.y + hh;
+      const ax = F.tx * w / 2, az = F.tz * w / 2;
+      for (const um of [u, getCh(bx, bz).lo]) quad(um, [cxp - ax, y1, czp - az], [cxp + ax, y1, czp + az], [cxp + ax, y0, czp + az], [cxp - ax, y0, czp - az], [F.nx, 0, F.nz], [c[0] * 2, c[1] * 2, c[2] * 2], [7, sg.flick, 0, 0],
+        [[u0, v0], [u0 + 0.25, v0], [u0 + 0.25, v0 + 0.125], [u0, v0 + 0.125]]);
+      if (sg.kind === 'board') {
+        box(u, cxp - ax - F.nx * 0.3, y0 - 0.2, czp - az - F.nz * 0.3, cxp + ax - F.nx * 0.1, y0, czp + az - F.nz * 0.1, [0.06, 0.06, 0.06], MT.con);
+        box(u, cxp - F.nx * 0.5 - 0.15, sg.bd.h, czp - F.nz * 0.5 - 0.15, cxp - F.nx * 0.5 + 0.15, y0, czp - F.nz * 0.5 + 0.15, [0.06, 0.06, 0.06], MT.con);
+      }
+      S(cxp + F.nx * 0.5, (y0 + y1) / 2, czp + F.nz * 0.5, [c[0] * 0.4, c[1] * 0.4, c[2] * 0.4], w * 0.9);
+    }
+  }
+  // 自動販売機(白い光)
+  for (const bd of CITY.buildings) {
+    if (!bd.shop || bd.blk.outer || bd.seed < 0.45) continue;
+    const faces = [];
+    if (Math.abs(bd.z0 - bd.blk.z0 - 2.6) < 0.1) faces.push('n');
+    if (Math.abs(bd.blk.z1 - bd.z1 - 2.6) < 0.1) faces.push('s');
+    if (!faces.length) continue;
+    const F = faceInfo(bd, faces[0]), t = 0.15 + ((bd.seed * 77) % 1) * 0.7, x = F.x(t), z = F.z(t), u = getCh(x, z).up;
+    for (let k = 0; k < 2; k++) {
+      const ox = x + F.tx * k * 1.05, oz = z + F.tz * k * 1.05;
+      const fx = ox + F.nx * 0.75, fz = oz + F.nz * 0.75;
+      box(u, Math.min(ox, fx) - Math.abs(F.tx) * 0.5, 0.15, Math.min(oz, fz) - Math.abs(F.tz) * 0.5, Math.max(ox, fx) + Math.abs(F.tx) * 0.5, 2.0, Math.max(oz, fz) + Math.abs(F.tz) * 0.5, [0.7, 0.7, 0.72], MT.con);
+      const px = fx + F.nx * 0.01, pz = fz + F.nz * 0.01, hx = F.tx * 0.42, hz = F.tz * 0.42;
+      for (const um of [u, getCh(x, z).lo]) quad(um, [px - hx, 1.85, pz - hz], [px + hx, 1.85, pz + hz], [px + hx, 0.4, pz + hz], [px - hx, 0.4, pz - hz], [F.nx, 0, F.nz], k ? [1.6, 1.9, 2.4] : [2.3, 1.7, 1.4], em(0));
+      S(px + F.nx * 0.3, 1.2, pz + F.nz * 0.3, [0.5, 0.6, 0.75], 2.2);
+    }
+    STATIC_LIGHTS.push({ x: x + F.nx * 1.4, y: 1.4, z: z + F.nz * 1.4, col: [1.0, 1.15, 1.4], r: 7 });
+  }
+  // 隠れ家のシャッター
+  {
+    const H = CITY.hideout, u = getCh(H.dx, H.dz).up;
+    const tx = H.nz !== 0 ? 1 : 0, tz = H.nx !== 0 ? 1 : 0;
+    const px = H.dx + H.nx * 0.08, pz = H.dz + H.nz * 0.08;
+    quad(u, [px - tx * 3.2, 4.4, pz - tz * 3.2], [px + tx * 3.2, 4.4, pz + tz * 3.2], [px + tx * 3.2, 0.15, pz + tz * 3.2], [px - tx * 3.2, 0.15, pz - tz * 3.2], [H.nx, 0, H.nz], [0.34, 0.33, 0.32], MT.con);
+    quad(u, [px - tx * 3.4 + H.nx * 0.05, 4.9, pz - tz * 3.4 + H.nz * 0.05], [px + tx * 3.4 + H.nx * 0.05, 4.9, pz + tz * 3.4 + H.nz * 0.05], [px + tx * 3.4 + H.nx * 0.05, 4.55, pz + tz * 3.4 + H.nz * 0.05], [px - tx * 3.4 + H.nx * 0.05, 4.55, pz - tz * 3.4 + H.nz * 0.05], [H.nx, 0, H.nz], [7, 3.2, 0.8], em(0));
+    S(px + H.nx * 0.4, 4.7, pz + H.nz * 0.4, [1.0, 0.5, 0.12], 5);
+    STATIC_LIGHTS.push({ x: px + H.nx * 2.5, y: 4.2, z: pz + H.nz * 2.5, col: [3.2, 1.6, 0.4], r: 13, hide: true });
+  }
+  // 高架
+  {
+    const m = MB(), x0 = HWY_X - HWY_HW, x1 = HWY_X + HWY_HW, zA = -HR - 260, zB = MAPZ + 1200;
+    box(m, x0, 9.2, zA, x1, 10.4, zB, [0.2, 0.2, 0.21], MT.con, { bottom: true, botCol: [0.13, 0.13, 0.14] });
+    box(m, x0, 10.4, zA, x0 + 0.35, 11.3, zB, [0.25, 0.25, 0.26], MT.con);
+    box(m, x1 - 0.35, 10.4, zA, x1, 11.3, zB, [0.25, 0.25, 0.26], MT.con);
+    const pz = CITY.pillars.map((p) => p.z);
+    for (let z = MAPZ + 40; z < zB; z += 46) pz.push(z);
+    for (let z = -HR - 40; z > zA; z -= 46) pz.push(z);
+    for (const z of pz) box(m, HWY_X - 0.85, -2, z - 0.85, HWY_X + 0.85, 9.2, z + 0.85, [0.24, 0.24, 0.25], MT.con);
+    for (let z = zA + 7; z < zB; z += 15) { if (z > -HR && z < MAPZ + HR) box(m, HWY_X - 1.6, 9.1, z - 0.15, HWY_X + 1.6, 9.2, z + 0.15, [1.4, 1.9, 2.6], em(0)); }
+    for (let z = zA; z < zB; z += 32) {
+      const sx = ((z / 32) | 0) % 2 ? x0 + 0.2 : x1 - 0.2;
+      box(m, sx - 0.08, 10.4, z - 0.08, sx + 0.08, 15.5, z + 0.08, [0.08, 0.08, 0.09], MT.con);
+      S(sx + (sx < HWY_X ? 1.5 : -1.5), 15.3, z, SODIUM, 3.4);
+    }
+    HWYM = upload(m);
+  }
+  // 遠くの街(北・西・東)
+  {
+    const m = MB();
+    let s = 99;
+    const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const ring = (x0, x1, z0, z1) => {
+      for (let k = 0; k < 26; k++) {
+        const w = 14 + rnd() * 26, d = 14 + rnd() * 26, x = lerp(x0, x1, rnd()), z = lerp(z0, z1, rnd()), h = 25 + rnd() * 70;
+        box(m, x, 0, z, x + w, h, z + d, TONES[k % TONES.length], [1, rnd(), rnd() < 0.3 ? 2 : 1, h], { topCol: [0.05, 0.05, 0.05], topMt: MT.con });
+        if (h > 60) S(x + w / 2, h + 1, z + d / 2, [1, 0.05, 0.02], 6, rnd());
+      }
+    };
+    ring(-260, MAPX + 220, -300, -90);
+    ring(-300, -100, -100, MAPZ);
+    ring(MAPX + 80, MAPX + 280, -100, MAPZ);
+    quad(m, [-2000, -0.06, -2000], [-2000, -0.06, MAPZ + HR + 6], [2400, -0.06, MAPZ + HR + 6], [2400, -0.06, -2000], [0, 1, 0], [0.025, 0.025, 0.027], MT.con);
+    FARM = upload(m);
+  }
+  // 海
+  { const m = MB(); quad(m, [-2400, -0.8, MAPZ + HR + 5.5], [-2400, -0.8, 3200], [2800, -0.8, 3200], [2800, -0.8, MAPZ + HR + 5.5], [0, 1, 0], [1, 1, 1], MT.con); SEAM = upload(m); }
+  for (const c of chunks.values()) { CH.push({ i: c.i, j: c.j, x: c.x, z: c.z, up: upload(c.up), lo: upload(c.lo), gr: upload(c.gr) }); }
+  // 灯の粒(動かないもの)
+  if (sprStatic) gl.deleteBuffer(sprStatic);
+  sprStatic = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, sprStatic);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(spr), gl.STATIC_DRAW);
+  sprStaticN = spr.length / 8;
+}
+
+// =============================================================================
+//  車・人・ヘリの形
+// =============================================================================
+function buildCar(type, lo) {
+  const T = TYPES[type], m = MB(), L = T.len, W = T.wid, H = T.hgt;
+  const W1 = [1, 1, 1], DK = [0.025, 0.025, 0.028];
+  const y0 = lo ? 0.1 : 0.3, tall = type === 'van' || type === 'armored';
+  const belt = tall ? H * 0.5 : type === 'sports' ? H * 0.62 : H * 0.6;
+  box(m, -L / 2, y0, -W / 2, L / 2, belt, W / 2, W1, MT.paint, { bottom: !lo, botCol: DK, botMt: MT.con });
+  if (!lo) {
+    box(m, L / 2 - 0.05, y0 - 0.06, -W / 2 + 0.04, L / 2 + 0.08, y0 + 0.28, W / 2 - 0.04, DK, MT.con);
+    box(m, -L / 2 - 0.08, y0 - 0.06, -W / 2 + 0.04, -L / 2 + 0.05, y0 + 0.28, W / 2 - 0.04, DK, MT.con);
+  }
+  const ctr = [0, (belt + H) / 2, 0];
+  let cf, cb, wsf, rs;
+  if (type === 'van') { cf = L * 0.3; cb = -L / 2 + 0.05; wsf = 0.55; rs = 0; }
+  else if (type === 'armored') { cf = L * 0.33; cb = L * 0.05; wsf = 0.4; rs = 0; }
+  else if (type === 'sports') { cf = L * 0.02; cb = -L * 0.26; wsf = 0.9; rs = 0.7; }
+  else { cf = L * 0.1; cb = -L * 0.3; wsf = 0.65; rs = 0.45; }
+  const wb = W / 2 - 0.05, wt = W / 2 - 0.2;
+  const xbf = cf + wsf, xbr = cb - rs;
+  quadN(m, [xbf, belt, -wb], [xbf, belt, wb], [cf, H, wt], [cf, H, -wt], ctr, W1, MT.glass);
+  quadN(m, [xbr, belt, -wb], [xbr, belt, wb], [cb, H, wt], [cb, H, -wt], ctr, W1, rs > 0 ? MT.glass : MT.paint);
+  quadN(m, [xbr, belt, -wb], [xbf, belt, -wb], [cf, H, -wt], [cb, H, -wt], ctr, W1, MT.glass);
+  quadN(m, [xbr, belt, wb], [xbf, belt, wb], [cf, H, wt], [cb, H, wt], ctr, W1, MT.glass);
+  quad(m, [cb, H, -wt], [cf, H, -wt], [cf, H, wt], [cb, H, wt], [0, 1, 0], W1, MT.paint);
+  if (type === 'armored') {
+    box(m, -L / 2, belt, -W / 2, cb, H, W / 2, W1, MT.paint);
+    box(m, -L / 2 + 0.3, belt + 0.2, -W / 2 - 0.01, cb - 0.3, belt + 0.45, W / 2 + 0.01, [0.6, 0.45, 0.05], MT.con, { noTop: true });
+  }
+  if (type === 'van') box(m, cb + 0.4, belt + 0.05, -W / 2 - 0.01, cf - 0.1, belt + 0.06, W / 2 + 0.01, DK, MT.con, { noTop: true });
+  if (!lo) for (const sx of [L / 2 - 0.85, -L / 2 + 0.85]) for (const sz of [-W / 2 + 0.13, W / 2 - 0.13]) cylZ(m, sx, 0.34, sz, 0.34, 0.13, 8, DK, MT.rub);
+  if (!lo) for (const s of [-1, 1]) {
+    const zc = s * (W / 2 - 0.36);
+    quad(m, [L / 2 + 0.085, y0 + 0.5, zc - 0.22], [L / 2 + 0.085, y0 + 0.5, zc + 0.22], [L / 2 + 0.085, y0 + 0.34, zc + 0.22], [L / 2 + 0.085, y0 + 0.34, zc - 0.22], [1, 0, 0], [9, 8.4, 7], em(5));
+    quad(m, [-L / 2 - 0.085, y0 + 0.52, zc - 0.25], [-L / 2 - 0.085, y0 + 0.52, zc + 0.25], [-L / 2 - 0.085, y0 + 0.36, zc + 0.25], [-L / 2 - 0.085, y0 + 0.36, zc - 0.25], [-1, 0, 0], [6, 0.25, 0.12], em(4));
+    quad(m, [L / 2 + 0.086, y0 + 0.3, s * (W / 2 - 0.08)], [L / 2 + 0.086, y0 + 0.3, s * (W / 2 - 0.2)], [L / 2 + 0.086, y0 + 0.22, s * (W / 2 - 0.2)], [L / 2 + 0.086, y0 + 0.22, s * (W / 2 - 0.08)], [1, 0, 0], [5, 2.4, 0.3], em(6));
+  }
+  if (type === 'police') {
+    box(m, -0.32, H, -0.72, 0.32, H + 0.17, -0.02, [14, 0.5, 0.35], [4, 3, 0, 0]);
+    box(m, -0.32, H, 0.02, 0.32, H + 0.17, 0.72, [0.5, 1.3, 16], [4, 3, 1, 0]);
+    for (const s of [-1, 1]) quad(m, [-1.0, belt - 0.05, s * (W / 2 + 0.005)], [1.0, belt - 0.05, s * (W / 2 + 0.005)], [1.0, y0 + 0.15, s * (W / 2 + 0.005)], [-1.0, y0 + 0.15, s * (W / 2 + 0.005)], [0, 0, s], [0.8, 0.8, 0.8], MT.con);
+    quad(m, [cb - 0.1, H + 0.001, -wt + 0.1], [cf + 0.1, H + 0.001, -wt + 0.1], [cf + 0.1, H + 0.001, wt - 0.1], [cb - 0.1, H + 0.001, wt - 0.1], [0, 1, 0], [0.8, 0.8, 0.8], MT.con);
+  }
+  if (type === 'taxi') box(m, -0.35, H, -0.22, 0.25, H + 0.24, 0.22, [5, 3, 0.7], [4, 7, 0, 0]);
+  return upload(m);
+}
+function buildFigure(stride) {
+  const m = MB(), c = [0.05, 0.05, 0.055];
+  const a = stride ? 0.28 : 0.06;
+  box(m, -0.13 + a * 0.5, 0, -0.17, 0.13 + a * 0.5, 0.9, -0.03, c, MT.con);
+  box(m, -0.13 - a * 0.5, 0, 0.03, 0.13 - a * 0.5, 0.9, 0.17, c, MT.con);
+  box(m, -0.14, 0.88, -0.22, 0.14, 1.5, 0.22, [0.07, 0.07, 0.08], MT.con);
+  box(m, -0.1 - a * 0.4, 0.9, -0.3, 0.1 - a * 0.4, 1.45, -0.22, c, MT.con);
+  box(m, -0.1 + a * 0.4, 0.9, 0.22, 0.1 + a * 0.4, 1.45, 0.3, c, MT.con);
+  box(m, -0.11, 1.52, -0.1, 0.11, 1.78, 0.1, [0.09, 0.07, 0.06], MT.con);
+  return upload(m);
+}
+function buildHeli() {
+  const m = MB(), c = [0.08, 0.09, 0.1];
+  box(m, -1.6, -0.9, -0.9, 1.4, 0.7, 0.9, c, MT.paint, { bottom: true });
+  quadN(m, [1.4, -0.9, -0.85], [1.4, -0.9, 0.85], [2.3, -0.3, 0.6], [2.3, -0.3, -0.6], [0, 0, 0], [1, 1, 1], MT.glass);
+  box(m, -6, 0.0, -0.18, -1.6, 0.4, 0.18, c, MT.paint, { bottom: true });
+  box(m, -6.2, 0.0, -0.08, -5.6, 1.5, 0.08, c, MT.paint);
+  box(m, -1.2, -1.35, -1.0, 1.2, -1.28, -0.92, [0.05, 0.05, 0.05], MT.con);
+  box(m, -1.2, -1.35, 0.92, 1.2, -1.28, 1.0, [0.05, 0.05, 0.05], MT.con);
+  box(m, -0.2, 0.7, -0.2, 0.2, 1.05, 0.2, c, MT.con);
+  return upload(m);
+}
+function buildRotor() { const m = MB(); box(m, -5.5, 0, -0.16, 5.5, 0.06, 0.16, [0.04, 0.04, 0.04], MT.con, { bottom: true }); box(m, -0.16, 0, -5.5, 0.16, 0.06, 5.5, [0.04, 0.04, 0.04], MT.con, { bottom: true }); return upload(m); }
+
+// =============================================================================
+//  描画の準備
+// =============================================================================
+const QSTEPS = [1, 0.85, 0.72, 0.6, 0.5, 0.42, 0.35, 0.28, 0.22];
+const REFL = [0.5, 0.5, 0.42, 0.36, 0.32, 0, 0, 0, 0];
+const NLQ = [16, 16, 14, 12, 10, 8, 6, 5, 4];
+const FARQ = [640, 640, 560, 500, 440, 380, 320, 260, 230];
+const CARQ = [300, 300, 260, 220, 190, 160, 130, 110, 95];
+let quality = 0, cssW = 1, cssH = 1, rw = 1, rh = 1;
+const RT = { scene: null, refl: null, bloom: [] };
+let progs = {}, CARM = {}, FIG = [], HELIM = null, ROTORM = null, BEAMM = null, RINGM = null, CONEM = null, fullVao = null, blobVao = null;
+let noiseTex = null, signTex = null, sprDyn = null, sprVao = null, sprDynVao = null, partBuf = null, partVao = null;
+const fmt = () => (HDR ? { ifmt: gl.RGBA16F, type: gl.HALF_FLOAT } : { ifmt: gl.RGBA8, type: gl.UNSIGNED_BYTE });
+function mkTarget(w, h, depth) {
+  const f = fmt();
+  const tex = makeTex(w, h, null, { ifmt: f.ifmt, type: f.type, wrap: false, mip: false });
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let rb = null;
+  if (depth) { rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fb, tex, rb, w, h };
+}
+function freeTarget(t) { if (!t) return; gl.deleteFramebuffer(t.fb); gl.deleteTexture(t.tex); if (t.rb) gl.deleteRenderbuffer(t.rb); }
+const bloomLevels = () => [6, 6, 5, 5, 4, 4, 3, 3, 3][quality];
+function resize() {
+  cssW = Math.max(1, innerWidth); cssH = Math.max(1, innerHeight);
+  const dpr = Math.min(devicePixelRatio || 1, isTouch ? 1.75 : 2);
+  rw = Math.max(64, Math.round(cssW * dpr * QSTEPS[quality]));
+  rh = Math.max(64, Math.round(cssH * dpr * QSTEPS[quality]));
+  if (!gl) return;
+  cvs.width = rw; cvs.height = rh;
+  freeTarget(RT.scene); RT.scene = mkTarget(rw, rh, true);
+  freeTarget(RT.refl); RT.refl = REFL[quality] > 0 ? mkTarget(Math.max(32, Math.round(rw * REFL[quality])), Math.max(32, Math.round(rh * REFL[quality])), true) : null;
+  RT.bloom.forEach(freeTarget); RT.bloom = [];
+  let w = rw, h = rh;
+  for (let i = 0; i < bloomLevels(); i++) { w = Math.max(2, w >> 1); h = Math.max(2, h >> 1); RT.bloom.push(mkTarget(w, h, false)); }
+}
+function initGL() {
+  if (gl.getExtension('EXT_color_buffer_float')) HDR = true;
+  gl.getExtension('OES_texture_float_linear');
+  progs = {
+    sky: mkProg(VS_SKY, FS_SKY, '空'), worldHi: mkProg(VS_WORLD, FS_WORLD, '街'), worldLo: mkProg(VS_WORLD, FS_WORLD, '街(軽い)', '#define LOWQ 1\n'), water: mkProg(VS_WORLD, FS_WATER, '海'),
+    spr: mkProg(VS_SPR, FS_SPR, '灯'), part: mkProg(VS_PART, FS_PART, '粒'), beam: mkProg(VS_WORLD, FS_BEAM, '光の柱'), blob: mkProg(VS_BLOB, FS_BLOB, '影'),
+    down: mkProg(VS_FULL, FS_DOWN, 'にじみ(縮小)'), up: mkProg(VS_FULL, FS_UP, 'にじみ(拡大)'), comp: mkProg(VS_FULL, FS_COMP, '仕上げ'),
+  };
+  setU(progs.worldHi, { uNoise: 0, uSign: 1, uRefl: 2 });
+  setU(progs.worldLo, { uNoise: 0, uSign: 1, uRefl: 2 });
+  progs.world = progs.worldHi;
+  setU(progs.water, { uNoise: 0, uRefl: 2 });
+  setU(progs.sky, { uNoise: 0 });
+  setU(progs.down, { uSrc: 4 }); setU(progs.up, { uSrc: 4 }); setU(progs.comp, { uSrc: 4, uBloom: 5 });
+  noiseTex = makeTex(128, 128, noiseData(128));
+  signTex = makeTex(1024, 1024, signAtlas());
+  fullVao = gl.createVertexArray(); gl.bindVertexArray(fullVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  blobVao = gl.createVertexArray(); gl.bindVertexArray(blobVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  const sprAttr = () => { const S = 32; gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, S, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, S, 12); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, S, 24); gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, S, 28); };
+  sprDyn = gl.createBuffer();
+  sprDynVao = gl.createVertexArray(); gl.bindVertexArray(sprDynVao); gl.bindBuffer(gl.ARRAY_BUFFER, sprDyn); gl.bufferData(gl.ARRAY_BUFFER, 4096 * 32, gl.DYNAMIC_DRAW); sprAttr();
+  partBuf = gl.createBuffer();
+  partVao = gl.createVertexArray(); gl.bindVertexArray(partVao); gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferData(gl.ARRAY_BUFFER, PMAX * 32, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 32, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 12); gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 32, 28);
+  gl.bindVertexArray(null);
+  initGL.sprAttr = sprAttr;
+  for (const t of Object.keys(TYPES)) { CARM[t] = buildCar(t, false); CARM[t + '_lo'] = buildCar(t, true); }
+  FIG = [buildFigure(false), buildFigure(true)];
+  HELIM = buildHeli(); ROTORM = buildRotor();
+  { const m = MB(); cylY(m, 1, 1, 14, true, false); BEAMM = upload(m); }
+  { const m = MB(); const n = 24; for (let k = 0; k < n; k++) { const a0 = k / n * TAU, a1 = (k + 1) / n * TAU; const i = m.n; vtx(m, 0, 0, 0, 0, 1, 0, [1, 1, 1], [0, 0, 0, 0]); vtx(m, Math.cos(a0), 0, Math.sin(a0), 0, 1, 0, [1, 1, 1], [0, 0, 0, 0]); vtx(m, Math.cos(a1), 0, Math.sin(a1), 0, 1, 0, [1, 1, 1], [0, 0, 0, 0]); m.idx.push(i, i + 1, i + 2); } RINGM = upload(m); }
+  { const m = MB(); cylY(m, 1, 1, 16, true, true); CONEM = upload(m); }
+  resize();
+}
+function bindTex(unit, tex) { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); }
+function fullscreen() { gl.bindVertexArray(fullVao); gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+// =============================================================================
+//  カメラ
+// =============================================================================
+const cam = { x: 0, y: 30, z: 0, tx: 0, ty: 0, tz: 0, yaw: 0, fov: 1.1, snap: true, orbit: 0 };
+let VIEW = M4.id(), PROJ = M4.id(), VP = M4.id(), VPM = M4.id(), INVVP = M4.id(), INVVPM = M4.id();
+function camFocus() { if (!G || !G.car) return null; return G.jack ? G.jack.to : G.car; }
+function updCam(dt) {
+  const port = cssH > cssW;
+  let ex, ey, ez, tx, ty, tz, fov;
+  if (gstate === 'title' || !G) {
+    cam.orbit += dt * 0.045;
+    const H = CITY.hideout, r = 150;
+    tx = H.x; ty = 8; tz = H.z;
+    ex = tx + Math.cos(cam.orbit) * r; ez = tz + Math.sin(cam.orbit) * r * 0.8; ey = 70;
+    fov = port ? 1.25 : 0.95;
+    cam.snap = true;
+  } else {
+    const c = camFocus();
+    const v = spd(c), fv = fwdSpd(c);
+    let want = c.h;
+    if (v > 3 && fv > 0) want = c.h + clamp(angDiff(c.h, Math.atan2(c.vz, c.vx)), -0.7, 0.7) * 0.55;
+    if (gstate === 'over' || gstate === 'result') { cam.orbit += dt * 0.35; want = c.h + cam.orbit; }
+    if (cam.snap) { cam.yaw = want; }
+    cam.yaw += angDiff(cam.yaw, want) * Math.min(1, dt * (gstate === 'play' ? 4.2 : 1.5));
+    const d = (port ? 10.5 : 7.4) + v * 0.06 + (gstate !== 'play' ? 6 : 0), hgt = (port ? 4.2 : 2.7) + v * 0.025 + (gstate !== 'play' ? 3 : 0);
+    let px = c.x - Math.cos(cam.yaw) * d, pz = c.z - Math.sin(cam.yaw) * d;
+    let k = 1;
+    for (let s = 0; s < 8 && isSolid(c.x + (px - c.x) * k, c.z + (pz - c.z) * k, 0.5); s++) k *= 0.78;
+    px = c.x + (px - c.x) * k; pz = c.z + (pz - c.z) * k;
+    const py = c.y + hgt * (0.55 + 0.45 * k);
+    if (cam.snap) { cam.x = px; cam.y = py; cam.z = pz; cam.snap = false; }
+    const a = 1 - Math.exp(-dt * 11);
+    cam.x += (px - cam.x) * a; cam.y += (py - cam.y) * a; cam.z += (pz - cam.z) * a;
+    ex = cam.x; ey = cam.y; ez = cam.z;
+    tx = c.x + Math.cos(c.h) * 3.5; ty = c.y + 1.3; tz = c.z + Math.sin(c.h) * 3.5;
+    fov = (port ? 1.2 : 1.0) + Math.min(0.42, v * 0.0085);
+    const sh = G.fx.shake * 0.22;
+    if (sh > 0) { ex += (vr() - 0.5) * sh; ey += (vr() - 0.5) * sh; ez += (vr() - 0.5) * sh; }
+  }
+  if (gstate === 'title' || !G) { cam.x = ex; cam.y = ey; cam.z = ez; }
+  cam.fov += (fov - cam.fov) * Math.min(1, dt * 3);
+  cam.tx = tx; cam.ty = ty; cam.tz = tz;
+  CAM_T.x = ex; CAM_T.z = ez;
+  VIEW = M4.look([ex, ey, ez], [tx, ty, tz], [0, 1, 0]);
+  PROJ = M4.persp(cam.fov, cssW / cssH, 0.3, 2600);
+  VP = M4.mul(PROJ, VIEW);
+  const S = M4.id(); S[5] = -1;
+  VPM = M4.mul(VP, S);
+  INVVP = M4.inv(VP); INVVPM = M4.inv(VPM);
+  cam.ex = ex; cam.ey = ey; cam.ez = ez;
+  cam.fx = tx - ex; cam.fz = tz - ez; const fl = Math.hypot(cam.fx, cam.fz) || 1; cam.fx /= fl; cam.fz /= fl;
+}
+
+// =============================================================================
+//  灯の選びかたと描画
+// =============================================================================
+const LBUF = new Float32Array(64), LCBUF = new Float32Array(64);
+let nLights = 0;
+function pickLights() {
+  const cand = [];
+  const add = (x, y, z, col, r, w = 1) => { const d = Math.hypot(x - cam.ex, z - cam.ez); if (d > 170 + r) return; cand.push({ x, y, z, col, r, s: d / w }); };
+  if (G) {
+    for (const c of G.cars) {
+      if (c.role === 'police' && c.hp > 0 && c.ai.mode !== 'patrol') {
+        const ph = (G.t * 1.9 + c.sirenPh) % 1;
+        add(c.x, 2.2, c.z, ph < 0.5 ? [14, 0.6, 0.4] : [0.6, 1.4, 16], 22, 2.5);
+      }
+      if (c.burning || (c.exploded && c.exT < 8)) { const f = 0.7 + 0.3 * Math.sin(G.t * 23 + c.id); add(c.x, 1.8, c.z, [9 * f, 3.6 * f, 0.8 * f], 15, 2); }
+    }
+    for (const f of G.flashes) add(f.x, f.y, f.z, f.col.map((v) => v * (f.t / f.max)), f.r, 6);
+    const J = G.jobs;
+    for (const o of J.offers) add(o.x, 2.5, o.z, o.kind === 'heist' ? [3, 0.3, 0.25] : [0.3, 1.8, 2.6], 13, 0.7);
+    if (J.active && J.active.kind === 'deliver') add(J.active.tx, 2.5, J.active.tz, [0.3, 2.0, 3.0], 14, 1.2);
+    if (J.active && J.active.bag) add(J.active.bag.x, 1.5, J.active.bag.z, [0.5, 3, 1.0], 10, 1.5);
+    // 近くの車の前照灯(道を照らす)
+    const near = G.cars.filter((c) => c !== G.car && c.role !== 'parked' && c.hp > 0 && !c.exploded).map((c) => [c, Math.hypot(c.x - cam.ex, c.z - cam.ez)]).sort((a, b) => a[1] - b[1]).slice(0, 4);
+    for (const [c] of near) add(c.x + Math.cos(c.h) * 5.5, 0.9, c.z + Math.sin(c.h) * 5.5, [2.4, 2.1, 1.7], 11, 0.8);
+  }
+  for (const s of STATIC_LIGHTS) add(s.x, s.y, s.z, s.col, s.r, s.hide ? 1.5 : 0.6);
+  cand.sort((a, b) => a.s - b.s);
+  nLights = Math.min(cand.length, NLQ[quality]);
+  for (let i = 0; i < nLights; i++) {
+    const c = cand[i];
+    LBUF.set([c.x, c.y, c.z, c.r], i * 4); LCBUF.set([c.col[0], c.col[1], c.col[2], 0], i * 4);
+  }
+}
+const SPRD = new Float32Array(4096 * 8);
+function packDynSprites() {
+  let n = 0;
+  const S = (x, y, z, c, s) => { if (n >= 4096) return; SPRD.set([x, y, z, c[0], c[1], c[2], s, -1], n * 8); n++; };
+  if (G) {
+    for (const c of G.cars) {
+      if (c.exploded) continue;
+      const fx = Math.cos(c.h), fz = Math.sin(c.h), rx = -fz, rz = fx, L = c.T.len / 2, W = c.T.wid / 2 - 0.36;
+      const lit = c.role !== 'parked' && c.hp > 0;
+      if (lit) for (const s of [-1, 1]) S(c.x + fx * (L + 0.15) + rx * W * s, c.y + 0.72, c.z + fz * (L + 0.15) + rz * W * s, [1.0, 0.92, 0.8], 1.3);
+      if (lit) { const b = c.brk > 0.1 ? 1.0 : 0.35; for (const s of [-1, 1]) S(c.x - fx * (L + 0.12) + rx * W * s, c.y + 0.74, c.z - fz * (L + 0.12) + rz * W * s, [1.0 * b, 0.05 * b, 0.02 * b], 0.8 + b * 0.4); }
+      if (c.role === 'police' && c.hp > 0 && c.ai.mode !== 'patrol') {
+        const ph = (G.t * 1.9 + c.sirenPh) % 1, st = (G.t * 11.4 + c.sirenPh * 6) % 1 < 0.5 ? 1 : 0.55;
+        const hy = c.y + c.T.hgt + 0.1;
+        S(c.x + rx * 0.4, hy, c.z + rz * 0.4, ph < 0.5 ? [0.05 * st, 0.15 * st, 2.2 * st] : [0.02, 0.05, 0.4], 3.2);
+        S(c.x - rx * 0.4, hy, c.z - rz * 0.4, ph >= 0.5 ? [2.2 * st, 0.05 * st, 0.03 * st] : [0.4, 0.02, 0.01], 3.2);
+      }
+      if (c.ai.dazed > 0 && c.role !== 'parked' && c.hp > 0 && (G.t * 1.6) % 1 < 0.5) for (const s of [-1, 1]) S(c.x + fx * (L + 0.1) + rx * (c.T.wid / 2 - 0.12) * s, c.y + 0.55, c.z + fz * (L + 0.1) + rz * (c.T.wid / 2 - 0.12) * s, [1.0, 0.45, 0.05], 0.9);
+    }
+    if (G.heli) {
+      const H = G.heli, bl = (G.t * 1.3) % 1 < 0.15;
+      S(H.x, H.y - 1.4, H.z, bl ? [3, 0.1, 0.05] : [0.2, 0, 0], 1.5);
+      S(H.x - Math.cos(H.h) * 6, H.y + 1.4, H.z - Math.sin(H.h) * 6, bl ? [3, 3, 3] : [0.1, 0.1, 0.1], 1.2);
+      S(H.x + Math.cos(H.h) * 2, H.y - 1.2, H.z + Math.sin(H.h) * 2, [3, 3.2, 3.5], 3.5);
+    }
+    if (G.jobs.active && G.jobs.active.bag) { const b = G.jobs.active.bag; S(b.x, 0.8 + Math.sin(G.t * 4) * 0.2, b.z, [0.4, 2.4, 0.9], 2.2); }
+  }
+  // 高架の上を走る車の灯
+  const t = G ? G.t : performance.now() / 1000;
+  for (let k = 0; k < 26; k++) {
+    const dir = k % 2 ? 1 : -1, sp = 24 + (k % 5) * 2.5;
+    const span = MAPZ + 1460, z = -HR - 260 + (((t * sp * dir + k * 97.3) % span) + span) % span;
+    const x = HWY_X + (dir > 0 ? 2.2 : -2.2);
+    if (dir > 0) { S(x - 0.7, 11, z, [1.0, 0.9, 0.75], 1.4); S(x + 0.7, 11, z, [1.0, 0.9, 0.75], 1.4); }
+    else { S(x - 0.7, 11, z, [1.0, 0.04, 0.02], 1.0); S(x + 0.7, 11, z, [1.0, 0.04, 0.02], 1.0); }
+  }
+  return n;
+}
+const PARTD = new Float32Array(PMAX * 8);
+function packParticles() {
+  for (let i = 0; i < PN; i++) {
+    const o = i * PF, q = i * 8, f = PD[o + 6] / PD[o + 7], ty = PD[o + 9];
+    PARTD[q] = PD[o]; PARTD[q + 1] = PD[o + 1]; PARTD[q + 2] = PD[o + 2]; PARTD[q + 7] = PD[o + 8];
+    let r, g, b, a = -1;
+    if (ty === 0) { r = 7 * f; g = 3.2 * f; b = 0.9 * f; }
+    else if (ty === 1) { const h = f * f; r = 6 * h + 0.6 * f; g = 2.1 * h; b = 0.35 * h; PARTD[q + 7] = PD[o + 8] * (0.6 + (1 - f) * 0.9); }
+    else if (ty === 2) { r = 0.03; g = 0.03; b = 0.034; a = 0.55 * Math.sin(f * Math.PI) * (PD[o + 8] > 1 ? 0.8 : 1); }
+    else if (ty === 3) { r = 26 * f; g = 14 * f; b = 6 * f; PARTD[q + 7] = PD[o + 8] * (1.6 - f * 0.6); }
+    else if (ty === 4) { r = 0.8 * f; g = 1.0 * f; b = 1.3 * f; }
+    else if (ty === 6) { r = 0.5 * f; g = 2.4 * f; b = 0.9 * f; }
+    else { r = 0.35 * f; g = 0.4 * f; b = 0.48 * f; }
+    PARTD[q + 3] = r; PARTD[q + 4] = g; PARTD[q + 5] = b; PARTD[q + 6] = a;
+  }
+  return PN;
+}
+function commonU(mirror) {
+  const pl = G ? G.car : null;
+  const u = {
+    uVP: mirror ? VPM : VP, uM: M4.id(), uCam: mirror ? [cam.ex, -cam.ey, cam.ez] : [cam.ex, cam.ey, cam.ez], uT: G ? G.t : 0,
+    uFogC: [0.032, 0.026, 0.042], uFogK: 0.0042, uAmbS: [0.03, 0.034, 0.06], uAmbG: [0.012, 0.01, 0.01],
+    uL: LBUF, uLC: LCBUF, uNL: nLights, uRes: [mirror ? RT.refl.w : rw, mirror ? RT.refl.h : rh], uReflOn: !mirror && RT.refl ? 1 : 0, uClip: mirror ? 1 : 0,
+    uTint: [1, 1, 1, 1], uPolPh: 0, uBrake: 0, uHaz: 0, uDmg: 0, uLampOn: 0, uHCos: 1, uKCos: 1,
+  };
+  if (pl && gstate !== 'title' && pl.hp > 0 && !pl.exploded) {
+    const fx = Math.cos(pl.h), fz = Math.sin(pl.h);
+    u.uHP = [pl.x + fx * (pl.T.len / 2 - 0.2), 0.75, pl.z + fz * (pl.T.len / 2 - 0.2)];
+    const dl = Math.hypot(fx, 0.09, fz);
+    u.uHD = [fx / dl, -0.09 / dl, fz / dl]; u.uHC = [11, 10, 8.6]; u.uHCos = 0.86;
+  }
+  if (G && G.heli) {
+    const H = G.heli, dx = H.sx - H.x, dy = -H.y, dz = H.sz - H.z, l = Math.hypot(dx, dy, dz);
+    u.uKP = [H.x, H.y - 1.5, H.z]; u.uKD = [dx / l, dy / l, dz / l]; u.uKC = [48, 52, 58]; u.uKCos = 0.992;
+  }
+  return u;
+}
+let frameN = 0;
+function visibleChunks() {
+  const out = [];
+  const asp = cssW / cssH, half = Math.atan(Math.tan(cam.fov / 2) * asp) + 0.35;
+  const far = FARQ[quality];
+  for (const c of CH) {
+    const dx = c.x - cam.ex, dz = c.z - cam.ez, d = Math.hypot(dx, dz);
+    if (d > far + 88) continue;
+    if (d > 100) { const a = Math.acos(clamp((dx * cam.fx + dz * cam.fz) / d, -1, 1)); if (a > half + Math.atan(92 / d)) continue; }
+    c.d = d;
+    out.push(c);
+  }
+  // 手前から描く(奥の見えない所を塗らずにすむ)
+  out.sort((a, b) => a.d - b.d);
+  return out;
+}
+function carDrawM(c) { return placeM(c.x, c.y + (c.exploded ? 0 : Math.abs(c.broll) * 0.3), c.z, c.h, c.bpitch + c.pitch, c.broll + c.roll); }
+function drawScene(mirror, vis) {
+  const cu = commonU(mirror);
+  // 手前の車 → 建物 → 地面 → 空 の順に描く(奥の見えない所を塗らずにすむ)
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LEQUAL);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+  setU(progs.world, cu);
+  // 車
+  if (G) {
+    for (const c of G.cars) {
+      const dx = c.x - cam.ex, dz = c.z - cam.ez, d = Math.hypot(dx, dz);
+      if (d > CARQ[quality] * (c.role === 'parked' ? 0.6 : 1) || (d > 12 && (dx * cam.fx + dz * cam.fz) / d < 0.25)) continue;
+      const pol = c.role === 'police' && c.hp > 0 && c.ai.mode !== 'patrol';
+      setU(progs.world, { uM: carDrawM(c), uTint: [c.color[0], c.color[1], c.color[2], 1], uPolPh: G.t * 1.9 + c.sirenPh, uLampOn: pol ? 1 : (c.type === 'taxi' && c.role !== 'parked' ? 1 : 0),
+        uBrake: c.role !== 'parked' && c.hp > 0 ? (c.brk > 0.1 ? 1 : 0) : -0.3, uHaz: c.ai.dazed > 0 && c.role !== 'parked' ? 1 : 0, uDmg: c.exploded ? 1 : clamp(1 - c.hp / c.T.hp, 0, 1) * 0.8 });
+      drawMesh(CARM[d > (quality >= 5 ? 14 : 45) || mirror ? c.type + '_lo' : c.type]);
+    }
+    // 人影
+    const figs = [];
+    if (G.jack) { const J = G.jack, t = clamp(J.t / J.dur, 0, 1); const a = J.from, b = J.to; const ax = a.x - Math.sin(a.h) * 1.3, az = a.z + Math.cos(a.h) * 1.3, bx = b.x - Math.sin(b.h) * 1.3, bz = b.z + Math.cos(b.h) * 1.3; figs.push([lerp(ax, bx, t), lerp(az, bz, t), Math.atan2(bz - az, bx - ax)]); }
+    for (const p of G.peds) figs.push([p.x, p.z, p.h]);
+    if (figs.length) {
+      setU(progs.world, { uTint: [1, 1, 1, 1], uDmg: 0, uLampOn: 0, uBrake: 0, uHaz: 0 });
+      for (const [x, z, h] of figs) { setU(progs.world, { uM: placeM(x, 0.15 + Math.abs(Math.sin(G.t * 14)) * 0.06, z, h) }); drawMesh(FIG[(G.t * 7 | 0) % 2]); }
+    }
+    if (G.heli) {
+      const H = G.heli;
+      setU(progs.world, { uM: placeM(H.x, H.y, H.z, H.h, -0.12, 0), uTint: [0.1, 0.11, 0.13, 1], uDmg: 0, uLampOn: 0 });
+      drawMesh(HELIM);
+      setU(progs.world, { uM: placeM(H.x, H.y + 1.05, H.z, H.blades) });
+      drawMesh(ROTORM);
+    }
+  }
+  setU(progs.world, { uM: M4.id(), uTint: [1, 1, 1, 1], uDmg: 0, uLampOn: 0, uBrake: 0, uHaz: 0 });
+  // 建物
+  {
+    const loD = quality >= 5 ? 70 : quality >= 3 ? 150 : 230;
+    for (const c of vis) drawMesh(c.d > loD || mirror ? c.lo : c.up);
+    drawMesh(HWYM); drawMesh(FARM);
+  }
+  if (!mirror) {
+    for (const c of vis) drawMesh(c.gr);
+    setU(progs.water, cu);
+    drawMesh(SEAM);
+  }
+  // 空
+  setU(progs.sky, { uInvVP: mirror ? INVVPM : INVVP, uT: cu.uT, uFogC: cu.uFogC, uCam: cu.uCam });
+  fullscreen();
+  if (!mirror) {
+    // 車の下の影
+    if (G) {
+      gl.enable(gl.BLEND); gl.blendFunc(gl.DST_COLOR, gl.ZERO); gl.depthMask(false);
+      setU(progs.blob, { uVP: VP, uK: 0.82 });
+      gl.bindVertexArray(blobVao);
+      for (const c of G.cars) {
+        if (Math.hypot(c.x - cam.ex, c.z - cam.ez) > 120 || c.y > 1.5) continue;
+        setU(progs.blob, { uM: placeM(c.x, 0.04, c.z, c.h, 0, 0, c.T.len / 2 + 0.35, 1, c.T.wid / 2 + 0.35) });
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+    }
+  }
+  // 足し算で重ねる光
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);  const ps = (mirror ? RT.refl.h : rh) * PROJ[5] * 0.5;
+  setU(progs.spr, { uVP: cu.uVP, uPS: ps, uMaxPt: 160 * (mirror ? REFL[quality] : 1) * Math.max(1, rh / 900), uT: cu.uT, uFogK: cu.uFogK });
+  if (sprStaticN) { if (!drawScene.sv) { drawScene.sv = gl.createVertexArray(); } gl.bindVertexArray(drawScene.sv); gl.bindBuffer(gl.ARRAY_BUFFER, sprStatic); initGL.sprAttr(); gl.drawArrays(gl.POINTS, 0, sprStaticN); }
+  if (drawScene.dynN) { gl.bindVertexArray(sprDynVao); gl.drawArrays(gl.POINTS, 0, drawScene.dynN); }
+  // 光の柱
+  if (G) {
+    setU(progs.beam, { uVP: cu.uVP, uCam: cu.uCam, uFogK: cu.uFogK, uMode: 0 });
+    const beam = (x, z, r, h, col, ring = true) => {
+      const nk = clamp((Math.hypot(x - cam.ex, z - cam.ez) - 6) / 30, 0.06, 1);
+      setU(progs.beam, { uM: placeM(x, 0, z, 0, 0, 0, r, h, r), uBC: col, uMode: 0, uNear: nk }); drawMesh(BEAMM);
+      if (ring && !mirror) { setU(progs.beam, { uM: placeM(x, 0.06, z, 0, 0, 0, r * 3.6, 1, r * 3.6), uBC: col.map((v) => v * 1.4), uMode: 1, uNear: Math.max(0.35, nk) }); drawMesh(RINGM); }
+    };
+    const pulse = 0.85 + 0.15 * Math.sin(G.t * 3);
+    const J = G.jobs, H = CITY.hideout;
+    if (!J.active) for (const o of J.offers) beam(o.x, o.z, 1.7, 70, o.kind === 'heist' ? [1.6 * pulse, 0.12, 0.1] : [0.1, 0.9 * pulse, 1.4 * pulse]);
+    if (J.active && J.active.kind === 'deliver') beam(J.active.tx, J.active.tz, 1.9, 80, [0.12, 1.2 * pulse, 1.8 * pulse]);
+    if (J.active && J.active.kind === 'heist' && J.active.phase === 'hunt') { const v = J.active.van; beam(v.x, v.z, 0.9, 40, [1.6 * pulse, 0.1, 0.08], false); }
+    if (J.active && J.active.bag) beam(J.active.bag.x, J.active.bag.z, 1.1, 30, [0.2, 1.6 * pulse, 0.5]);
+    const hc = G.stars > 0 ? 0.35 : 1;
+    beam(H.x, H.z, 2.2, 55, [1.5 * hc * pulse, 0.62 * hc * pulse, 0.12 * hc]);
+    if (G.heli && !mirror) {
+      const Hh = G.heli, dx = Hh.sx - Hh.x, dy = -Hh.y + 1.5, dz = Hh.sz - Hh.z, l = Math.hypot(dx, dy, dz);
+      // 円錐: 頂点からヘリ→地面の向きへ
+      const m = coneM(Hh.x, Hh.y - 1.5, Hh.z, dx / l, dy / l, dz / l, l, l * 0.16);
+      setU(progs.beam, { uM: m, uBC: [0.05, 0.055, 0.06], uMode: 2, uNear: 1 }); drawMesh(CONEM);
+    }
+  }
+  // 粒
+  if (!mirror && PN) {
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    setU(progs.part, { uVP: VP, uPS: ps, uMaxPt: 400 });
+    gl.bindVertexArray(partVao); gl.drawArrays(gl.POINTS, 0, drawScene.partN);
+  }
+  gl.disable(gl.BLEND); gl.depthMask(true);
+}
+function coneM(x, y, z, dx, dy, dz, len, rad) {
+  // ローカルの -y が (dx,dy,dz) を向く
+  const ax = -dx, ay = -dy, az = -dz;
+  let ux = 1, uy = 0, uz = 0;
+  if (Math.abs(ax) > 0.9) { ux = 0; uz = 1; }
+  let bx = ay * uz - az * uy, by = az * ux - ax * uz, bz = ax * uy - ay * ux; let l = Math.hypot(bx, by, bz); bx /= l; by /= l; bz /= l;
+  const cx = by * az - bz * ay, cy = bz * ax - bx * az, cz = bx * ay - by * ax;
+  const m = new Float32Array(16);
+  m[0] = bx * rad; m[1] = by * rad; m[2] = bz * rad;
+  m[4] = ax * len; m[5] = ay * len; m[6] = az * len;
+  m[8] = cx * rad; m[9] = cy * rad; m[10] = cz * rad;
+  m[12] = x; m[13] = y; m[14] = z; m[15] = 1;
+  return m;
+}
+function render() {
+  frameN++;
+  progs.world = quality >= 5 ? progs.worldLo : progs.worldHi;
+  pickLights();
+  const dn = packDynSprites();
+  drawScene.dynN = dn;
+  if (dn) { gl.bindBuffer(gl.ARRAY_BUFFER, sprDyn); gl.bufferSubData(gl.ARRAY_BUFFER, 0, SPRD.subarray(0, dn * 8)); }
+  const np = packParticles();
+  drawScene.partN = np;
+  if (np) { gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, PARTD.subarray(0, np * 8)); }
+  bindTex(0, noiseTex); bindTex(1, signTex); bindTex(2, null);
+  gl.disable(gl.CULL_FACE);
+  const vis = visibleChunks();
+  // 1) 濡れた路面に映る景色(上下を返して描く)
+  if (RT.refl) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, RT.refl.fb);
+    gl.viewport(0, 0, RT.refl.w, RT.refl.h);
+    drawScene(true, vis);
+    bindTex(2, RT.refl.tex);
+  }
+  // 2) 本番
+  gl.bindFramebuffer(gl.FRAMEBUFFER, RT.scene.fb);
+  gl.viewport(0, 0, rw, rh);
+  drawScene(false, vis);
+  bindTex(2, null);
+  // 3) 光のにじみ
+  let src = RT.scene;
+  const nb = RT.bloom.length;
+  gl.disable(gl.DEPTH_TEST);
+  for (let i = 0; i < nb; i++) {
+    const dst = RT.bloom[i];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, dst.w, dst.h);
+    bindTex(4, src.tex);
+    setU(progs.down, { uTx: [1 / src.w, 1 / src.h], uTh: i === 0 ? (HDR ? 0.9 : 0.3) : 0 });
+    fullscreen();
+    src = dst;
+  }
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  for (let i = nb - 1; i > 0; i--) {
+    const s = RT.bloom[i], d = RT.bloom[i - 1];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, d.fb); gl.viewport(0, 0, d.w, d.h);
+    bindTex(4, s.tex);
+    setU(progs.up, { uTx: [1 / s.w, 1 / s.h], uK: 1 });
+    fullscreen();
+  }
+  gl.disable(gl.BLEND);
+  // 4) 仕上げ
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, rw, rh);
+  bindTex(4, RT.scene.tex);
+  bindTex(5, nb ? RT.bloom[0].tex : RT.scene.tex);
+  const pl = G && G.car, v = pl && gstate === 'play' ? spd(pl) : 0;
+  let polR = 0, polB = 0;
+  if (G && G.stars > 0 && gstate === 'play') { const ph = (G.t * 1.9) % 1, near = G.seen ? 1 : 0.4; if (ph < 0.5) polR = 0.5 * near; else polB = 0.6 * near; }
+  setU(progs.comp, { uExp: 1.55, uBloomK: 0.16, uGrain: (frameN % 64) * 7.13, uVig: 0.5, uHasBloom: nb ? 1 : 0, uRes: [rw, rh],
+    uSpeed: clamp((v - 22) / 25, 0, 1), uHurt: G ? G.fx.hurt : 0, uGold: G ? G.fx.gold || 0 : 0, uBW: gstate === 'over' || gstate === 'result' ? clamp(G.endT / 2, 0, 0.75) : 0, uPolR: polR, uPolB: polB });
+  fullscreen();
+  bindTex(4, null); bindTex(5, null);
+}
+
+// =============================================================================
+//  音(Web Audio で合成)
+// =============================================================================
+let AC = null, master = null, sfxBus = null, musBus = null, noiseBuf = null, eng = null, scr = null, sir = null, mus = null, amb = null;
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 対応していないブラウザ */ }
+  try {
+    if (!AC) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      AC = new AudioCtx();
+      master = AC.createGain(); master.gain.value = save.sound ? 0.9 : 0; master.connect(AC.destination);
+      const comp = AC.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(master);
+      sfxBus = AC.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(comp);
+      musBus = AC.createGain(); musBus.gain.value = 0.55; musBus.connect(comp);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      // エンジン
+      const o1 = AC.createOscillator(), o2 = AC.createOscillator(), f = AC.createBiquadFilter(), g = AC.createGain();
+      o1.type = 'sawtooth'; o2.type = 'square'; o1.frequency.value = 50; o2.frequency.value = 25;
+      const g2 = AC.createGain(); g2.gain.value = 0.5;
+      f.type = 'lowpass'; f.frequency.value = 400; f.Q.value = 2;
+      g.gain.value = 0;
+      o1.connect(f); o2.connect(g2); g2.connect(f); f.connect(g); g.connect(sfxBus); o1.start(); o2.start();
+      eng = { o1, o2, f, g };
+      // タイヤのきしみ(すべっているときだけ)
+      const ns = AC.createBufferSource(); ns.buffer = noiseBuf; ns.loop = true;
+      const bf = AC.createBiquadFilter(); bf.type = 'bandpass'; bf.frequency.value = 1500; bf.Q.value = 5;
+      const sg = AC.createGain(); sg.gain.value = 0;
+      ns.connect(bf); bf.connect(sg); sg.connect(sfxBus); ns.start();
+      scr = { g: sg, f: bf };
+      // サイレン
+      const so = AC.createOscillator(); so.type = 'triangle'; so.frequency.value = 700;
+      const so2 = AC.createOscillator(); so2.type = 'sine'; so2.frequency.value = 1400;
+      const sgn = AC.createGain(); sgn.gain.value = 0; const s2g = AC.createGain(); s2g.gain.value = 0.25;
+      so.connect(sgn); so2.connect(s2g); s2g.connect(sgn); sgn.connect(sfxBus); so.start(); so2.start();
+      sir = { o: so, o2: so2, g: sgn };
+      // 街のざわめき(低い音だけを小さく)
+      const an = AC.createBufferSource(); an.buffer = noiseBuf; an.loop = true; an.playbackRate.value = 0.4;
+      const af = AC.createBiquadFilter(); af.type = 'lowpass'; af.frequency.value = 180;
+      const ag = AC.createGain(); ag.gain.value = 0.05;
+      an.connect(af); af.connect(ag); ag.connect(musBus); an.start();
+      amb = { g: ag };
+      mus = { next: AC.currentTime + 0.1, step: 0, pad: 0 };
+    }
+    if (AC.state === 'suspended') AC.resume();
+    const b = AC.createBuffer(1, 1, 22050), src = AC.createBufferSource();
+    src.buffer = b; src.connect(AC.destination); src.start(0);
+  } catch (e) { /* 音が出せなくても遊べる */ }
+}
+for (const e of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(e, unlockAudio, { capture: true, passive: true });
+const canPlay = () => AC && save.sound && AC.state === 'running';
+function tone(f, dur, type, vol, f2, delay = 0, dest = null, attack = 0.005) {
+  if (!canPlay() || !isFinite(f) || f <= 0 || !isFinite(vol) || vol <= 0) return;
+  try {
+    const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2 && isFinite(f2) && f2 > 0) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest || sfxBus); o.start(t); o.stop(t + dur + 0.05);
+  } catch (e) { /* なし */ }
+}
+function noise(dur, vol, freq, q = 1, type = 'lowpass', delay = 0, f2 = 0, dest = null) {
+  if (!canPlay() || !isFinite(vol) || vol <= 0) return;
+  try {
+    const t = AC.currentTime + delay, s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+    s.buffer = noiseBuf; s.playbackRate.value = 0.8 + Math.random() * 0.4;
+    f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+    if (f2) f.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(dest || sfxBus); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  } catch (e) { /* なし */ }
+}
+const sfxT = {};
+const near01 = (x, z) => clamp(1 - Math.hypot(x - CAM_T.x, z - CAM_T.z) / 90, 0, 1);
+function sfxCrash(sp, x, z, car) {
+  const k = 'crash'; if (performance.now() - (sfxT[k] || 0) < 70) return; sfxT[k] = performance.now();
+  const v = clamp(sp / 25, 0.08, 1) * Math.max(0.15, near01(x, z));
+  noise(0.25 + v * 0.3, 0.5 * v, 900 + v * 1200, 0.7);
+  tone(70, 0.25, 'sine', 0.5 * v, 32);
+  if (car && sp > 6) tone(170 + Math.random() * 60, 0.18, 'square', 0.12 * v, 90);
+  if (sp > 12) for (let i = 0; i < 4; i++) tone(2600 + Math.random() * 2400, 0.12, 'sine', 0.05 * v, 0, 0.03 + i * 0.04);
+}
+function sfxBoom(x, z) {
+  const v = Math.max(0.3, near01(x, z));
+  noise(1.6, 0.9 * v, 1600, 0.6, 'lowpass', 0, 90);
+  tone(55, 1.2, 'sine', 0.8 * v, 24);
+  noise(0.3, 0.5 * v, 3000, 0.5, 'highpass');
+}
+function sfxHonk(c) { const v = near01(c.x, c.z) * 0.12; if (v < 0.01) return; tone(392, 0.32, 'square', v, 0, 0, null, 0.01); tone(494, 0.32, 'square', v * 0.8, 0, 0, null, 0.01); }
+function sfx(name) {
+  if (performance.now() - (sfxT[name] || 0) < 80) return;
+  sfxT[name] = performance.now();
+  switch (name) {
+    case 'alarm': for (let i = 0; i < 3; i++) { tone(880, 0.12, 'square', 0.07, 0, i * 0.24); tone(660, 0.12, 'square', 0.07, 0, i * 0.24 + 0.12); } break;
+    case 'clear': [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.5, 'triangle', 0.12, 0, i * 0.09)); break;
+    case 'cash': [1319, 1568, 2093].forEach((f, i) => tone(f, 0.25, 'square', 0.05, 0, i * 0.06)); tone(2637, 0.4, 'sine', 0.06, 0, 0.2); break;
+    case 'bank': [392, 494, 587, 784].forEach((f, i) => tone(f, 0.8, 'triangle', 0.1, 0, i * 0.05)); [1568, 2093, 2637].forEach((f, i) => tone(f, 0.3, 'square', 0.04, 0, 0.3 + i * 0.07)); noise(0.15, 0.2, 5000, 1, 'highpass', 0.3); break;
+    case 'accept': tone(660, 0.1, 'square', 0.07); tone(990, 0.14, 'square', 0.07, 0, 0.08); break;
+    case 'fail': tone(440, 0.3, 'sawtooth', 0.07, 220); tone(330, 0.4, 'sawtooth', 0.06, 160, 0.2); break;
+    case 'metal': tone(220, 0.35, 'square', 0.14, 110); noise(0.25, 0.4, 2400, 2, 'bandpass'); tone(1800, 0.3, 'sine', 0.06, 1500); break;
+    case 'burst': noise(0.6, 0.6, 1400, 0.6, 'lowpass', 0, 200); tone(80, 0.5, 'sine', 0.5, 35); break;
+    case 'door': noise(0.06, 0.25, 1800, 1, 'bandpass'); tone(120, 0.12, 'sine', 0.2, 60, 0.05); break;
+    case 'door2': tone(90, 0.15, 'sine', 0.35, 50); noise(0.08, 0.3, 800, 1); break;
+    case 'busted': tone(220, 1.2, 'sawtooth', 0.12, 110); tone(233, 1.2, 'sawtooth', 0.1, 116); noise(0.4, 0.3, 600, 1); break;
+    case 'wreck': tone(110, 1.4, 'sawtooth', 0.1, 40); break;
+  }
+}
+const BASS = [55, 55, 65.4, 55, 49, 55, 82.4, 73.4];
+function updAudio(dt) {
+  if (!AC) return;
+  master.gain.setTargetAtTime(save.sound ? 0.9 : 0, AC.currentTime, 0.05);
+  if (!canPlay()) return;
+  const t = AC.currentTime, playing = G && (gstate === 'play' || gstate === 'over');
+  const c = G && G.car;
+  if (c && playing) {
+    const v = spd(c), g = Math.min(5, Math.floor(v / 9.5)), rpm = clamp(0.22 + 0.78 * (v - g * 9.5) / 9.5, 0, 1.2);
+    const f = 36 + rpm * 90 + g * 6 + c.thr * 6;
+    eng.o1.frequency.setTargetAtTime(f, t, 0.06); eng.o2.frequency.setTargetAtTime(f * 0.5, t, 0.06);
+    eng.f.frequency.setTargetAtTime(260 + rpm * (c.thr > 0 ? 1500 : 600), t, 0.08);
+    eng.g.gain.setTargetAtTime(c.hp > 0 && !c.exploded ? 0.07 + c.thr * 0.06 : 0, t, 0.08);
+    const sl = c.slip > 4.5 && v > 7 ? Math.min(0.09, (c.slip - 4.5) * 0.016) : 0;
+    scr.g.gain.setTargetAtTime(sl, t, 0.05); scr.f.frequency.setTargetAtTime(1300 + c.slip * 25, t, 0.1);
+  } else { eng.g.gain.setTargetAtTime(0, t, 0.2); scr.g.gain.setTargetAtTime(0, t, 0.05); }
+  // サイレン: いちばん近い追っ手の距離で
+  let nd = 999;
+  if (G) for (const p of G.cars) if (p.role === 'police' && p.hp > 0 && p.ai.mode !== 'patrol') nd = Math.min(nd, Math.hypot(p.x - CAM_T.x, p.z - CAM_T.z));
+  const sv = G && G.stars > 0 && gstate !== 'title' ? 0.1 * clamp(1 - nd / 140, 0, 1) : 0;
+  const yelp = G && G.stars >= 3;
+  const wf = yelp ? 0.5 + 0.5 * Math.sin(t * 13) : 0.5 + 0.5 * Math.sin(t * 2.4);
+  sir.o.frequency.setTargetAtTime(620 + wf * 520, t, 0.02); sir.o2.frequency.setTargetAtTime((620 + wf * 520) * 2, t, 0.02);
+  sir.g.gain.setTargetAtTime(sv, t, 0.1);
+  amb.g.gain.setTargetAtTime(gstate === 'title' ? 0.08 : 0.05, t, 0.5);
+  // 追われているときの鼓動(低い音とキック)。手配度が上がるほど厚くなる
+  const st = G && gstate === 'play' ? G.stars : 0;
+  const sp16 = 60 / 128 / 4;
+  while (mus.next < t + 0.12) {
+    const n = mus.step++, at = mus.next - t;
+    mus.next += sp16;
+    if (st > 0) {
+      if (n % 4 === 0) { tone(110, 0.18, 'sine', 0.32, 40, at, musBus, 0.002); }
+      if (n % 2 === 0) tone(BASS[(n >> 1) % 8], 0.2, 'sawtooth', 0.06 + st * 0.012, 0, at, musBus);
+      if (st >= 2 && n % 4 === 2) noise(0.05, 0.08, 7000, 1, 'highpass', at, 0, musBus);
+      if (st >= 4 && n % 16 === 14) tone(440, 0.25, 'square', 0.04, 415, at, musBus);
+    } else if (n % 64 === 0 && gstate !== 'title') {
+      const ch = [[110, 164.8, 220], [98, 146.8, 196], [87.3, 130.8, 174.6], [98, 146.8, 233]][(n >> 6) % 4];
+      for (const f of ch) tone(f, 7.5, 'sine', 0.025, 0, at, musBus, 1.5);
+    }
+  }
+}
+function toggleSound() { save.sound = !save.sound; writeSave(); $('snd').textContent = save.sound ? '音' : '消音'; if (save.sound) unlockAudio(); }
+
+// =============================================================================
+//  画面の表示
+// =============================================================================
+let toastT = 0, toastP = 0;
+function toast(big, small, prio = 1) {
+  const now = performance.now();
+  if (prio < toastP && now - toastT < 1300) return;
+  toastT = now; toastP = prio;
+  const el = $('toast');
+  el.innerHTML = `${big}${small ? `<small>${small}</small>` : ''}`;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
+const hudC = {};
+function setH(id, v, html) { if (hudC[id] === v) return; hudC[id] = v; if (html) $(id).innerHTML = v; else $(id).textContent = v; }
+function hintText() {
+  if (gstate !== 'play') return '';
+  const pl = G.car, tc = isTouch;
+  if (pl.burning) return tc ? '燃えている! 止まって「乗りかえ」' : '燃えている! 止まって <kbd>E</kbd> で近くの車へ';
+  if (G.jack) return '乗りかえ中…';
+  if (canJack() && G.stars > 0 && !G.seen) return tc ? '今なら見られていない — 「乗りかえ」で手配が下がる' : '今なら見られていない — <kbd>E</kbd> で乗りかえると手配が下がる';
+  if (G.stars > 0) {
+    if (G.atHide) return '手配中は隠れ家に入れない — まず逃げ切る';
+    if (G.stats.evaded === 0) return 'パトカーの見えない所へ — 角を曲がる・路地・高架の下(空から見えない)';
+    return '';
+  }
+  if (G.t < 7) return tc ? 'アクセルで走る ・ ◀ ▶ で曲がる ・ ドリフトで滑らせる' : '<kbd>↑</kbd> 走る ・ <kbd>←</kbd><kbd>→</kbd> 曲がる ・ <kbd>Space</kbd> ドリフト';
+  if (pl.hp < pl.T.hp * 0.4 && canJack()) return tc ? '車が傷んでいる — 「乗りかえ」で近くの車へ' : '車が傷んでいる — <kbd>E</kbd> で近くの車へ乗りかえ';
+  const a = G.jobs.active;
+  if (!a && G.carried > 0) return `手持ち ${fmtY(G.carried)} — 橙の柱(隠れ家)で金庫へ。続けて稼げば上乗せ、捕まれば没収`;
+  if (!a && G.jobsDone === 0) return '光の柱へ — 青は運び、赤は強奪(左下の地図の点)';
+  if (a && a.kind === 'deliver' && G.jobsDone === 0) return '青い柱へ届ける。パトカーのそばを通ると荷物を怪しまれる';
+  return '';
+}
+function updHud() {
+  if (!G) return;
+  setH('vault', fmtY(G.banked));
+  setH('carry', fmtY(G.carried));
+  $('carry-row').classList.toggle('empty', G.carried <= 0);
+  const mult = G.chain >= 2 ? `×${(1 + Math.min(1, 0.25 * (G.chain - 1))).toFixed(2)}` : '';
+  setH('chain', mult); $('chain').style.display = mult ? 'inline-block' : 'none';
+  const st = $('stars').children;
+  if (hudC.stars !== G.stars) { hudC.stars = G.stars; for (let i = 0; i < 5; i++) st[i].classList.toggle('on', i < G.stars); }
+  $('stars').classList.toggle('blink', G.stars > 0 && !G.seen);
+  const ev = $('evade');
+  if (G.stars > 0 && gstate === 'play') {
+    const pl = G.car, dark = underHwy(pl.x, pl.z) || inAlley(pl.x, pl.z) || inPark(pl.x, pl.z);
+    setH('evade', G.seen ? '見られている' : `見失わせるまで ${Math.max(0, evadeNeed() - G.evadeT).toFixed(1)}秒${dark ? ' ・暗がり' : ''}`);
+    ev.className = G.seen ? 'seen' : 'lost';
+  } else if (G.susT > 0.15 && gstate === 'play') { setH('evade', `巡回に怪しまれている ${'▮'.repeat(Math.ceil(G.susT / 2 * 5))}`); ev.className = 'seen'; }
+  else setH('evade', '');
+  const c = G.car;
+  setH('kmh', String(Math.round(spd(c) * 3.6)));
+  setH('carname', c.T.name);
+  $('hpbar').firstElementChild.style.transform = `scaleX(${clamp(c.hp / c.T.hp, 0, 1).toFixed(3)})`;
+  const a = G.jobs.active, jb = $('job');
+  if (a && gstate === 'play') {
+    jb.style.display = 'block';
+    jb.className = 'hud ' + a.kind;
+    let k, t, f;
+    if (a.kind === 'deliver') { k = DLABEL[a.variant] + (a.variant === 'fragile' ? ` ・傷み ${Math.min(100, Math.round(a.dmg / 40 * 100))}%` : ''); t = `行き先まで ${Math.round(Math.hypot(a.tx - c.x, a.tz - c.z))}m ・ 残り ${Math.ceil(a.left)}秒`; f = a.left / a.timeMax; }
+    else if (a.phase === 'hunt') { k = '強奪'; t = `現金輸送車に体当たり あと${3 - a.van.hits}回 ・ ${Math.round(dist(a.van, c))}m`; f = a.left / a.timeMax; }
+    else { k = '強奪'; t = '現金を拾え'; f = 1; }
+    jb.children[0].textContent = k; jb.children[1].textContent = t;
+    jb.children[2].firstElementChild.style.transform = `scaleX(${clamp(f, 0, 1).toFixed(3)})`;
+  } else jb.style.display = 'none';
+  const bu = $('bust');
+  if (G.bust > 0.05 && gstate === 'play') { bu.style.display = 'block'; bu.querySelector('b').style.transform = `scaleX(${clamp(G.bust / BUST_T, 0, 1).toFixed(3)})`; } else bu.style.display = 'none';
+  setH('hint', hintText(), true);
+  $('t-act').classList.toggle('show', canJack());
+}
+// 地図
+const mapCv = $('map'), mctx = mapCv.getContext('2d');
+let mapBase = null;
+const MAPPAD = 90;
+function drawMapBase() {
+  const W = MAPX + MAPPAD * 2, H = MAPZ + MAPPAD * 2;
+  if (!mapBase) mapBase = document.createElement('canvas');
+  mapBase.width = W; mapBase.height = H;
+  const x = mapBase.getContext('2d');
+  x.clearRect(0, 0, W, H);
+  x.translate(MAPPAD, MAPPAD);
+  x.fillStyle = '#0a1a2c'; x.fillRect(-MAPPAD, MAPZ + HR + 6, W, MAPPAD);
+  x.fillStyle = '#5d6475'; x.fillRect(-HR, -HR, MAPX + RW, MAPZ + RW);
+  for (const b of CITY.cells.values()) {
+    if (b.park) { x.fillStyle = '#1d3a22'; x.fillRect(b.x0, b.z0, b.x1 - b.x0, b.z1 - b.z0); continue; }
+    x.fillStyle = b.outer ? '#141720' : '#20242f';
+    for (const s of b.solids) x.fillRect(s.x0, s.z0, s.x1 - s.x0, s.z1 - s.z0);
+  }
+  x.fillStyle = '#20242f'; x.fillRect(-MAPPAD, -MAPPAD, W, MAPPAD - HR); x.fillRect(-MAPPAD, -HR, MAPPAD - HR, MAPZ + RW + 6); x.fillRect(MAPX + HR, -HR, MAPPAD, MAPZ + RW + 6);
+  x.strokeStyle = '#a08a5a'; x.lineWidth = 3; x.setLineDash([8, 6]); x.beginPath(); x.moveTo(HWY_X, -MAPPAD); x.lineTo(HWY_X, MAPZ + MAPPAD); x.stroke(); x.setLineDash([]);
+  x.setTransform(1, 0, 0, 1, 0, 0);
+}
+function drawMap() {
+  if (!G || !mapBase) return;
+  const W = mapCv.width, R = W / 2, ctx = mctx, pl = camFocus() || G.car;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, W);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(R, R, R - 4, 0, TAU); ctx.fillStyle = '#05060ed0'; ctx.fill(); ctx.clip();
+  const k = (R - 4) / 175;
+  const rot = -(cam.yaw + Math.PI / 2);
+  ctx.translate(R, R); ctx.rotate(rot); ctx.scale(k, k);
+  ctx.globalAlpha = 0.95;
+  ctx.drawImage(mapBase, -pl.x - MAPPAD, -pl.z - MAPPAD);
+  ctx.globalAlpha = 1;
+  const P2 = (x, z) => [x - pl.x, z - pl.z];
+  const dot = (x, z, col, r) => { const [a, b] = P2(x, z); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(a, b, r / k, 0, TAU); ctx.fill(); };
+  if (G.stars > 0 && !G.seen) { const [a, b] = P2(G.lastKnown.x, G.lastKnown.z); ctx.fillStyle = 'rgba(255,60,60,0.12)'; ctx.beginPath(); ctx.arc(a, b, 60, 0, TAU); ctx.fill(); }
+  const H = CITY.hideout;
+  dot(H.x, H.z, G.stars > 0 ? '#7a5520' : '#ffa030', 9);
+  const J = G.jobs;
+  if (!J.active) for (const o of J.offers) dot(o.x, o.z, o.kind === 'heist' ? '#ff4b4b' : '#3fe6ff', 8);
+  if (J.active && J.active.kind === 'deliver') dot(J.active.tx, J.active.tz, '#3fe6ff', 10);
+  if (J.active && J.active.van && J.active.phase === 'hunt') dot(J.active.van.x, J.active.van.z, '#ff4b4b', 9);
+  if (J.active && J.active.bag) dot(J.active.bag.x, J.active.bag.z, '#5bff8a', 9);
+  const bl = (G.t * 2) % 1 < 0.5;
+  for (const c of G.cars) if (c.role === 'police' && c.hp > 0) dot(c.x, c.z, c.ai.mode === 'patrol' ? '#9aa6ff' : bl ? '#ff3b3b' : '#3b7bff', c.ai.mode === 'patrol' ? 5 : 7);
+  if (G.heli) { dot(G.heli.sx, G.heli.sz, 'rgba(220,235,255,0.35)', 14); dot(G.heli.x, G.heli.z, '#dfe8ff', 5); }
+  ctx.restore();
+  // 地図の外の目印は、ふちに矢印で
+  const edge = (x, z, col) => {
+    const dx = x - pl.x, dz = z - pl.z, c = Math.cos(rot), s = Math.sin(rot);
+    const sx = (dx * c - dz * s) * k, sy = (dx * s + dz * c) * k, d = Math.hypot(sx, sy);
+    if (d < R - 14) return;
+    const ax = R + sx / d * (R - 13), ay = R + sy / d * (R - 13), an = Math.atan2(sy, sx);
+    ctx.save(); ctx.translate(ax, ay); ctx.rotate(an); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, -7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill(); ctx.restore();
+  };
+  if (G.carried > 0 && G.stars === 0) edge(H.x, H.z, '#ffa030');
+  if (!J.active) for (const o of J.offers) edge(o.x, o.z, o.kind === 'heist' ? '#ff4b4b' : '#3fe6ff');
+  if (J.active && J.active.kind === 'deliver') edge(J.active.tx, J.active.tz, '#3fe6ff');
+  if (J.active && J.active.van && J.active.phase === 'hunt') edge(J.active.van.x, J.active.van.z, '#ff4b4b');
+  ctx.strokeStyle = '#ffffff55'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(R, R, R - 4, 0, TAU); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(R, R - 12); ctx.lineTo(R - 8, R + 9); ctx.lineTo(R, R + 4); ctx.lineTo(R + 8, R + 9); ctx.closePath(); ctx.fill();
+}
+
+// =============================================================================
+//  操作
+// =============================================================================
+const K = {}, TC = { left: false, right: false, gas: false, brk: false, hb: false };
+function applyInput(c, dt) {
+  const up = K.ArrowUp || K.KeyW || TC.gas, dn = K.ArrowDown || K.KeyS || TC.brk;
+  const lf = K.ArrowLeft || K.KeyA || TC.left, rt = K.ArrowRight || K.KeyD || TC.right;
+  const s = (rt ? 1 : 0) - (lf ? 1 : 0);
+  const rate = s === 0 ? 7 : Math.sign(s) !== Math.sign(c.steer) ? 9 : 4.5;
+  c.steer += clamp(s - c.steer, -rate * dt, rate * dt);
+  c.thr = up ? 1 : 0; c.brk = dn ? 1 : 0; c.hand = !!(K.Space || TC.hb);
+}
+addEventListener('keydown', (e) => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  K[e.code] = true;
+  if (gstate === 'title' && (e.code === 'Enter' || e.code === 'Space')) startGame();
+  else if (gstate === 'result' && (e.code === 'Enter' || e.code === 'Space') && performance.now() - resultAt > 900) retry();
+  else if (gstate === 'play' && (e.code === 'KeyE' || e.code === 'KeyF')) tryJack();
+  if (e.code === 'KeyM') toggleSound();
+});
+addEventListener('keyup', (e) => { K[e.code] = false; });
+addEventListener('blur', () => { for (const k in K) K[k] = false; for (const k in TC) TC[k] = false; });
+for (const [id, key] of [['t-left', 'left'], ['t-right', 'right'], ['t-gas', 'gas'], ['t-brk', 'brk'], ['t-hb', 'hb']]) {
+  const el = $(id);
+  const on = (e) => { e.preventDefault(); TC[key] = true; el.classList.add('on'); try { el.setPointerCapture(e.pointerId); } catch (er) { /* なし */ } };
+  const off = (e) => { TC[key] = false; el.classList.remove('on'); };
+  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
+}
+$('t-act').addEventListener('pointerdown', (e) => { e.preventDefault(); tryJack(); });
+$('b-start').addEventListener('click', (e) => { e.stopPropagation(); startGame(); });
+$('b-retry').addEventListener('click', (e) => { e.stopPropagation(); retry(); });
+$('snd').addEventListener('click', (e) => { e.stopPropagation(); toggleSound(); });
+$('title').addEventListener('click', () => startGame());
+let resultAt = 0;
+function startGame() {
+  if (gstate !== 'title') return;
+  unlockAudio();
+  gstate = 'play';
+  G.t = 0; G.events = [];
+  cam.snap = true;
+  $('title').classList.add('hidden');
+  logEv('start');
+}
+function retry() {
+  if (gstate !== 'result') return;
+  newRun();
+  gstate = 'play';
+  cam.snap = true; cam.orbit = 0;
+  $('result').classList.add('hidden');
+  logEv('start');
+}
+function showResult() {
+  gstate = 'result';
+  resultAt = performance.now();
+  const s = G.stats, busted = G.cause === 'busted';
+  $('stamp').textContent = busted ? '確保' : '大破';
+  $('stamp').className = busted ? 'busted' : 'wreck';
+  $('why').textContent = busted ? 'パトカーに囲まれて止められた' : '燃えた車から逃げ遅れた';
+  const rec = G.banked > save.best;
+  save.runs++;
+  if (rec) save.best = G.banked;
+  save.bestStars = Math.max(save.bestStars, G.maxStars);
+  writeSave();
+  const row = (a, b, cls = '') => `<dt>${a}</dt><dd class="${cls}">${b}</dd>`;
+  $('rep').innerHTML = row('金庫に入れた額', fmtY(G.banked), 'big') + (s.lost > 0 ? row('没収された手持ち', fmtY(s.lost), 'lost') : '') +
+    row('こなした仕事', `${G.jobsDone}件(運び ${s.delivers} / 強奪 ${s.heists})`) + row('最高の手配度', G.maxStars ? '★'.repeat(G.maxStars) : 'なし') +
+    row('逃げ切った回数', `${s.evaded}回`) + row('つぶしたパトカー', `${s.policeWrecked}台`) + row('乗りかえ', `${s.jacks}回`) + row('走った時間', `${Math.floor(G.t / 60)}分${Math.floor(G.t % 60)}秒`) +
+    row('これまでの最高', fmtY(save.best));
+  $('newrec').style.display = rec && G.banked > 0 ? 'block' : 'none';
+  $('result').classList.remove('hidden');
+  logEv('result', { banked: G.banked });
+}
+function showBest() { $('best').textContent = save.best > 0 ? `これまでの最高 ${fmtY(save.best)}` : ''; }
+
+// =============================================================================
+//  まわす
+// =============================================================================
+let acc = 0, lastT = performance.now(), fpsAcc = 0, fpsN = 0, goodT = 0, badN = 0, wantResize = false;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (wantResize && gl) { wantResize = false; resize(); }
+  const rdt = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  try {
+    const sp = window.__simSpeed || 1;
+    acc += rdt * sp;
+    let n = 0;
+    const maxN = Math.ceil(sp * 7) + 2;
+    const PR = window.__prof, t0 = PR ? performance.now() : 0;
+    while (acc >= DT && n < maxN) {
+      if (window.__autoStep && gstate === 'play') window.__autoStep();
+      step(DT);
+      acc -= DT; n++;
+    }
+    if (acc > DT * maxN) acc = 0;
+    if (window.__autoStep && gstate !== 'play') window.__autoStep();
+    const t1 = PR ? performance.now() : 0;
+    updCam(rdt);
+    if (gl && !window.__noDraw) render();
+    if (PR) gl.finish();
+    const t2 = PR ? performance.now() : 0;
+    updAudio(rdt);
+    updHud();
+    if (!window.__noDraw) drawMap();
+    if (PR) { const t3 = performance.now(); PR.n++; PR.step += t1 - t0; PR.render += t2 - t1; PR.ui += t3 - t2; }
+    const intro = gstate === 'title' || gstate === 'result';
+    if (document.body.classList.contains('intro') !== intro) document.body.classList.toggle('intro', intro);
+  } catch (e) {
+    console.error(e);
+  }
+  fpsAcc += rdt; fpsN++;
+  if (window.__lockQ != null && window.__lockQ !== quality) { quality = window.__lockQ; wantResize = true; }
+  if (fpsAcc > 0.5 && window.__lockQ == null && !window.__noDraw) {
+    const ms = (fpsAcc / fpsN) * 1000;
+    if (ms > 24 && quality < QSTEPS.length - 1) { badN++; if (badN >= (quality === 0 ? 2 : 1)) { quality++; wantResize = true; badN = 0; } goodT = 0; }
+    else if (ms < 14.5) { badN = 0; goodT += fpsAcc; if (goodT > 4 && quality > 0) { quality--; wantResize = true; goodT = 0; } }
+    else { goodT = 0; badN = 0; }
+    fpsAcc = 0; fpsN = 0;
+  }
+}
+addEventListener('resize', () => { if (gl) resize(); else { cssW = innerWidth; cssH = innerHeight; } });
+
+// =============================================================================
+//  テスト用の窓口(読み取りだけ)
+// =============================================================================
+const carInfo = (c) => ({ id: c.id, role: c.role, type: c.type, x: c.x, z: c.z, h: c.h, vx: c.vx, vz: c.vz, speed: spd(c), fwd: fwdSpd(c), hp: c.hp, hpMax: c.T.hp, dazed: c.ai.dazed, burning: c.burning, exploded: c.exploded, mode: c.ai.mode, los: c.ai.los, hits: c.hits });
+window.gameTest = {
+  state: () => gstate,
+  score: () => (G ? G.banked : 0),
+  webgl: () => !!gl,
+  hdr: () => HDR,
+  quality: () => quality,
+  refl: () => !!RT.refl,
+  lights: () => nLights,
+  sound: () => !!save.sound,
+  time: () => (G ? G.t : 0),
+  player: () => { const c = G.car; return Object.assign(carInfo(c), { steer: c.steer, slip: c.slip, w: c.w, thr: c.thr, brk: c.brk, hand: c.hand, jacking: !!G.jack, atHide: G.atHide }); },
+  wanted: () => { const p = G.car; return { stars: G.stars, seen: G.seen, evadeT: G.evadeT, need: evadeNeed(), bust: G.bust, lastKnown: Object.assign({}, G.lastKnown), heli: G.heli ? { x: G.heli.x, z: G.heli.z, sx: G.heli.sx, sz: G.heli.sz, sees: G.heli.sees } : null, dark: underHwy(p.x, p.z) || inAlley(p.x, p.z) || inPark(p.x, p.z), sus: G.susT }; },
+  police: () => G.cars.filter((c) => c.role === 'police').map((c) => Object.assign(carInfo(c), { dist: dist(c, G.car) })),
+  cars: () => G.cars.map(carInfo),
+  jobs: () => { const a = G.jobs.active; return { offers: G.jobs.offers.map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z })), heistCD: G.jobs.heistCD,
+    active: a ? { kind: a.kind, variant: a.variant || null, tx: a.tx, tz: a.tz, left: a.left, timeMax: a.timeMax, pay0: a.pay0, dmg: a.dmg, phase: a.phase, cash: a.cash, van: a.van ? carInfo(a.van) : null, bag: a.bag ? Object.assign({}, a.bag) : null } : null }; },
+  hideout: () => { const H = CITY.hideout; return { x: H.x, z: H.z, hw: H.hw, hd: H.hd, side: H.side }; },
+  city: () => ({ P, HR, RW, NX, NZ, MAPX, MAPZ, hwyX: HWY_X, lane: LANE, solids: CITY.solids.map((s) => [s.x0, s.z0, s.x1, s.z1]), alleys: CITY.alleys.map((a) => ({ ax: a.ax, x0: a.x0, z0: a.z0, x1: a.x1, z1: a.z1 })),
+    park: CITY.park ? [CITY.park.x0, CITY.park.z0, CITY.park.x1, CITY.park.z1] : null, pillars: CITY.pillars.map((p) => [p.x, p.z, p.r]), buildings: CITY.buildings.length, signs: CITY.signs.length }),
+  stats: () => Object.assign({}, G.stats, { t: G.t, banked: G.banked, carried: G.carried, chain: G.chain, jobsDone: G.jobsDone, maxStars: G.maxStars, stars: G.stars, cause: G.cause }),
+  events: () => G.events.slice(),
+  canJack: () => canJack(),
+  los: (x0, z0, x1, z1) => los(x0, z0, x1, z1),
+  solid: (x, z, pad) => isSolid(x, z, pad || 0),
+  toScreen: (x, y, z) => { const v = [x, y, z, 1], o = [0, 0, 0, 0]; for (let r = 0; r < 4; r++) o[r] = VP[r] * v[0] + VP[4 + r] * v[1] + VP[8 + r] * v[2] + VP[12 + r]; if (o[3] <= 0) return null; return { x: (o[0] / o[3] * 0.5 + 0.5) * cssW, y: (1 - (o[1] / o[3] * 0.5 + 0.5)) * cssH }; },
+  save: () => JSON.parse(JSON.stringify(save)),
+  hud: () => ({ hint: $('hint').textContent, toast: $('toast').textContent, job: $('job').style.display !== 'none' ? $('job').textContent : '', vault: $('vault').textContent, carry: $('carry').textContent, evade: $('evade').textContent, kmh: $('kmh').textContent }),
+  particles: () => PN,
+};
+
+// =============================================================================
+//  はじめる
+// =============================================================================
+if (gl) { try { initGL(); } catch (e) { console.error(e); gl = null; } }
+cssW = innerWidth; cssH = innerHeight;
+if (isTouch && gl) { quality = 2; resize(); }
+newRun();
+if (!gl) $('nogl').classList.remove('hidden');
+$('snd').textContent = save.sound ? '音' : '消音';
+showBest();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
