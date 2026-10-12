@@ -343,5 +343,16 @@
     "posted_at": "2026-10-12T12:47:43+09:00",
     "metrics": null,
     "poll_result": null
+  },
+  {
+    "date": "2026-10-12",
+    "slot": "release",
+    "tweet_id": "2109611229048115445",
+    "title": "夜鳴き廊下",
+    "text": "【14日目】今日のゲームは『夜鳴き廊下』です。雨の夜の廃旅館を懐中電灯ひとつで探り、消えた兄の手がかりと裏口の鍵を探します。踏むと鳴く廊下、近づく鈴の音。押し入れで息を止めて、やりすごせるか。ヘッドホン推奨🎧\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-12-yanaki-rouka/",
+    "posted_at": "2026-10-12T20:44:46+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
