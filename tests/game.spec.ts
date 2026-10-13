@@ -58,7 +58,8 @@ test.describe('今日のゲーム', () => {
       /<meta[^>]+name\s*=\s*["']?viewport/i,
     );
 
-    // 設計書と「腕の差」のテスト(CLAUDE.md 手順4・6)。この決まりができた次の作品(10/7公開)から確かめる
+    // 設計書(CLAUDE.md 手順4)。この決まりができた次の作品(10/7公開)から確かめる。
+    // 「腕の差」を測るテストは 2026-10-13 にやめた(テストを軽くして、仕上げに回す。オーナーの方針)
     if (game.name.slice(0, 10) >= '2026-10-07') {
       const design = path.join(game.dir, 'design.md');
       expect(fs.existsSync(design), '設計書 design.md がありません(CLAUDE.md 手順4)').toBeTruthy();
@@ -66,8 +67,6 @@ test.describe('今日のゲーム', () => {
       for (const q of ['面白さの種類', '迷い', '腕の差', '変化', 'もう1回', '緊張']) {
         expect(doc, `設計書に「${q}」への答えがありません`).toContain(q);
       }
-      const play = fs.readFileSync(path.join(__dirname, 'play.spec.ts'), 'utf8');
-      expect(play, 'play.spec.ts に「腕の差」のテストがありません(CLAUDE.md 手順6)').toContain('腕の差');
     }
 
     // 行数の上限は公開日の曜日で変わる。土曜は3Dの大作枠で上限なし、ふだんは10000行。

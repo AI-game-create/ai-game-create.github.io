@@ -131,13 +131,20 @@ Write-Log "使う実行ファイル: $claude"
 $today = Get-Date -Format 'yyyy-MM-dd'
 $now = Get-Date -Format 'HH:mm'
 $weekday = $weekdayMap[[string](Get-Date).DayOfWeek]
-$prompt = @"
-今日は $today($weekday)、いまの時刻は $now です。
-CLAUDE.md の「2. 毎日のワークフロー」に従って、今日の作業を最後まで進めてください。
+#    制作は2回の起動に分ける(2026-10-13、オーナーの方針)。1回の会話が長くなるほど、返事のたびに読み直す量が増えて使用量がかさむため。
+#    1回目: 作る(手順1〜7)。作ったものはコミットしない / 2回目: 作りかけが残っていれば、仕上げ(手順8〜13)
+$common = @"
 投稿は GitHub Actions が行うので、自分では投稿しないでください。
 この作業は、あなたが返事を終えた時点で終了し、完了の通知などは届きません。
 コマンド(特にテスト)はバックグラウンドで実行せず、必ず終わるまで待ってください。
-最後の git push まで終えてから、作業を終了してください。
+"@
+$prompt = @"
+今日は $today($weekday)、いまの時刻は $now です。
+CLAUDE.md の「2. 毎日のワークフロー」に従って、今日の作業を進めてください。
+今夜の制作は2回の起動に分けています。この1回目では、ゲームを作る日なら手順7(テストが通るまで。動画も撮る)で終えてください。
+そのときは作ったものをコミットせずに終了してください。仕上げ(手順8)からは、2回目の起動が続けます。
+ゲームを作らない日(ストックが十分な日など)は、いつもどおり最後の git push まで終えてから終了してください。
+$common
 "@
 
 Write-Log "今日の日付を渡します: $today($weekday) $now"
@@ -146,18 +153,42 @@ Write-Log "今日の日付を渡します: $today($weekday) $now"
 $Model = 'claude-opus-5-5'
 Write-Log "使うモデル: $Model"
 
-$claudeArgs = @('-p', $prompt, '--model', $Model, '--permission-mode', 'acceptEdits', '--allowedTools') + $AllowedTools
+function Invoke-Claude([string]$p) {
+    $claudeArgs = @('-p', $p, '--model', $Model, '--permission-mode', 'acceptEdits', '--allowedTools') + $AllowedTools
+    try {
+        & $claude @claudeArgs 2>&1 |
+            ForEach-Object {
+                # Write-Output だと関数の戻り値に混ざるので、画面へは Write-Host で出す
+                Write-Host $_
+                Add-Content -Path $logFile -Value $_ -Encoding utf8
+            }
+        return $LASTEXITCODE
+    } catch {
+        Write-Log "実行中にエラーが出ました: $($_.Exception.Message)"
+        return 1
+    }
+}
 
-try {
-    & $claude @claudeArgs 2>&1 |
-        ForEach-Object {
-            Write-Output $_
-            Add-Content -Path $logFile -Value $_ -Encoding utf8
-        }
-    $code = $LASTEXITCODE
-} catch {
-    Write-Log "実行中にエラーが出ました: $($_.Exception.Message)"
-    $code = 1
+Write-Log '--- 1回目(作る) ---'
+$code = Invoke-Claude $prompt
+
+# コミットされていない games/ のフォルダが残っていれば、2回目の起動で仕上げる
+if ($code -eq 0) {
+    $wip = git -C $repo status --porcelain -- games 2>$null
+    if ($wip) {
+        $now2 = Get-Date -Format 'HH:mm'
+        $prompt2 = @"
+今日は $today($weekday)、いまの時刻は $now2 です。
+今夜の制作の2回目の起動です。1回目の起動で作ったゲームが、コミットされずに games/ に残っています(手順7まで終わっているはずです)。
+CLAUDE.md の「2. 毎日のワークフロー」の手順8(仕上げ)から手順13(git push)まで進めてください。
+はじめに data/learnings.md とそのゲームの design.md を読み、``npx playwright test --grep-invert 動画`` を1回走らせてください。
+通らなければ手順7から直してください。ゲーム本体や tests/play.spec.ts の全体は読まず、Grep で必要な所だけ読んでください。
+$common
+最後の git push まで終えてから、作業を終了してください。
+"@
+        Write-Log '--- 2回目(仕上げ) ---'
+        $code = Invoke-Claude $prompt2
+    }
 }
 
 if ($code -eq 0) {
