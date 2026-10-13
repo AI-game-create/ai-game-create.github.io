@@ -1,0 +1,2026 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>ネズミ1万匹で城攻め</title>
+<style>
+:root { --bone: #efe6d2; --ink: #07080d; --blood: #d0262c; --ember: #ffa04a; --moon: #a9bde8; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #05060a; color: var(--bone);
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  touch-action: none; user-select: none; -webkit-user-select: none; }
+#cv { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.min { font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif JP", serif; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ---- 遊んでいる間の表示: 左上に骨色の大きな数、右上に警鐘の輪 ---- */
+#hud { position: fixed; inset: 0; pointer-events: none; display: none; }
+#cnt { position: absolute; left: max(14px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); line-height: 1; }
+#cnt .n { display: inline-block; font-size: clamp(42px, 10vw, 76px); font-weight: 900; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums; text-shadow: 0 0 24px rgba(0,0,0,.95), 0 3px 0 #000; transform-origin: 0 70%; }
+#cnt .n.pop { animation: pop .45s cubic-bezier(.2,1.6,.4,1); }
+@keyframes pop { 0% { transform: scale(1.28); color: #fff3c4; } 100% { transform: scale(1); } }
+#cnt .u { font-size: clamp(18px, 4vw, 26px); font-weight: 700; margin-left: 4px; opacity: .9; text-shadow: 0 2px 8px #000; }
+#cnt .sub { font-size: 13px; margin-top: 6px; letter-spacing: .12em; opacity: .78; text-shadow: 0 1px 4px #000; }
+#cnt .sub b { color: var(--ember); font-weight: 700; }
+#bell { position: absolute; right: max(12px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top));
+  width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--c, #c9a45a) calc(var(--p, 0) * 1turn), rgba(255,255,255,.08) 0);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 4px 18px rgba(0,0,0,.6); }
+#bell::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: rgba(8,9,14,.88); }
+#bell span { position: relative; font-size: 12px; text-align: center; line-height: 1.15; letter-spacing: .06em; }
+#bell span b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+#bell.ring { --c: var(--blood); animation: shake .25s infinite; }
+#bell.done { --c: var(--blood); }
+@keyframes shake { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
+#snd { position: absolute; right: max(12px, env(safe-area-inset-right)); top: calc(max(10px, env(safe-area-inset-top)) + 76px);
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(239,230,210,.35); background: rgba(8,9,14,.6);
+  pointer-events: auto; font-size: 18px; }
+#split { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom));
+  width: 88px; height: 88px; border-radius: 50%; border: 2px solid rgba(239,230,210,.75); background: rgba(10,10,16,.62);
+  pointer-events: auto; display: grid; place-items: center; line-height: 1.1; box-shadow: 0 6px 22px rgba(0,0,0,.6); }
+#split b { font-size: 19px; letter-spacing: .1em; }
+#split small { display: block; font-size: 10px; opacity: .6; letter-spacing: .1em; }
+#split.on { border-color: var(--ember); color: #ffd9ad; box-shadow: 0 0 22px rgba(255,140,40,.45); }
+#split:active { transform: scale(.94); }
+#hint { position: absolute; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  width: min(78vw, 520px); text-align: center; font-size: 14px; line-height: 1.6; letter-spacing: .06em;
+  text-shadow: 0 1px 6px #000, 0 0 14px #000; opacity: 0; transition: opacity .6s; }
+#hint.show { opacity: .95; }
+#toast { position: absolute; left: 50%; top: 22%; transform: translate(-50%, 0); white-space: nowrap; font-size: clamp(17px, 4.6vw, 26px);
+  font-weight: 800; letter-spacing: .08em; text-shadow: 0 0 16px #000, 0 2px 0 #000; opacity: 0; transition: opacity .35s, transform .35s; }
+#toast.show { opacity: 1; transform: translate(-50%, -8px); }
+#toast.red { color: #ff6a5e; }
+#toast.gold { color: #ffd27a; }
+#flash { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle, rgba(255,60,40,0) 40%, rgba(255,40,30,.35)); opacity: 0; transition: opacity .5s; }
+
+/* ---- タイトル: 縦に積んだ大きな題、朱の一本線 ---- */
+.ov { position: fixed; inset: 0; display: none; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  padding: max(28px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(34px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: linear-gradient(180deg, rgba(4,5,9,.0) 25%, rgba(4,5,9,.55) 55%, rgba(4,5,9,.92)); }
+.ov.show { display: flex; }
+#title h1 { font-weight: 900; line-height: .98; letter-spacing: .02em; text-shadow: 0 4px 30px rgba(0,0,0,.9); }
+#title h1 .a { display: block; font-size: clamp(26px, 6.5vw, 40px); letter-spacing: .25em; opacity: .9; }
+#title h1 .b { display: block; font-size: clamp(64px, 17vw, 132px); letter-spacing: -.02em; }
+#title h1 .b em { font-style: normal; color: var(--blood); }
+#title h1 .c { display: block; font-size: clamp(40px, 10vw, 76px); letter-spacing: .12em; }
+#title .rule { width: 120px; height: 4px; background: var(--blood); margin: 18px 0 16px; }
+#title ul { list-style: none; font-size: 15px; line-height: 1.85; letter-spacing: .04em; opacity: .92; margin-bottom: 20px; }
+#title ul li::before { content: "― "; color: var(--ember); }
+#title .best { font-size: 13px; opacity: .7; margin-bottom: 14px; letter-spacing: .1em; }
+.btn { min-height: 56px; padding: 0 30px 0 26px; border: 0; border-left: 6px solid var(--blood); background: var(--bone); color: #120c0a;
+  font-size: 19px; font-weight: 800; letter-spacing: .12em; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
+.btn:active { transform: translateY(2px); }
+
+/* ---- 結果: 中央の大きな一字二字 ---- */
+#result { justify-content: center; align-items: center; text-align: center; background: radial-gradient(ellipse at center, rgba(4,5,9,.55), rgba(4,5,9,.9)); }
+#r-head { font-size: clamp(84px, 24vw, 170px); font-weight: 900; line-height: 1; letter-spacing: .1em; text-shadow: 0 6px 40px rgba(0,0,0,.9); }
+#r-head.win { color: var(--blood); }
+#r-sub { font-size: 16px; letter-spacing: .1em; margin: 10px 0 22px; opacity: .9; }
+#r-grid { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 14px 30px; margin-bottom: 18px; text-align: left; }
+#r-grid div { border-top: 1px solid rgba(239,230,210,.25); padding-top: 6px; font-size: 12px; letter-spacing: .1em; opacity: .9; }
+#r-grid div b { display: block; font-size: 26px; font-weight: 900; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+#r-grid div b.rec { color: #ffd27a; }
+#r-hint { max-width: 520px; font-size: 14px; line-height: 1.7; margin-bottom: 22px; color: #ffcf9e; padding: 0 8px; }
+#nogl { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 30px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="flash"></div>
+<div id="hud">
+  <div id="cnt"><span class="n" id="n">12</span><span class="u">匹</span><div class="sub" id="zone">下水道</div></div>
+  <div id="bell"><span>警鐘<b id="bell-t">3:00</b></span></div>
+  <button id="snd" aria-label="音">♪</button>
+  <button id="split"><span><b id="split-t">分ける</b><small>Space</small></span></button>
+  <div id="hint"></div>
+  <div id="toast"></div>
+</div>
+<div id="title" class="ov">
+  <h1 class="min"><span class="a">ネズミ</span><span class="b">1<em>万</em>匹</span><span class="c">で城攻め</span></h1>
+  <div class="rule"></div>
+  <ul>
+    <li>ドラッグ(指・マウス)した所へ、群れが走る</li>
+    <li>食べ物を食べた分だけ、子ネズミが生まれる</li>
+    <li>大群で兵士を飲み込み、城の大広間を埋めつくせ</li>
+    <li>分ける(Space)で半分をおとりに残す。キーなら矢印 / WASD</li>
+  </ul>
+  <div class="best" id="t-best"></div>
+  <button class="btn" id="b-start">下水道から出る ▶</button>
+</div>
+<div id="result" class="ov">
+  <div id="r-head" class="min">落城</div>
+  <div id="r-sub"></div>
+  <div id="r-grid"></div>
+  <div id="r-hint"></div>
+  <button class="btn" id="b-again">もう一度、下水道から</button>
+</div>
+<div id="nogl">この端末では 3D(WebGL2)が使えないため、遊べません。<br>別のブラウザでお試しください。</div>
+<script>
+'use strict';
+// ============================================================================
+//  ネズミ1万匹で城攻め
+//  12匹のネズミを食べて増やし、夜の城を飲み込む。ひと続きの長い旅(下水道 → 大広間)。
+//  ネズミは 0.5m の格子の「流れの向き」と「混み具合」で動く。敵の攻撃は格子に書く危険度と、範囲で何匹かの要求。
+// ============================================================================
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
+const TAU = Math.PI * 2;
+const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+
+// ---------- 保存 ----------
+const SAVE_KEY = 'nezumi-shiro-v1';
+const save = { best: 0, wins: 0, sound: true };
+try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* なし */ }
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* なし */ } }
+
+// ---------- 音 ----------
+let AC = null, master = null, sfx = null, noiseBuf = null, windG = null, rumbleG = null;
+function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 対応していないブラウザ */ }
+  try {
+    if (!AC) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      AC = new Ctx();
+      master = AC.createGain(); master.gain.value = save.sound ? 0.9 : 0; master.connect(AC.destination);
+      const comp = AC.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.2; comp.connect(master);
+      sfx = AC.createGain(); sfx.gain.value = 0.9; sfx.connect(comp);
+      noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      // 夜風: 低い音だけを小さく、ゆっくり強弱をつける
+      windG = AC.createGain(); windG.gain.value = 0; windG.connect(comp);
+      const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 170; lp.Q.value = 0.5; lp.connect(windG);
+      const ns = AC.createBufferSource(); ns.buffer = noiseBuf; ns.loop = true; ns.connect(lp); ns.start();
+      // 大群の地鳴り(数に応じて): 低いうなり
+      rumbleG = AC.createGain(); rumbleG.gain.value = 0; rumbleG.connect(comp);
+      const lp2 = AC.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 110; lp2.connect(rumbleG);
+      const ns2 = AC.createBufferSource(); ns2.buffer = noiseBuf; ns2.loop = true; ns2.loopStart = 0.5; ns2.connect(lp2); ns2.start(0, 0.7);
+    }
+    if (AC.state === 'suspended') AC.resume();
+    const b = AC.createBuffer(1, 1, 22050), src = AC.createBufferSource();
+    src.buffer = b; src.connect(AC.destination); src.start(0);
+  } catch (e) { /* 音が出せなくても遊べる */ }
+}
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) addEventListener(ev, unlockAudio, { capture: true, passive: true });
+const canPlay = () => AC && save.sound && AC.state === 'running';
+function envG(t, a, peak, dur) {
+  const g = AC.createGain();
+  peak = Math.max(0.0002, peak || 0);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + Math.max(0.002, a));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(a + 0.01, dur));
+  return g;
+}
+function tone(f0, f1, dur, type, vol, delay = 0, attack = 0.005, dest = null) {
+  if (!canPlay() || !(f0 > 0) || !(dur > 0)) return;
+  const t = AC.currentTime + delay;
+  const o = AC.createOscillator(); o.type = type;
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1 || f0), t + dur);
+  const g = envG(t, attack, vol, dur);
+  o.connect(g); g.connect(dest || sfx); o.start(t); o.stop(t + dur + 0.05);
+}
+function noise(dur, ftype, f, q, vol, delay = 0, f1 = 0, attack = 0.003) {
+  if (!canPlay() || !(dur > 0)) return;
+  const t = AC.currentTime + delay;
+  const s = AC.createBufferSource(); s.buffer = noiseBuf;
+  const fl = AC.createBiquadFilter(); fl.type = ftype; fl.frequency.setValueAtTime(Math.max(30, f), t); fl.Q.value = q;
+  if (f1 > 0) fl.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+  const g = envG(t, attack, vol, dur);
+  s.connect(fl); fl.connect(g); g.connect(sfx); s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
+}
+const SND = {
+  patter(v) { noise(rnd(0.012, 0.03), 'bandpass', rnd(2600, 5200), 2.2, v); },
+  squeak(v) { const f = rnd(2700, 4600); tone(f, f * rnd(1.08, 1.45), rnd(0.05, 0.11), 'sine', v); tone(f * 1.5, f * 1.15, 0.05, 'triangle', v * 0.35, 0.025); },
+  crunch(v) { noise(rnd(0.03, 0.06), 'bandpass', rnd(900, 2000), 3, v); },
+  shriek() { const f = rnd(3600, 5200); tone(f, f * 0.6, 0.18, 'sawtooth', 0.025); tone(f * 1.2, f * 0.8, 0.14, 'sine', 0.05, 0.02); },
+  bell() {
+    if (!canPlay()) return;
+    const f0 = 392;
+    [[1, 0.16, 2.6], [2.0, 0.09, 1.8], [2.76, 0.08, 1.4], [4.07, 0.05, 1.0], [5.4, 0.035, 0.7], [0.5, 0.1, 2.8]].forEach(([k, v, d]) => tone(f0 * k, f0 * k * 0.998, d, 'sine', v, 0, 0.002));
+    noise(0.05, 'highpass', 3000, 0.7, 0.12);
+  },
+  scream(kind) {
+    const base = kind === 'villager' ? 420 : kind === 'archer' ? 330 : 260;
+    if (!canPlay()) return;
+    const t = AC.currentTime;
+    const o = AC.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(base * 1.25, t); o.frequency.linearRampToValueAtTime(base * 1.4, t + 0.12); o.frequency.exponentialRampToValueAtTime(base * 0.45, t + 0.85);
+    const vib = AC.createOscillator(); vib.frequency.value = 7; const vg = AC.createGain(); vg.gain.value = base * 0.04; vib.connect(vg); vg.connect(o.frequency);
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 2.5;
+    const g = envG(t, 0.03, 0.2, 0.9);
+    o.connect(bp); bp.connect(g); g.connect(sfx); o.start(t); o.stop(t + 1); vib.start(t); vib.stop(t + 1);
+    noise(0.5, 'bandpass', 1300, 1.2, 0.05, 0.05);
+  },
+  cat() { tone(520, 940, 0.16, 'sawtooth', 0.035); tone(940, 360, 0.42, 'sawtooth', 0.04, 0.15); tone(1880, 700, 0.4, 'sine', 0.02, 0.15); },
+  whoosh() { noise(0.26, 'bandpass', 500, 1.1, 0.1, 0, 1700, 0.04); },
+  arrow() { noise(0.2, 'highpass', 2600, 0.7, 0.035, 0, 0, 0.05); tone(2100, 1100, 0.2, 'sine', 0.012); },
+  thunk() { tone(190, 70, 0.12, 'triangle', 0.12); noise(0.05, 'bandpass', 900, 2, 0.06); },
+  fire(v) { noise(rnd(0.006, 0.02), 'highpass', rnd(1500, 3500), 0.7, v); },
+  ignite() { noise(0.8, 'lowpass', 300, 0.7, 0.3, 0, 3200, 0.06); tone(80, 38, 0.6, 'sine', 0.3); },
+  overwhelm() { noise(0.35, 'bandpass', 1100, 0.9, 0.16); tone(130, 48, 0.35, 'sine', 0.28); for (let i = 0; i < 4; i++) SND.squeak(0.05); },
+  splash(v) { noise(0.12, 'bandpass', 1400, 1.2, v); },
+  creak() { tone(140, 95, 0.5, 'sawtooth', 0.03); noise(0.4, 'bandpass', 400, 4, 0.05); },
+  milestone(k) { const base = [523, 587, 659, 784, 880, 1046][Math.min(5, k)]; tone(base, base, 0.5, 'triangle', 0.08); tone(base * 1.5, base * 1.5, 0.6, 'sine', 0.05, 0.08); tone(base * 2, base * 2, 0.7, 'sine', 0.04, 0.16); },
+  victory() {
+    SND.bell(); setTimeout(() => SND.bell(), 380);
+    noise(2.6, 'lowpass', 140, 0.7, 0.45, 0, 60, 0.05); tone(65, 32, 2.4, 'sine', 0.4);
+    [261, 329, 392, 523].forEach((f, i) => tone(f, f, 2.2, 'triangle', 0.06, 0.5 + i * 0.08, 0.02));
+  },
+  lose() { tone(220, 110, 1.4, 'triangle', 0.1); tone(165, 82, 1.6, 'sine', 0.08, 0.2); },
+  click() { tone(900, 700, 0.05, 'square', 0.03); },
+  split() { noise(0.18, 'bandpass', 2400, 1.5, 0.06, 0, 900); tone(700, 1200, 0.12, 'triangle', 0.05); },
+};
+
+// ---------- 世界の格子(0.5m) ----------
+const X0 = -30, Z0 = -6, CS = 0.5, GX = 120, GZ = 924;
+const WALL_Z = 380, WALL_T = 4, WALL_H = 10;
+const HALL = { x0: -11, x1: 11, z0: 412, z1: 452 };
+const ZONES = [[-99, '下水道'], [50, '村の路地'], [150, '穀物倉の通り'], [232, '城下町'], [345, '城壁の前'], [WALL_Z + WALL_T, '中庭'], [412, '大広間']];
+const zoneName = (z) => { let n = ZONES[0][1]; for (const [z0, s] of ZONES) if (z >= z0) n = s; return n; };
+const grid = new Uint8Array(GX * GZ);   // 0 通れる / 1 建物(自動で建てる) / 2 水 / 3 城壁(登る) / 5 建物(別に描く)
+const fireG = new Uint8Array(GX * GZ);
+const foodG = new Int16Array(GX * GZ);
+const dens = new Uint16Array(GX * GZ);
+const hazard = new Float32Array(GX * GZ), hazCause = new Uint8Array(GX * GZ), hazList = [];
+const killMark = new Uint8Array(GX * GZ), killList = [];
+const cellOf = (x, z) => { const ix = Math.floor((x - X0) / CS), iz = Math.floor((z - Z0) / CS); return ix < 0 || iz < 0 || ix >= GX || iz >= GZ ? -1 : iz * GX + ix; };
+const cellX = (c) => X0 + ((c % GX) + 0.5) * CS, cellZ = (c) => Z0 + (((c / GX) | 0) + 0.5) * CS;
+const isSolid = (t) => t === 1 || t === 5 || t === 6;
+const solidAt = (x, z) => { const c = cellOf(x, z); return c < 0 || isSolid(grid[c]); };
+function rectCells(x0, z0, x1, z1, fn) {
+  const a = Math.max(0, Math.round((x0 - X0) / CS)), b = Math.min(GX, Math.round((x1 - X0) / CS));
+  const c = Math.max(0, Math.round((z0 - Z0) / CS)), d = Math.min(GZ, Math.round((z1 - Z0) / CS));
+  for (let iz = c; iz < d; iz++) for (let ix = a; ix < b; ix++) fn(iz * GX + ix);
+}
+function sumDens(x, z, r) { // 半径 r の中のネズミの数(格子で数える)
+  let s = 0; const r2 = r * r;
+  rectCells(Math.floor((x - r) * 2) / 2, Math.floor((z - r) * 2) / 2, Math.ceil((x + r) * 2) / 2, Math.ceil((z + r) * 2) / 2, (c) => {
+    const dx = cellX(c) - x, dz = cellZ(c) - z; if (dx * dx + dz * dz <= r2) s += dens[c];
+  });
+  return s;
+}
+
+// ---------- 世界を作る(遊ぶたびに家並み・道・敵・食べ物が変わる) ----------
+let floors = [], foods = [], enemies = [], lamps = [], fires = [], oils = [], decor = [];
+const world = { granSide: 1, townSide: 1 };
+function floor(x0, z0, x1, z1, mat, type = 0) { floors.push({ x0, z0, x1, z1, mat, y: floors.length * 0.0006 }); rectCells(x0, z0, x1, z1, (c) => { grid[c] = type; }); }
+function addFood(x, z, amt, kind) {
+  const r = kind === 'grain' ? 3.3 : kind === 'stall' ? 1.7 : kind === 'garbage' ? 1.35 : kind === 'bread' ? 0.8 : 0.75;
+  const f = { id: foods.length, x, z, amt, amt0: amt, r, kind, acc: 0, eaters: 0, g: 0, seed: Math.random(), tick: 0 };
+  foods.push(f);
+  rectCells(Math.floor((x - r) * 2) / 2, Math.floor((z - r) * 2) / 2, Math.ceil((x + r) * 2) / 2, Math.ceil((z + r) * 2) / 2, (c) => {
+    const dx = cellX(c) - x, dz = cellZ(c) - z; if (dx * dx + dz * dz <= r * r && !isSolid(grid[c])) foodG[c] = f.id;
+  });
+  return f;
+}
+function makeEnemy(type, x, z, o = {}) {
+  const e = Object.assign({ type, x, z, y: 0, yaw: Math.PI + rnd(-0.5, 0.5), dmg: 0, dead: false, fall: 0, fallDir: 1, t: rnd(0, 1), act: 0, swing: 0,
+    walk: rnd(0, 6), aim: null, mass: 0, flee: false, seed: Math.random(), home: { x, z }, cont: 0, deadT: 0 }, o);
+  enemies.push(e); return e;
+}
+function genWorld() {
+  grid.fill(1); fireG.fill(0); foodG.fill(-1);
+  floors = []; foods = []; enemies = []; lamps = []; fires = []; oils = []; decor = [];
+  const F = [], E = [];
+  const lamp = (x, y, z, kind, i = 5, r = 10, c = [1.0, 0.56, 0.22]) => lamps.push({ x, y, z, c, i, r, kind, seed: Math.random() });
+  // --- 下水道 ---
+  floor(-4, -5, 4, 50.5, 9);
+  floor(-1, -3, 1, 47, 4, 2);
+  for (let i = 0; i < 6; i++) F.push([(i % 2 ? 2.5 : -2.5) + rnd(-0.3, 0.3), 8 + i * 6.8 + rnd(-1.2, 1.2), Math.round(rnd(7, 12)), 'scrap']);
+  for (let z = 7; z < 50; z += 11) lamp(z % 22 < 11 ? 3.4 : -3.4, 2.2, z, 'sewer', 2.6, 8, [0.45, 1.0, 0.5]);
+  for (let z = 13; z < 50; z += 13) lamp(0, 2.9, z, 'grate', 2.4, 7, [0.5, 0.65, 1.0]);
+  // --- 村の路地 ---
+  floor(-3.5, 50, 3.5, 150, 0);
+  for (const s of [-1, 1]) {
+    floor(s < 0 ? -16 : 12, 54, s < 0 ? -12 : 16, 146, 8);
+    let z = 52;
+    for (;;) {
+      z += rnd(8, 14); if (z > 140) break;
+      const za = Math.round(z * 2) / 2;
+      floor(s < 0 ? -12 : 3.5, za, s < 0 ? -3.5 : 12, za + 2.5, 0);
+      if (Math.random() < 0.5) {
+        const yz0 = za + 2.5, yz1 = yz0 + 5.5, x0 = s < 0 ? -10.5 : 5, x1 = s < 0 ? -5 : 10.5;
+        floor(x0, yz0, x1, yz1, 8); F.push([(x0 + x1) / 2, (yz0 + yz1) / 2, Math.round(rnd(35, 60)), 'garbage']);
+      } else F.push([s * rnd(13, 15), clamp(za + rnd(-3, 3), 57, 143), Math.round(rnd(22, 36)), 'garbage']);
+      z = za + 2.5;
+    }
+  }
+  for (let i = 0; i < 3; i++) F.push([rnd(-2, 2), 62 + i * 30 + rnd(0, 12), 16, 'bread']);
+  for (let z = 56; z < 150; z += 15) lamp(z % 30 < 15 ? 3.0 : -3.0, 3.1, z, 'post', 4.2, 11);
+  for (let i = 0; i < 3; i++) E.push(['villager', rnd(-2, 2), 72 + i * 28 + rnd(-3, 3)]);
+  for (let i = 0; i < 3; i++) E.push(['cat', (i % 2 ? 14 : -14), 64 + i * 30 + rnd(0, 10)]);
+  { const oz = rnd(88, 122), side = Math.random() < 0.5 ? -1 : 1; oils.push({ x: side * rnd(0.3, 1.2), z: oz, r: 1.9, state: 0, t: 0, lx: side * 3.0, lz: oz + 1.2, tip: 0 }); }
+  // --- 穀物倉の通り(本道の横の庭に、穀物の山。寄り道すると増えるが時間がかかる) ---
+  floor(-4, 150, 4, 232, 0);
+  const gs = Math.random() < 0.5 ? -1 : 1; world.granSide = gs;
+  const gx0 = gs < 0 ? -27 : 8, gx1 = gs < 0 ? -8 : 27;
+  floor(gx0, 158, gx1, 226, 8);
+  for (const zg of [180, 208]) floor(gs < 0 ? -8 : 4, zg, gs < 0 ? -4 : 8, zg + 6, 0);
+  const amts = [2300, 2900, 3500].sort(() => Math.random() - 0.5);
+  [169, 192, 215].forEach((zz, i) => F.push([gs * rnd(15, 20), zz + rnd(-1.5, 1.5), amts[i], 'grain']));
+  { const ox0 = gs < 0 ? 4 : -12, ox1 = gs < 0 ? 12 : -4; floor(ox0, 196, ox1, 206, 8); F.push([(ox0 + ox1) / 2, 201, 140, 'garbage']); }
+  for (let z = 156; z < 232; z += 16) lamp(z % 32 < 16 ? 3.5 : -3.5, 3.2, z, 'post', 4.2, 11);
+  for (const zz of [164, 186, 205, 222]) lamp(gs * (zz % 2 ? 10 : 25), 2.6, zz, 'post', 3.6, 10);
+  E.push(['villager', gs * 17, 200], ['cat', gs * 13, 178], ['cat', gs * 22, 210], ['cat', rnd(-2, 2), 226]);
+  // --- 城下町(炎のバリケードと回り道・水路・市場) ---
+  floor(-4.5, 232, 4.5, 345, 0);
+  const ts = Math.random() < 0.5 ? -1 : 1; world.townSide = ts;
+  const detour = (s, za, zb) => {
+    floor(s < 0 ? -12.5 : 4.5, za, s < 0 ? -4.5 : 12.5, za + 3, 0); floor(s < 0 ? -12.5 : 4.5, zb - 3, s < 0 ? -4.5 : 12.5, zb, 0);
+    floor(s < 0 ? -12.5 : 9.5, za, s < 0 ? -9.5 : 12.5, zb, 8);
+  };
+  detour(ts, 249, 277);
+  fires.push({ x0: -4.5, z0: 261, x1: 4.5, z1: 263.5, on: true, kind: 'barricade' });
+  floor(-4.5, 289, 4.5, 292, 4, 2); floor(-1, 289, 1, 292, 5, 0);
+  { const mx0 = ts < 0 ? -15 : 4.5, mx1 = ts < 0 ? -4.5 : 15; floor(mx0, 296, mx1, 310, 0);
+    [380, 450, 520].forEach((a, i) => F.push([ts * (7.5 + i * 2.6), 298.5 + i * 4.5, a, 'stall'])); }
+  detour(-ts, 314, 342);
+  fires.push({ x0: -4.5, z0: 327, x1: 4.5, z1: 329.5, on: true, kind: 'barricade' });
+  for (let z = 236; z < 345; z += 12) { lamp(4.2, 3.6, z, 'wall', 4.4, 11); lamp(-4.2, 3.6, z + 6, 'wall', 4.4, 11); }
+  E.push(['soldier', rnd(-2, 2), 268], ['soldier', rnd(-2, 2), 284], ['soldier', ts * 9, 303], ['soldier', rnd(-2, 2), 312],
+    ['soldier', -ts * 11, 330], ['soldier', rnd(-2, 2), 338], ['cat', ts * 11, 262], ['cat', -ts * 11, 322]);
+  if (Math.random() < 0.5) oils.push({ x: ts * 11, z: 266, r: 1.6, state: 0, t: 0, lx: ts * 12.2, lz: 267, tip: 0 });
+  else oils.push({ x: rnd(-1.5, 1.5), z: 300, r: 1.9, state: 0, t: 0, lx: -ts * 4.2, lz: 301, tip: 0 });
+  // --- 城壁の前の広場・城壁・中庭・大広間 ---
+  floor(-28, 345, 28, WALL_Z, 0);
+  rectCells(-28, WALL_Z, 28, WALL_Z + WALL_T, (c) => { grid[c] = 3; });
+  for (const tx of [-14, 14]) rectCells(tx - 3, WALL_Z - 2, tx + 3, WALL_Z + WALL_T + 2, (c) => { grid[c] = 5; });
+  floor(-24, WALL_Z + WALL_T, 24, 411, 0);
+  floor(HALL.x0, 411, HALL.x1, HALL.z1, 10);
+  rectCells(-12, 411, -2.5, 412, (c) => { grid[c] = 5; }); rectCells(2.5, 411, 12, 412, (c) => { grid[c] = 5; });
+  rectCells(-12, 411, -11, 453, (c) => { grid[c] = 5; }); rectCells(11, 411, 12, 453, (c) => { grid[c] = 5; });
+  rectCells(-12, 452, 12, 453, (c) => { grid[c] = 5; });
+  for (const px of [-5.5, 5.5]) for (const pz of [420, 428, 436, 444]) rectCells(px - 0.5, pz - 0.5, px + 0.5, pz + 0.5, (c) => { grid[c] = 5; });
+  for (let x = -24; x <= 24; x += 9.6) if (Math.abs(Math.abs(x) - 14) > 3) lamp(x, 6.5, WALL_Z - 0.4, 'wall', 5.5, 12);
+  for (const x of [-20, 20]) lamp(x, 1.6, 360, 'brazier', 6, 13);
+  for (const x of [-17, 17]) lamp(x, 1.6, 396, 'brazier', 6, 13);
+  lamp(0, 9, 424, 'chandelier', 7, 16, [1.0, 0.68, 0.32]); lamp(0, 9, 440, 'chandelier', 7, 16, [1.0, 0.68, 0.32]);
+  for (const z of [418, 432, 446]) { lamp(-10.4, 4, z, 'wall', 4, 10); lamp(10.4, 4, z, 'wall', 4, 10); }
+  E.push(['soldier', -9, 356], ['soldier', 8, 364], ['soldier', 0, 372]);
+  for (const x of [-22, -7, 7, 22]) E.push(['archer', x, WALL_Z + WALL_T * 0.5]);
+  E.push(['soldier', -12, 392], ['soldier', 10, 396], ['soldier', -3, 402], ['soldier', 5, 407], ['soldier', 15, 404]);
+  E.push(['soldier', -3, 438], ['soldier', 3, 441], ['soldier', 0, 446]);
+  F.push([-17, 401, 320, 'stall'], [17, 401, 320, 'stall']);
+  // 外周は必ずふさぐ(格子の外へ出ないように)
+  for (let ix = 0; ix < GX; ix++) { grid[ix] = 1; grid[(GZ - 1) * GX + ix] = 1; }
+  for (let iz = 0; iz < GZ; iz++) { if (!isSolid(grid[iz * GX])) grid[iz * GX] = 1; if (!isSolid(grid[iz * GX + GX - 1])) grid[iz * GX + GX - 1] = 1; }
+  for (const [x, z, a, k] of F) addFood(x, z, a, k);
+  for (const [t, x, z] of E) makeEnemy(t, x, z, t === 'archer' ? { y: WALL_H, yaw: Math.PI } : {});
+  rebuildFire();
+}
+function rebuildFire() {
+  fireG.fill(0);
+  for (const f of fires) if (f.on) rectCells(f.x0, f.z0, f.x1, f.z1, (c) => { fireG[c] = f.kind === 'oil' ? 2 : 1; });
+  for (const o of oils) if (o.state === 2) rectCells(o.x - o.r, o.z - o.r, o.x + o.r, o.z + o.r, (c) => { const dx = cellX(c) - o.x, dz = cellZ(c) - o.z; if (dx * dx + dz * dz < o.r * o.r) fireG[c] = 2; });
+}
+
+// ---------- 3D の下ごしらえ ----------
+const cv = $('cv');
+const gl = cv.getContext('webgl2', { antialias: false, alpha: false, depth: true, powerPreference: 'high-performance' });
+const HDR = !!(gl && gl.getExtension('EXT_color_buffer_float'));
+function compile(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error('shader: ' + gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vs)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) console.error('link: ' + gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+const COMMON = `
+precision highp float;
+uniform vec3 uCam; uniform vec3 uMoonDir; uniform vec3 uMoonCol; uniform vec3 uSkyAmb; uniform vec3 uGndAmb;
+uniform int uNL; uniform vec4 uLP[16]; uniform vec3 uLC[16];
+uniform vec3 uFogCol; uniform float uFogD; uniform float uTime; uniform float uLite;
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
+vec3 shade(vec3 P, vec3 N, vec3 alb, float rough, float wet){
+  vec3 V = normalize(uCam - P);
+  float g = 1. - rough;
+  float shin = mix(6., 300., g * g);
+  float sk = g * 0.9;
+  vec3 c = alb * mix(uGndAmb, uSkyAmb, N.y * 0.5 + 0.5);
+  float nd = max(dot(N, uMoonDir), 0.);
+#ifdef LITE
+  // いちばん軽い画質: 鏡のような照り返しを省き、光は拡散だけ
+  c += uMoonCol * alb * nd;
+  for (int i = 0; i < 16; i++) {
+    if (i >= uNL) break;
+    vec3 L = uLP[i].xyz - P; float d2 = dot(L, L); float r = uLP[i].w;
+    if (d2 > r * r) continue;
+    float d = sqrt(d2);
+    c += uLC[i] * alb * max(dot(N, L / d), 0.) * (1. - smoothstep(r * 0.45, r, d)) / (1. + d2 * 0.45);
+  }
+  return c;
+#endif
+  vec3 H = normalize(uMoonDir + V);
+  c += uMoonCol * (alb * nd + sk * pow(max(dot(N, H), 0.), shin) * nd);
+  vec3 R = reflect(-V, N);
+  for (int i = 0; i < 16; i++) {
+    if (i >= uNL) break;
+    vec3 L = uLP[i].xyz - P; float d2 = dot(L, L); float r = uLP[i].w;
+    if (wet > 0.05 && uLite < 0.5 && d2 < 1600.) {
+      // 濡れた石畳の照り返し: 光の真下へ縦に伸びる帯
+      vec2 a = normalize(R.xz + 1e-4), b = normalize(L.xz + 1e-4);
+      float az = pow(max(dot(a, b), 0.), 500.);
+      float el = exp(-abs(R.y - L.y / sqrt(d2)) * 2.2);
+      c += uLC[i] * wet * az * el * 0.55 / (1. + d2 * 0.03);
+    }
+    if (d2 > r * r) continue;
+    float d = sqrt(d2); L /= d;
+    float att = (1. - smoothstep(r * 0.45, r, d)) / (1. + d2 * 0.45);
+    float nl = max(dot(N, L), 0.);
+    vec3 H2 = normalize(L + V);
+    c += uLC[i] * att * (alb * nl + sk * (1. + wet * 2.) * pow(max(dot(N, H2), 0.), shin) * nl);
+  }
+  return c;
+}
+vec3 fogit(vec3 c, vec3 P){ float d = length(P - uCam); float f = 1. - exp(-d * uFogD); return mix(c, uFogCol, clamp(f, 0., 1.)); }
+vec3 surface(vec3 P, vec3 N, vec3 col, float m){
+  float rough = 0.85, wet = 0.; vec3 alb = col; vec3 emit = vec3(0);
+  int mi = int(m + 0.5);
+  if (mi == 0 || mi == 10) {               // 石畳 / 大広間の床
+    vec2 q = mi == 0 ? P.xz * 2.3 : P.xz * 0.9;
+    q.x += mod(floor(q.y), 2.) * 0.5;
+    vec2 id = floor(q), f = fract(q) - 0.5;
+    float h = h21(id);
+    float edge = max(abs(f.x), abs(f.y));
+    float mortar = smoothstep(mi == 0 ? 0.36 : 0.46, mi == 0 ? 0.48 : 0.5, edge);
+    alb = col * (0.72 + 0.5 * h) * mix(1., 0.3, mortar);
+#ifdef LITE
+    float pud = smoothstep(0.52, 0.78, vn(P.xz * 0.17) + 0.11);
+#else
+    float pud = smoothstep(0.52, 0.78, vn(P.xz * 0.17) + 0.22 * vn(P.xz * 0.9 + 3.));
+#endif
+    wet = mi == 0 ? 0.3 + 0.7 * pud : 0.55;
+    rough = mix(0.6, 0.05, wet);
+    alb *= mix(1., 0.5, pud);
+    if (mi == 0) N = normalize(N + vec3(f.x, 0., f.y) * 0.4 * (1. - pud) * (1. - mortar));
+  } else if (mi == 1 || mi == 9) {         // 石積み / 下水道の煉瓦
+    vec2 q = abs(N.x) > 0.5 ? P.zy : (abs(N.y) > 0.5 ? P.xz : P.xy);
+    q *= mi == 1 ? vec2(1.5, 3.0) : vec2(2.6, 5.);
+    q.x += mod(floor(q.y), 2.) * 0.5;
+    vec2 f = fract(q) - 0.5;
+    float h = h21(floor(q));
+    float mortar = smoothstep(0.4, 0.49, max(abs(f.x), abs(f.y) * 0.9));
+#ifdef LITE
+    alb = col * (0.68 + 0.5 * h) * mix(1., 0.4, mortar);
+#else
+    alb = col * (0.68 + 0.5 * h) * mix(1., 0.4, mortar) * (0.8 + 0.4 * vn(P.xy * 0.3 + P.zz * 0.2));
+#endif
+    rough = mi == 9 ? 0.35 : 0.85; wet = mi == 9 ? 0.4 : 0.;
+    if (mi == 9) alb *= vec3(0.85, 1.0, 0.8);
+  } else if (mi == 2) {                    // しっくいと木組みの家・窓
+    if (abs(N.y) < 0.5) {
+      vec2 q = abs(N.x) > 0.5 ? P.zy : P.xy;
+      vec2 w = vec2(q.x / 2.6, (q.y - 0.4) / 2.8);
+      vec2 wi = floor(w), wf = fract(w);
+      float beam = max(1. - step(0.05, fract((q.y - 0.4) / 2.8)), 1. - step(0.04, fract(q.x / 2.6 + 0.02)));
+      alb = mix(col * (0.85 + 0.25 * vn(q * 1.7)), vec3(0.11, 0.07, 0.045), beam);
+      float win = step(0.3, wf.x) * step(wf.x, 0.7) * step(0.3, wf.y) * step(wf.y, 0.78) * step(1.2, q.y);
+      if (win > 0.5) {
+        float k = h21(wi + floor(P.xz * 0.13) * 7.31 + N.xz * 3.);
+        alb = vec3(0.03);
+        emit = step(0.58, k) * vec3(1.0, 0.5, 0.18) * (1.6 + 1.2 * h21(wi * 3.1 + 1.7)) * (0.9 + 0.1 * sin(uTime * 3. + k * 40.));
+        rough = 0.2;
+      }
+    }
+  } else if (mi == 3) {                    // 瓦屋根
+    float r = fract(P.y * 3.2 + P.x * 0.0);
+    alb = col * (0.6 + 0.45 * smoothstep(0.1, 0.9, r)) * (0.8 + 0.3 * h21(floor(vec2(P.x + P.z, P.y) * vec2(3.0, 3.2))));
+    rough = 0.55; wet = 0.25;
+  } else if (mi == 4) {                    // 水
+    float t = uTime;
+    vec2 q = P.xz;
+    float w1 = vn(q * 1.3 + vec2(t * 0.6, t * 0.2)), w2 = vn(q * 2.7 - vec2(t * 0.3, t * 0.7));
+    N = normalize(vec3((w1 - 0.5) * 0.35, 1., (w2 - 0.5) * 0.35));
+    alb = vec3(0.012, 0.018, 0.022); rough = 0.03; wet = 1.;
+    float fr = pow(1. - max(dot(N, normalize(uCam - P)), 0.), 4.);
+    emit = uSkyAmb * 1.2 * fr + vec3(0.02, 0.05, 0.03) * (mi == 4 && P.z < 50. ? 1. : 0.);
+  } else if (mi == 5) {                    // 木
+    float pl = fract((abs(N.y) > 0.5 ? P.x : (abs(N.x) > 0.5 ? P.z : P.x)) * 3.);
+    alb = col * (0.7 + 0.35 * vn(P.xz * vec2(0.6, 9.) + P.yy * 4.)) * mix(0.55, 1., smoothstep(0.02, 0.1, pl));
+    rough = 0.75;
+  } else if (mi == 6) {                    // 穀物の山
+    alb = col * (0.7 + 0.5 * vn(P.xz * 18. + P.yy * 9.)); rough = 0.95;
+  } else if (mi == 8) {                    // 土の路地
+    float pud = smoothstep(0.58, 0.8, vn(P.xz * 0.25));
+    alb = col * (0.7 + 0.4 * vn(P.xz * 3.)) * mix(1., 0.45, pud); wet = pud; rough = mix(0.95, 0.08, pud);
+  } else if (mi == 11) {                   // 血だまり
+    rough = 0.08; wet = 0.6;
+  } else if (mi == 12) { rough = 0.3; }    // 金属
+  else if (mi == 13) { alb = vec3(0); emit = col; }  // 光るもの(灯・窓・炎の芯)
+  else if (mi == 14) { rough = 0.95; }     // 毛・布
+  vec3 c = shade(P, N, alb, rough, wet) + emit;
+  return c;
+}`;
+const VS_WORLD = `#version 300 es
+layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=2) in vec3 aC; layout(location=3) in float aM;
+uniform mat4 uVP; out vec3 vW; out vec3 vN; out vec3 vC; out float vM;
+void main(){ vW = aP; vN = aN; vC = aC; vM = aM; gl_Position = uVP * vec4(aP, 1.); }`;
+const FS_WORLD = `#version 300 es
+${COMMON}
+in vec3 vW; in vec3 vN; in vec3 vC; in float vM; out vec4 o;
+void main(){ vec3 c = surface(vW, normalize(vN), vC, vM); o = vec4(fogit(c, vW), 1.); }`;
+const VS_INST = `#version 300 es
+layout(location=0) in vec3 aP; layout(location=1) in vec3 aN;
+layout(location=2) in vec4 iA; layout(location=3) in vec4 iB; layout(location=4) in vec4 iC;
+uniform mat4 uVP; out vec3 vW; out vec3 vN; out vec3 vC; out float vM;
+void main(){
+  vec3 p = aP * iB.xyz; vec3 n = normalize(aN / max(iB.xyz, vec3(1e-3)));
+  float cp = cos(iB.w), sp = sin(iB.w);
+  p = vec3(p.x, p.y * cp + p.z * sp, -p.y * sp + p.z * cp); n = vec3(n.x, n.y * cp + n.z * sp, -n.y * sp + n.z * cp);
+  float ch = cos(iA.w), sh = sin(iA.w);
+  p = vec3(p.x * ch + p.z * sh, p.y, -p.x * sh + p.z * ch); n = vec3(n.x * ch + n.z * sh, n.y, -n.x * sh + n.z * ch);
+  vW = p + iA.xyz; vN = n; vC = iC.rgb; vM = iC.a;
+  gl_Position = uVP * vec4(vW, 1.);
+}`;
+const VS_RAT = `#version 300 es
+layout(location=0) in vec3 aP; layout(location=1) in vec3 aN; layout(location=2) in float aPart;
+layout(location=3) in vec4 iA; layout(location=4) in vec4 iB;
+uniform mat4 uVP; uniform float uTime; out vec3 vW; out vec3 vN; out vec3 vC;
+void main(){
+  float s = iB.z; vec3 p = aP * s; vec3 n = aN;
+  float ph = iB.y;
+  if (aPart > 1.5 && aPart < 2.5) { float k = clamp(-aP.z - 0.11, 0., 1.); p.x += sin(uTime * 13. + ph - k * 18.) * k * 0.5 * s; }
+  p.y += abs(sin(uTime * 17. + ph)) * 0.014 * s;
+  float cp = cos(iB.x), sp = sin(iB.x);
+  p = vec3(p.x, p.y * cp + p.z * sp, -p.y * sp + p.z * cp); n = vec3(n.x, n.y * cp + n.z * sp, -n.y * sp + n.z * cp);
+  float ch = cos(iA.w), sh = sin(iA.w);
+  p = vec3(p.x * ch + p.z * sh, p.y, -p.x * sh + p.z * ch); n = vec3(n.x * ch + n.z * sh, n.y, -n.x * sh + n.z * ch);
+  vW = p + iA.xyz; vN = n;
+  float t = iB.w;
+  vec3 fur = mix(vec3(0.16, 0.14, 0.13), vec3(0.34, 0.32, 0.3), t);
+  if (t > 1.5) fur = vec3(0.06, 0.03, 0.02);  // 焼けた
+  vC = aPart > 0.5 && aPart < 1.5 ? vec3(0.55, 0.32, 0.32) : (aPart > 1.5 ? vec3(0.42, 0.3, 0.3) : fur);
+  gl_Position = uVP * vec4(vW, 1.);
+}`;
+const FS_RAT = `#version 300 es
+${COMMON}
+in vec3 vW; in vec3 vN; in vec3 vC; out vec4 o;
+void main(){
+  vec3 N = normalize(vN); vec3 V = normalize(uCam - vW);
+  vec3 c = shade(vW, N, vC, 0.7, 0.);
+  c += uMoonCol * 0.35 * pow(1. - abs(dot(N, V)), 3.);
+  o = vec4(fogit(c, vW), 1.);
+}`;
+const VS_EYE = `#version 300 es
+layout(location=3) in vec4 iA; layout(location=4) in vec4 iB;
+uniform mat4 uVP; uniform vec3 uCam; uniform float uPS; uniform int uNL; uniform vec4 uLP[16]; uniform vec3 uLC[16]; uniform float uFogD;
+out float vI;
+void main(){
+  float side = gl_VertexID == 0 ? -1. : 1.;
+  vec3 p = vec3(side * 0.024, 0.052, 0.118) * iB.z;
+  float cp = cos(iB.x), sp = sin(iB.x);
+  p = vec3(p.x, p.y * cp + p.z * sp, -p.y * sp + p.z * cp);
+  float ch = cos(iA.w), sh = sin(iA.w);
+  p = vec3(p.x * ch + p.z * sh, p.y, -p.x * sh + p.z * ch);
+  vec3 W = p + iA.xyz;
+  vec3 fwd = vec3(sin(iA.w) * cos(iB.x), sin(iB.x), cos(iA.w) * cos(iB.x));
+  vec3 V = uCam - W; float dist = length(V); V /= dist;
+  float face = smoothstep(-0.25, 0.85, dot(fwd, V));
+  float li = 0.;
+  for (int i = 0; i < 16; i++) { if (i >= uNL) break; vec3 L = uLP[i].xyz - W; li += dot(uLC[i], vec3(0.33)) / (1. + dot(L, L) * 0.12); }
+  vI = face * (0.3 + li) * exp(-dist * uFogD) * (iB.w > 1.5 ? 0. : 1.);
+  vec4 c = uVP * vec4(W, 1.); gl_Position = vI < 0.004 ? vec4(0., 0., 2., 1.) : c; // 光らない目は塗らない
+  gl_PointSize = clamp(uPS * 0.045 * iB.z / c.w, 1.6, 7.);
+}`;
+const FS_EYE = `#version 300 es
+precision highp float; in float vI; out vec4 o;
+void main(){ vec2 q = gl_PointCoord * 2. - 1.; float r = dot(q, q); if (r > 1.) discard; o = vec4(vec3(1.0, 0.32, 0.12) * vI * (1. - r) * 3.2, 1.); }`;
+const VS_PART = `#version 300 es
+layout(location=0) in vec4 aP; layout(location=1) in vec4 aC;
+uniform mat4 uVP; uniform float uPS; uniform vec3 uCam; uniform float uFogD; out vec4 vC;
+void main(){ vec4 c = uVP * vec4(aP.xyz, 1.); gl_Position = c; gl_PointSize = clamp(uPS * aP.w / c.w, 1., 220.);
+  vC = vec4(aC.rgb * exp(-length(aP.xyz - uCam) * uFogD * 0.8), aC.a); }`;
+const FS_PART = `#version 300 es
+precision highp float; in vec4 vC; out vec4 o;
+void main(){ float r = length(gl_PointCoord * 2. - 1.); float a = 1. - smoothstep(0.0, 1., r); a *= a; o = vec4(vC.rgb * a * vC.a, a * vC.a); }`;
+const VS_FULL = `#version 300 es
+out vec2 vUV; void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); vUV = p; gl_Position = vec4(p * 2. - 1., 0.99999, 1.); }`;
+const FS_SKY = `#version 300 es
+${COMMON}
+in vec2 vUV; uniform mat4 uInv; out vec4 o;
+void main(){
+  vec4 a = uInv * vec4(vUV * 2. - 1., 1., 1.); vec3 dir = normalize(a.xyz / a.w - uCam);
+  float h = dir.y;
+  vec3 c = mix(uFogCol, vec3(0.006, 0.01, 0.028), smoothstep(0.0, 0.55, h));
+  float m = max(dot(dir, uMoonDir), 0.);
+  c += vec3(0.35, 0.45, 0.75) * (pow(m, 50.) * 0.35 + pow(m, 6.) * 0.06);
+  float disc = smoothstep(0.99955, 0.99975, m);
+  c = mix(c, vec3(3.4, 3.5, 3.2) * (0.82 + 0.18 * vn(dir.xy * 900.)), disc);
+  vec2 sp = dir.xz / (dir.y + 0.35) * 160.;
+  float s = h21(floor(sp));
+  c += step(0.9965, s) * smoothstep(0.05, 0.35, h) * vec3(0.9) * (0.6 + 0.4 * sin(uTime * 2. + s * 50.)) * (1. - disc);
+  float cl = vn(dir.xz / (dir.y + 0.2) * 2.2 + vec2(uTime * 0.012, 0.)) * vn(dir.xz / (dir.y + 0.2) * 5.1);
+  c = mix(c, vec3(0.05, 0.065, 0.11) + vec3(0.25, 0.3, 0.45) * pow(m, 12.) * 0.6, smoothstep(0.2, 0.55, cl) * 0.65 * smoothstep(0., 0.2, h));
+  o = vec4(c, 1.);
+}`;
+const FS_BRIGHT = `#version 300 es
+precision highp float; in vec2 vUV; uniform sampler2D uT; out vec4 o;
+void main(){ vec3 c = texture(uT, vUV).rgb; float l = max(c.r, max(c.g, c.b)); o = vec4(c * max(l - 0.9, 0.) / max(l, 1e-4), 1.); }`;
+const FS_BLUR = `#version 300 es
+precision highp float; in vec2 vUV; uniform sampler2D uT; uniform vec2 uDir; out vec4 o;
+void main(){ vec3 c = texture(uT, vUV).rgb * 0.227;
+  c += (texture(uT, vUV + uDir * 1.38).rgb + texture(uT, vUV - uDir * 1.38).rgb) * 0.316;
+  c += (texture(uT, vUV + uDir * 3.23).rgb + texture(uT, vUV - uDir * 3.23).rgb) * 0.07;
+  o = vec4(c, 1.); }`;
+const FS_COMP = `#version 300 es
+precision highp float; in vec2 vUV; uniform sampler2D uS; uniform sampler2D uB; uniform float uBloom; uniform float uExp; uniform float uTime; uniform vec3 uTint; out vec4 o;
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+void main(){
+  vec3 c = texture(uS, vUV).rgb + texture(uB, vUV).rgb * uBloom;
+  c *= uExp;
+  c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+  vec2 d = vUV - 0.5; float v = 1. - dot(d, d) * 1.15;
+  c *= v;
+  c += uTint * smoothstep(0.15, 0.55, length(d));
+  c = pow(clamp(c, 0., 1.), vec3(1. / 2.2));
+  c += (h21(gl_FragCoord.xy + fract(uTime) * 91.) - 0.5) * 0.025;
+  o = vec4(c, 1.);
+}`;
+
+// ---------- 行列 ----------
+const M4 = () => new Float32Array(16);
+function persp(o, fy, a, n, f) { const t = 1 / Math.tan(fy / 2); o.fill(0); o[0] = t / a; o[5] = t; o[10] = (f + n) / (n - f); o[11] = -1; o[14] = 2 * f * n / (n - f); }
+function lookAt(o, e, c) {
+  let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2]; let l = Math.hypot(zx, zy, zz) || 1; zx /= l; zy /= l; zz /= l;
+  let xx = zz, xy = 0, xz = -zx; l = Math.hypot(xx, xz) || 1; xx /= l; xz /= l; // up=(0,1,0) × z
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  o[0] = xx; o[1] = yx; o[2] = zx; o[3] = 0; o[4] = xy; o[5] = yy; o[6] = zy; o[7] = 0; o[8] = xz; o[9] = yz; o[10] = zz; o[11] = 0;
+  o[12] = -(xx * e[0] + xy * e[1] + xz * e[2]); o[13] = -(yx * e[0] + yy * e[1] + yz * e[2]); o[14] = -(zx * e[0] + zy * e[1] + zz * e[2]); o[15] = 1;
+}
+function mul(o, a, b) { for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + i] * b[j * 4 + k]; o[j * 4 + i] = s; } }
+function invert(o, m) {
+  const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3], a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7], a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11], a30 = m[12], a31 = m[13], a32 = m[14], a33 = m[15];
+  const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11, b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12;
+  const b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30, b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
+  const det = 1 / (b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06);
+  o[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det; o[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det; o[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det; o[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
+  o[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det; o[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det; o[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det; o[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
+  o[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det; o[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det; o[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det; o[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
+  o[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det; o[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det; o[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det; o[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
+}
+
+// ---------- 形を作る ----------
+const SV = [];
+function tri(a, b, c, n, col, m) { for (const p of [a, b, c]) SV.push(p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2], m); }
+function quad(a, b, c, d, n, col, m) { tri(a, b, c, n, col, m); tri(a, c, d, n, col, m); }
+const nrm = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+function box(x0, y0, z0, x1, y1, z1, col, m, topM = m, topCol = col) {
+  quad([x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0], topCol, topM);
+  quad([x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [0, 0, -1], col, m);
+  quad([x1, y0, z1], [x0, y0, z1], [x0, y1, z1], [x1, y1, z1], [0, 0, 1], col, m);
+  quad([x0, y0, z1], [x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [-1, 0, 0], col, m);
+  quad([x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0], [1, 0, 0], col, m);
+}
+function roof(x0, z0, x1, z1, y0, h, col, wallCol) {
+  const o = 0.35;
+  if (z1 - z0 >= x1 - x0) {
+    const xm = (x0 + x1) / 2, yb = y0 - 0.25;
+    quad([x0 - o, yb, z0 - o], [x0 - o, yb, z1 + o], [xm, y0 + h, z1 + o], [xm, y0 + h, z0 - o], nrm([-(h + 0.25), xm - x0 + o, 0]), col, 3);
+    quad([x1 + o, yb, z1 + o], [x1 + o, yb, z0 - o], [xm, y0 + h, z0 - o], [xm, y0 + h, z1 + o], nrm([h + 0.25, x1 + o - xm, 0]), col, 3);
+    tri([x0, y0, z0], [x1, y0, z0], [xm, y0 + h, z0], [0, 0, -1], wallCol, 2); tri([x1, y0, z1], [x0, y0, z1], [xm, y0 + h, z1], [0, 0, 1], wallCol, 2);
+  } else {
+    const zm = (z0 + z1) / 2, yb = y0 - 0.25;
+    quad([x1 + o, yb, z0 - o], [x0 - o, yb, z0 - o], [x0 - o, y0 + h, zm], [x1 + o, y0 + h, zm], nrm([0, zm - z0 + o, -(h + 0.25)]), col, 3);
+    quad([x0 - o, yb, z1 + o], [x1 + o, yb, z1 + o], [x1 + o, y0 + h, zm], [x0 - o, y0 + h, zm], nrm([0, z1 + o - zm, h + 0.25]), col, 3);
+    tri([x0, y0, z1], [x0, y0, z0], [x0, y0 + h, zm], [-1, 0, 0], wallCol, 2); tri([x1, y0, z0], [x1, y0, z1], [x1, y0 + h, zm], [1, 0, 0], wallCol, 2);
+  }
+}
+function cyl(cx, cz, r, y0, y1, seg, col, m, cap = true) {
+  for (let i = 0; i < seg; i++) {
+    const a0 = i / seg * TAU, a1 = (i + 1) / seg * TAU, am = (a0 + a1) / 2;
+    const p0 = [cx + Math.sin(a0) * r, cz + Math.cos(a0) * r], p1 = [cx + Math.sin(a1) * r, cz + Math.cos(a1) * r];
+    quad([p0[0], y0, p0[1]], [p1[0], y0, p1[1]], [p1[0], y1, p1[1]], [p0[0], y1, p0[1]], [Math.sin(am), 0, Math.cos(am)], col, m);
+    if (cap) tri([cx, y1, cz], [p0[0], y1, p0[1]], [p1[0], y1, p1[1]], [0, 1, 0], col, m);
+  }
+}
+function cone(cx, cz, r, y0, h, seg, col, m) {
+  for (let i = 0; i < seg; i++) {
+    const a0 = i / seg * TAU, a1 = (i + 1) / seg * TAU, am = (a0 + a1) / 2;
+    tri([cx + Math.sin(a0) * r, y0, cz + Math.cos(a0) * r], [cx + Math.sin(a1) * r, y0, cz + Math.cos(a1) * r], [cx, y0 + h, cz], nrm([Math.sin(am) * h, r, Math.cos(am) * h]), col, m);
+  }
+}
+const FLOOR_COL = { 0: [0.36, 0.34, 0.33], 4: [0.02, 0.03, 0.04], 5: [0.36, 0.24, 0.14], 8: [0.3, 0.24, 0.17], 9: [0.2, 0.22, 0.19], 10: [0.34, 0.31, 0.29] };
+function buildStatic() {
+  SV.length = 0;
+  quad([-90, -0.03, -30], [90, -0.03, -30], [90, -0.03, 540], [-90, -0.03, 540], [0, 1, 0], [0.12, 0.1, 0.08], 8);
+  for (const f of floors) quad([f.x0, f.y, f.z0], [f.x1, f.y, f.z0], [f.x1, f.y, f.z1], [f.x0, f.y, f.z1], [0, 1, 0], FLOOR_COL[f.mat] || [0.3, 0.3, 0.3], f.mat);
+  // 通れない所に建物を建てる(貪欲に四角へまとめる)
+  const used = new Uint8Array(GX * GZ);
+  for (let iz = 0; iz < GZ; iz++) for (let ix = 0; ix < GX; ix++) {
+    const c = iz * GX + ix, t = grid[c];
+    if ((t !== 1 && t !== 6) || used[c]) continue;
+    const zc = Z0 + iz * CS;
+    const big = zc < 50 ? 48 : 24;
+    let w = 1; while (ix + w < GX && w < big && grid[c + w] === t && !used[c + w]) w++;
+    let h = 1;
+    outer: while (iz + h < GZ && h < big) { for (let k = 0; k < w; k++) { const cc = (iz + h) * GX + ix + k; if (grid[cc] !== t || used[cc]) break outer; } h++; }
+    for (let a = 0; a < h; a++) for (let k = 0; k < w; k++) used[(iz + a) * GX + ix + k] = 1;
+    house(X0 + ix * CS, zc, X0 + (ix + w) * CS, zc + h * CS, t);
+  }
+  // 遠くの家並み(画面の外側が空っぽに見えないように)
+  for (const s of [-1, 1]) for (let z = -8; z < 470;) { const d = rnd(8, 14); const w = rnd(10, 22); house(s < 0 ? -30 - w : 30, z, s < 0 ? -30 : 30 + w, z + d - 0.6, 1, true); z += d; }
+  // 下水道のアーチ
+  for (let z = 3; z < 50; z += 6) box(-4, 2.65, z, 4, 3.05, z + 0.45, [0.22, 0.22, 0.2], 9);
+  for (const x of [-1.05, 0.9]) box(x, 0, -3, x + 0.15, 0.12, 47, [0.25, 0.25, 0.23], 9);
+  // 橋
+  box(-1.1, 0, 288.6, 1.1, 0.12, 292.4, [0.36, 0.24, 0.14], 5);
+  // 城壁・塔・門
+  const stone = [0.42, 0.41, 0.4];
+  box(-30, 0, WALL_Z, 30, WALL_H, WALL_Z + WALL_T, stone, 1);
+  for (let x = -29.4; x < 30; x += 2.4) { box(x, WALL_H, WALL_Z, x + 1.2, WALL_H + 1.3, WALL_Z + 0.55, stone, 1); box(x, WALL_H, WALL_Z + WALL_T - 0.55, x + 1.2, WALL_H + 1.3, WALL_Z + WALL_T, stone, 1); }
+  box(-3.2, 0, WALL_Z - 0.35, 3.2, 6.6, WALL_Z, [0.24, 0.15, 0.09], 5);
+  for (const y of [1.4, 3.2, 5]) box(-3.25, y, WALL_Z - 0.42, 3.25, y + 0.22, WALL_Z - 0.3, [0.2, 0.2, 0.22], 12);
+  for (const tx of [-14, 14]) {
+    cyl(tx, WALL_Z + 2, 3.4, 0, 17, 14, stone, 1);
+    cone(tx, WALL_Z + 2, 4.1, 17, 6.5, 14, [0.2, 0.16, 0.15], 3);
+    for (const y of [9, 13]) box(tx - 0.35, y, WALL_Z + 2 - 3.5, tx + 0.35, y + 1.1, WALL_Z + 2 - 3.3, [3.2, 1.7, 0.6], 13);
+  }
+  // 大広間
+  const hs = [0.46, 0.44, 0.42];
+  box(-12, 0, 411, -11, 14, 453, hs, 1); box(11, 0, 411, 12, 14, 453, hs, 1); box(-12, 0, 452, 12, 14, 453, hs, 1);
+  box(-12, 0, 411, -2.5, 14, 412, hs, 1); box(2.5, 0, 411, 12, 14, 412, hs, 1); box(-2.5, 6.2, 411, 2.5, 14, 412, hs, 1);
+  for (const px of [-5.5, 5.5]) for (const pz of [420, 428, 436, 444]) cyl(px, pz, 0.55, 0, 13.4, 10, [0.5, 0.48, 0.45], 1);
+  for (let z = 414; z < 452; z += 6) box(-11, 13.3, z, 11, 13.8, z + 0.5, [0.25, 0.17, 0.1], 5);
+  for (const tx of [-8.4, 8.4]) { box(tx - 0.8, 0.74, 416, tx + 0.8, 0.86, 448, [0.32, 0.2, 0.11], 5); for (const z of [417, 432, 447]) box(tx - 0.7, 0, z, tx - 0.55, 0.74, z + 0.15, [0.25, 0.16, 0.09], 5), box(tx + 0.55, 0, z, tx + 0.7, 0.74, z + 0.15, [0.25, 0.16, 0.09], 5); }
+  box(-1.2, 0, 447.6, 1.2, 0.5, 450, [0.3, 0.1, 0.1], 14); box(-0.8, 0.5, 448.6, 0.8, 1.3, 449.6, [0.55, 0.42, 0.15], 12); box(-0.8, 1.3, 449.4, 0.8, 3.4, 449.7, [0.55, 0.42, 0.15], 12);
+  // 天守(遠くからも見える目標)
+  box(-10, 0, 456, 10, 34, 476, stone, 1);
+  for (let x = -9.4; x < 10; x += 2.6) box(x, 34, 456, x + 1.3, 35.6, 457, stone, 1);
+  for (let y = 8; y < 33; y += 5) for (let x = -7.5; x < 8; x += 3.75) if (Math.random() < 0.7) box(x - 0.4, y, 455.85, x + 0.4, y + 1.5, 456, [3.0, 1.5, 0.55], 13);
+  for (const tx of [-10, 10]) { cyl(tx, 456, 2.6, 0, 40, 12, stone, 1); cone(tx, 456, 3.2, 40, 7, 12, [0.2, 0.16, 0.15], 3); }
+  // 灯の柱・下水道のランプ・かがり火
+  for (const l of lamps) {
+    if (l.kind === 'post') { cyl(l.x, l.z, 0.07, 0, l.y - 0.2, 6, [0.08, 0.08, 0.09], 12); box(l.x - 0.18, l.y - 0.25, l.z - 0.18, l.x + 0.18, l.y + 0.15, l.z + 0.18, [3.4, 1.8, 0.7], 13); }
+    else if (l.kind === 'wall') box(l.x - 0.12, l.y - 0.1, l.z - 0.12, l.x + 0.12, l.y + 0.25, l.z + 0.12, [3.6, 1.9, 0.7], 13);
+    else if (l.kind === 'sewer') box(l.x - 0.12, l.y - 0.15, l.z - 0.12, l.x + 0.12, l.y + 0.15, l.z + 0.12, [1.0, 2.8, 1.1], 13);
+    else if (l.kind === 'brazier') { cyl(l.x, l.z, 0.45, 0, 1.2, 8, [0.15, 0.12, 0.1], 12); }
+    else if (l.kind === 'grate') { for (let k = -2; k <= 2; k++) box(-0.9 + k * 0.38, 3.0, l.z - 0.6, -0.8 + k * 0.38, 3.08, l.z + 0.6, [0.1, 0.1, 0.1], 12); }
+  }
+  // 炎のバリケード(焦げた荷車と樽)
+  for (const f of fires) {
+    for (let x = f.x0 + 0.4; x < f.x1 - 0.3; x += 1.1) cyl(x + rnd(-0.2, 0.2), (f.z0 + f.z1) / 2 + rnd(-0.5, 0.5), 0.35, 0, 0.9, 8, [0.12, 0.08, 0.05], 5);
+    box(f.x0 + 0.5, 0.3, f.z0 + 0.3, f.x0 + 3.2, 0.9, f.z1 - 0.3, [0.1, 0.07, 0.05], 5);
+  }
+  // 市場の台
+  for (const fd of foods) if (fd.kind === 'stall') { box(fd.x - 1.4, 0, fd.z + 1.5, fd.x + 1.4, 0.95, fd.z + 2.0, [0.33, 0.21, 0.12], 5); }
+  return new Float32Array(SV);
+}
+function house(x0, z0, x1, z1, t, far = false) {
+  const zc = (z0 + z1) / 2;
+  if (t === 6) { box(x0, 0, z0, x1, 1.3, z1, [0.3, 0.2, 0.12], 5); return; }
+  if (zc < 50 && !far) { box(x0, 0, z0, x1, 3, z1, [0.25, 0.26, 0.23], 9, 0, [0.2, 0.2, 0.2]); return; }
+  const k = rnd(0.8, 1.15);
+  let h, wall, mat = 2, rh = rnd(1.6, 2.6), rc = Math.random() < 0.5 ? [0.3, 0.14, 0.1] : [0.2, 0.2, 0.22];
+  if (zc < 150) { h = rnd(3.8, 6.2); wall = [0.62 * k, 0.56 * k, 0.46 * k]; }
+  else if (zc < 232) { h = rnd(3.5, 5.5); wall = [0.4 * k, 0.28 * k, 0.17 * k]; mat = Math.random() < 0.5 ? 5 : 2; }
+  else if (zc < 345) { h = rnd(6, 9.5); wall = [0.5 * k, 0.48 * k, 0.45 * k]; }
+  else { h = rnd(11, 16); wall = [0.4 * k, 0.39 * k, 0.38 * k]; mat = 1; rh = 0; }
+  if (far) h *= rnd(1, 1.5);
+  box(x0, 0, z0, x1, h, z1, wall, mat, mat === 1 ? 1 : 3, mat === 1 ? wall : rc);
+  if (rh > 0) roof(x0, z0, x1, z1, h, rh, rc, wall);
+}
+
+// ---------- 小さな形(インスタンス描画用) ----------
+function primBox() {
+  const out = [];
+  for (const n of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+    const u = n[0] !== 0 ? [0, 1, 0] : [1, 0, 0];
+    const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+    const p = (a, b) => [n[0] * 0.5 + u[0] * a + v[0] * b, n[1] * 0.5 + u[1] * a + v[1] * b, n[2] * 0.5 + u[2] * a + v[2] * b];
+    const q = [p(-0.5, -0.5), p(0.5, -0.5), p(0.5, 0.5), p(-0.5, 0.5)];
+    for (const i of [0, 1, 2, 0, 2, 3]) out.push(...q[i], ...n);
+  }
+  return out;
+}
+function primCyl(seg = 10) {
+  const out = [];
+  for (let i = 0; i < seg; i++) {
+    const a0 = i / seg * TAU, a1 = (i + 1) / seg * TAU, am = (a0 + a1) / 2;
+    const s0 = Math.sin(a0) * 0.5, c0 = Math.cos(a0) * 0.5, s1 = Math.sin(a1) * 0.5, c1 = Math.cos(a1) * 0.5;
+    const n = [Math.sin(am), 0, Math.cos(am)];
+    for (const p of [[s0, -0.5, c0], [s1, -0.5, c1], [s1, 0.5, c1], [s0, -0.5, c0], [s1, 0.5, c1], [s0, 0.5, c0]]) out.push(...p, ...n);
+    for (const p of [[0, 0.5, 0], [s0, 0.5, c0], [s1, 0.5, c1]]) out.push(...p, 0, 1, 0);
+    for (const p of [[0, -0.5, 0], [s1, -0.5, c1], [s0, -0.5, c0]]) out.push(...p, 0, -1, 0);
+  }
+  return out;
+}
+function primCone(seg = 10) {
+  const out = [];
+  for (let i = 0; i < seg; i++) {
+    const a0 = i / seg * TAU, a1 = (i + 1) / seg * TAU, am = (a0 + a1) / 2;
+    const n = nrm([Math.sin(am), 0.5, Math.cos(am)]);
+    for (const p of [[Math.sin(a0) * 0.5, 0, Math.cos(a0) * 0.5], [Math.sin(a1) * 0.5, 0, Math.cos(a1) * 0.5], [0, 1, 0]]) out.push(...p, ...n);
+  }
+  return out;
+}
+function primSph() {
+  const out = [], la = 6, lo = 9;
+  const P = (i, j) => { const t = i / la * Math.PI, f = j / lo * TAU; return [Math.sin(t) * Math.sin(f) * 0.5, Math.cos(t) * 0.5, Math.sin(t) * Math.cos(f) * 0.5]; };
+  for (let i = 0; i < la; i++) for (let j = 0; j < lo; j++) {
+    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1);
+    for (const p of [a, b, c, a, c, d]) out.push(...p, ...nrm(p));
+  }
+  return out;
+}
+function ratGeometry(lod) {
+  const out = [];
+  const T3 = (a, b, c, part, nFix) => {
+    let n = nFix;
+    if (!n) {
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      n = nrm([u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]);
+      const cx = (a[0] + b[0] + c[0]) / 3, cy = (a[1] + b[1] + c[1]) / 3;
+      if (n[0] * cx + n[1] * (cy - 0.05) < 0 && Math.abs(n[2]) < 0.9) n = [-n[0], -n[1], -n[2]];
+    }
+    // 外から見て左回りにそろえる(裏の面を描かずにすむ)。尾と耳は薄いので両面にする
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const gn = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    if (gn[0] * n[0] + gn[1] * n[1] + gn[2] * n[2] < 0) [b, c] = [c, b];
+    for (const p of [a, b, c]) out.push(...p, ...n, part);
+    if (part >= 2) for (const p of [a, c, b]) out.push(...p, -n[0], -n[1], -n[2], part);
+  };
+  if (lod === 3) { // いちばん軽い形: 紡錘形の胴と尾
+    const ring = []; for (let k = 0; k < 3; k++) { const ang = k / 3 * TAU + Math.PI / 2; ring.push([Math.cos(ang) * 0.058, 0.058 + Math.sin(ang) * 0.058 * 0.82, 0]); }
+    const rear = [0, 0.045, -0.12], nose = [0, 0.042, 0.145];
+    for (let k = 0; k < 3; k++) { const k1 = (k + 1) % 3; T3(rear, ring[k1], ring[k], 0); T3(ring[k], ring[k1], nose, 0); }
+    T3([-0.01, 0.035, -0.115], [0.01, 0.035, -0.115], [0, 0.012, -0.32], 2, [0, 1, 0]);
+    return out;
+  }
+  const sides = lod === 2 ? 3 : lod ? 4 : 5;
+  const rings = lod ? [[-0.11, 0.045, 0.05], [0.05, 0.045, 0.055]] : [[-0.12, 0.034, 0.048], [-0.07, 0.062, 0.06], [0.0, 0.058, 0.058], [0.062, 0.038, 0.052]];
+  const R = rings.map(([z, r, yc]) => { const a = []; for (let k = 0; k < sides; k++) { const ang = k / sides * TAU + Math.PI / 2; a.push([Math.cos(ang) * r, yc + Math.sin(ang) * r * 0.82, z]); } return a; });
+  for (let j = 0; j < R.length - 1; j++) for (let k = 0; k < sides; k++) {
+    const k1 = (k + 1) % sides;
+    T3(R[j][k], R[j][k1], R[j + 1][k1], 0); T3(R[j][k], R[j + 1][k1], R[j + 1][k], 0);
+  }
+  const nose = [0, 0.042, 0.145], last = R[R.length - 1];
+  for (let k = 0; k < sides; k++) T3(last[k], last[(k + 1) % sides], nose, 1);
+  for (let k = 1; k < sides - 1; k++) T3(R[0][0], R[0][k], R[0][k + 1], 0, [0, 0, -1]);
+  const tz = rings[0][0] + 0.005;
+  if (lod) T3([-0.01, 0.035, tz], [0.01, 0.035, tz], [0, 0.012, -0.32], 2, [0, 1, 0]);
+  else {
+    const a = [-0.011, 0.036, tz], b = [0.011, 0.036, tz], c = [-0.007, 0.022, -0.22], d = [0.007, 0.022, -0.22], e = [0, 0.012, -0.33];
+    T3(a, b, d, 2, [0, 1, 0]); T3(a, d, c, 2, [0, 1, 0]); T3(c, d, e, 2, [0, 1, 0]);
+    T3([-0.034, 0.074, 0.05], [-0.012, 0.082, 0.056], [-0.032, 0.108, 0.046], 3, nrm([-0.2, 0.3, 1]));
+    T3([0.034, 0.074, 0.05], [0.012, 0.082, 0.056], [0.032, 0.108, 0.046], 3, nrm([0.2, 0.3, 1]));
+  }
+  return out;
+}
+
+// ---------- GPU の準備 ----------
+const P = {}, VAO = {}, PRIMS = {};
+const MAXR = 12000, MAXI = 3000, MP = 5000, MPD = 9000;
+const INST_ROWS = Math.ceil(MAXR * 2 / 1024);
+const ratInst = new Float32Array(INST_ROWS * 1024 * 4);
+let ratTex = null, ratGeoTex = [];
+const partData = new Float32Array(MPD * 8);
+let ratBuf = null, partBuf = null, staticBuf = null, staticCount = 0, ratCounts = [0, 0, 0, 0];
+let FB = null, HDRok = HDR;
+function attr(loc, size, stride, off, div = 0) { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, off); gl.vertexAttribDivisor(loc, div); }
+function initGL() {
+  P.world = program(VS_WORLD, FS_WORLD); P.inst = program(VS_INST, FS_WORLD); P.rat = program(VS_RAT, FS_RAT);
+  const lite = (s) => s.replace('#version 300 es', '#version 300 es\n#define LITE');
+  P.worldL = program(VS_WORLD, lite(FS_WORLD)); P.instL = program(VS_INST, lite(FS_WORLD)); P.ratL = program(VS_RAT, lite(FS_RAT));
+  // 軽い画質のネズミと目は、インスタンス描画を使わず1回の描画で(遅い端末ではインスタンスごとの手間が重い)。
+  // 1匹ぶんの形と、1匹ずつの位置をテクスチャから読む
+  const PULL = 'uniform highp sampler2D uInst; uniform highp sampler2D uGeo; uniform int uNV;\n' +
+    'vec4 instTex(int t){ return texelFetch(uInst, ivec2(t & 1023, t >> 10), 0); }\n';
+  const ratP = VS_RAT.replace(/layout\(location=0\)[^\n]*\n[^\n]*iB;/, PULL)
+    .replace('void main(){', 'void main(){\n  int id = gl_VertexID / uNV, vi = gl_VertexID - id * uNV;\n  vec4 iA = instTex(id * 2), iB = instTex(id * 2 + 1);\n' +
+      '  vec4 g0 = texelFetch(uGeo, ivec2(vi * 2, 0), 0), g1 = texelFetch(uGeo, ivec2(vi * 2 + 1, 0), 0);\n  vec3 aP = g0.xyz, aN = vec3(g0.w, g1.xy); float aPart = g1.z;');
+  P.ratP = program(ratP, lite(FS_RAT));
+  const eyeP = VS_EYE.replace('layout(location=3) in vec4 iA; layout(location=4) in vec4 iB;', PULL)
+    .replace('void main(){', 'void main(){\n  int id = gl_VertexID >> 1; vec4 iA = instTex(id * 2), iB = instTex(id * 2 + 1);')
+    .replace('gl_VertexID == 0 ?', '(gl_VertexID & 1) == 0 ?');
+  P.eyeP = program(eyeP, FS_EYE);
+  const ftex = (w, h, data) => {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, h, 0, gl.RGBA, gl.FLOAT, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    return t;
+  };
+  ratTex = ftex(1024, INST_ROWS, null);
+  ratGeoTex = [0, 1, 2, 3].map((lod) => {
+    const g = ratGeometry(lod), nv = g.length / 7, d = new Float32Array(nv * 8);
+    for (let i = 0; i < nv; i++) d.set(g.slice(i * 7, i * 7 + 7), i * 8);
+    return ftex(nv * 2, 1, d);
+  });
+  P.eye = program(VS_EYE.replace('location=3) in vec4 iA', 'location=0) in vec4 iA').replace('location=4) in vec4 iB', 'location=1) in vec4 iB'), FS_EYE);
+  P.part = program(VS_PART, FS_PART); P.sky = program(VS_FULL, FS_SKY);
+  P.bright = program(VS_FULL, FS_BRIGHT); P.blur = program(VS_FULL, FS_BLUR); P.comp = program(VS_FULL, FS_COMP);
+  VAO.world = gl.createVertexArray(); gl.bindVertexArray(VAO.world);
+  staticBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, staticBuf);
+  attr(0, 3, 40, 0); attr(1, 3, 40, 12); attr(2, 3, 40, 24); attr(3, 1, 40, 36);
+  for (const [name, data] of [['box', primBox()], ['cyl', primCyl()], ['cone', primCone()], ['sph', primSph()]]) {
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+    attr(0, 3, 24, 0); attr(1, 3, 24, 12);
+    const ib = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ib); gl.bufferData(gl.ARRAY_BUFFER, MAXI * 48, gl.DYNAMIC_DRAW);
+    attr(2, 4, 48, 0, 1); attr(3, 4, 48, 16, 1); attr(4, 4, 48, 32, 1);
+    PRIMS[name] = { vao, ib, data: new Float32Array(MAXI * 12), n: 0, count: data.length / 6 };
+  }
+  ratBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ratBuf); gl.bufferData(gl.ARRAY_BUFFER, MAXR * 32, gl.DYNAMIC_DRAW);
+  VAO.rat = [];
+  for (const lod of [0, 1, 2, 3]) {
+    const geo = ratGeometry(lod);
+    const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geo), gl.STATIC_DRAW);
+    attr(0, 3, 28, 0); attr(1, 3, 28, 12); attr(2, 1, 28, 24);
+    gl.bindBuffer(gl.ARRAY_BUFFER, ratBuf); attr(3, 4, 32, 0, 1); attr(4, 4, 32, 16, 1);
+    VAO.rat.push(vao); ratCounts[lod] = geo.length / 7;
+  }
+  VAO.eye = gl.createVertexArray(); gl.bindVertexArray(VAO.eye);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ratBuf); attr(0, 4, 32, 0, 1); attr(1, 4, 32, 16, 1);
+  VAO.part = gl.createVertexArray(); gl.bindVertexArray(VAO.part);
+  partBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferData(gl.ARRAY_BUFFER, MPD * 32, gl.DYNAMIC_DRAW);
+  attr(0, 4, 32, 0); attr(1, 4, 32, 16);
+  VAO.full = gl.createVertexArray();
+  gl.bindVertexArray(null);
+}
+// 動かない景色は塊(z 12m × x 3列)に分けて並べ直し、画面に入る塊だけ描く(見た目は変わらない)
+let chunks = [];
+function uploadStatic() {
+  const src = buildStatic(), nt = src.length / 30, buckets = new Map();
+  for (let t = 0; t < nt; t++) {
+    const o = t * 30, cx = (src[o] + src[o + 10] + src[o + 20]) / 3, cz = (src[o + 2] + src[o + 12] + src[o + 22]) / 3;
+    const key = Math.floor(cz / 12) * 4 + (cx < -12 ? 0 : cx > 12 ? 2 : 1);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(t);
+  }
+  const data = new Float32Array(src.length);
+  let v = 0; chunks = [];
+  for (const key of [...buckets.keys()].sort((a, b) => a - b)) {
+    const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity], first = v;
+    for (const t of buckets.get(key)) for (let k = 0; k < 3; k++) {
+      const o = t * 30 + k * 10;
+      for (let a = 0; a < 3; a++) { b[a] = Math.min(b[a], src[o + a]); b[a + 3] = Math.max(b[a + 3], src[o + a]); }
+      data.set(src.subarray(o, o + 10), v * 10); v++;
+    }
+    chunks.push({ first, count: v - first, b });
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, staticBuf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  staticCount = v;
+}
+function boxVisible(b) { // 箱の8つの角が、すべて同じ面の外にあれば見えない
+  let o0 = 0, o1 = 0, o2 = 0, o3 = 0, o4 = 0;
+  for (let k = 0; k < 8; k++) {
+    const x = b[k & 1 ? 3 : 0], y = b[k & 2 ? 4 : 1], z = b[k & 4 ? 5 : 2];
+    const cx = VP[0] * x + VP[4] * y + VP[8] * z + VP[12], cy = VP[1] * x + VP[5] * y + VP[9] * z + VP[13];
+    const cz = VP[2] * x + VP[6] * y + VP[10] * z + VP[14], cw = VP[3] * x + VP[7] * y + VP[11] * z + VP[15];
+    if (cx < -cw) o0++; if (cx > cw) o1++; if (cy < -cw) o2++; if (cy > cw) o3++; if (cz < -cw) o4++;
+  }
+  return o0 < 8 && o1 < 8 && o2 < 8 && o3 < 8 && o4 < 8;
+}
+function drawStatic() {
+  let s = -1, e = -1;
+  for (const c of chunks) {
+    if (!boxVisible(c.b)) continue;
+    if (c.first === e) e += c.count;
+    else { if (s >= 0) gl.drawArrays(gl.TRIANGLES, s, e - s); s = c.first; e = c.first + c.count; }
+  }
+  if (s >= 0) gl.drawArrays(gl.TRIANGLES, s, e - s);
+}
+function makeTarget(w, h, depth) {
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, HDRok ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA, HDRok ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let rb = null;
+  if (depth) { rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb); }
+  const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (!ok && HDRok) { gl.deleteTexture(tex); gl.deleteFramebuffer(fb); if (rb) gl.deleteRenderbuffer(rb); HDRok = false; return makeTarget(w, h, depth); }
+  return { fb, tex, rb, w, h };
+}
+function makeTargets(W, H) {
+  if (FB) for (const k of ['s', 'a', 'b']) { gl.deleteTexture(FB[k].tex); gl.deleteFramebuffer(FB[k].fb); if (FB[k].rb) gl.deleteRenderbuffer(FB[k].rb); }
+  const qw = Math.max(2, W >> 2), qh = Math.max(2, H >> 2);
+  FB = { s: makeTarget(W, H, true), a: makeTarget(qw, qh, false), b: makeTarget(qw, qh, false) };
+}
+function inst(b, x, y, z, yaw, sx, sy, sz, pitch, r, g, bl, m) {
+  if (b.n >= MAXI) return;
+  const d = b.data, o = b.n * 12;
+  d[o] = x; d[o + 1] = y; d[o + 2] = z; d[o + 3] = yaw; d[o + 4] = sx; d[o + 5] = sy; d[o + 6] = sz; d[o + 7] = pitch; d[o + 8] = r; d[o + 9] = g; d[o + 10] = bl; d[o + 11] = m;
+  b.n++;
+}
+
+// ---------- ネズミ ----------
+const rx = new Float32Array(MAXR), rz = new Float32Array(MAXR), ry = new Float32Array(MAXR);
+const rvx = new Float32Array(MAXR), rvz = new Float32Array(MAXR), rh = new Float32Array(MAXR), rph = new Float32Array(MAXR);
+const rsp = new Float32Array(MAXR), rsc = new Float32Array(MAXR), rtint = new Float32Array(MAXR);
+const rc = new Int32Array(MAXR), rg = new Uint8Array(MAXR);
+const RA = [rx, rz, ry, rvx, rvz, rh, rph, rsp, rsc, rtint, rc, rg];
+let N = 0;
+const T = [{ x: 0, z: 6 }, { x: 0, z: 6 }];
+const gc = [{ x: 0, z: 0, n: 0 }, { x: 0, z: 0, n: 0 }];
+const INF = 65535;
+const flow = [new Uint16Array(GX * GZ), new Uint16Array(GX * GZ)];
+const flowMeta = [{ c: -2, t: -9 }, { c: -2, t: -9 }];
+const bfsQ = new Int32Array(GX * GZ);
+const D8X = [1, -1, 0, 0, 1, 1, -1, -1], D8Z = [0, 0, 1, -1, 1, -1, 1, -1];
+const MAXSP = 4.6, EAT = 0.85, BIRTH = 1.2;
+const FIRE_RATE = 0.45, OIL_RATE = 1.5, TORCH_RATE = 0.6;
+const CAUSES = ['', 'fire', 'torch', 'cat', 'broom', 'arrow', 'oil'];
+const NEED = { soldier: 42, villager: 16, cat: 20, archer: 24 };
+const ALARM_AT = 200, ALARM_LEN = 25;
+const blobR = (n) => Math.sqrt(n / (Math.PI * 13)) + 0.5;
+const kreqs = [];
+
+function spawnRat(x, z, g) {
+  if (N >= MAXR) return -1;
+  const i = N++;
+  rx[i] = x; rz[i] = z; ry[i] = 0; rvx[i] = 0; rvz[i] = 0; rh[i] = rnd(0, TAU); rph[i] = rnd(0, TAU);
+  rsp[i] = rnd(0.85, 1.18); rsc[i] = rnd(1.25, 1.75); rtint[i] = Math.random(); rg[i] = g; rc[i] = cellOf(x, z);
+  return i;
+}
+function killRat(i, cause) {
+  deathFx(rx[i], ry[i], rz[i], cause);
+  G.deaths[CAUSES[cause]] = (G.deaths[CAUSES[cause]] || 0) + 1;
+  G.hurt = Math.min(0.7, G.hurt + 0.004);
+  const j = --N;
+  if (i !== j) for (const a of RA) a[i] = a[j];
+}
+function targetCell(t) {
+  const c0 = cellOf(t.x, t.z);
+  if (c0 >= 0 && !isSolid(grid[c0])) return c0;
+  for (let r = 1; r < 14; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+    const c = cellOf(t.x + dx * CS, t.z + dz * CS);
+    if (c >= 0 && !isSolid(grid[c])) return c;
+  }
+  return -1;
+}
+function computeFlow(g) {
+  const fd = flow[g]; fd.fill(INF);
+  const tc = targetCell(T[g]); flowMeta[g].c = tc; flowMeta[g].t = G.t;
+  if (tc < 0) return;
+  const tz = (tc / GX) | 0, zlo = Math.max(1, tz - 170), zhi = Math.min(GZ - 2, tz + 170);
+  let head = 0, tail = 0; fd[tc] = 0; bfsQ[tail++] = tc;
+  while (head < tail) {
+    const c = bfsQ[head++], v = fd[c] + 1, iz = (c / GX) | 0, ix = c - iz * GX;
+    for (let k = 0; k < 8; k++) {
+      const nx = ix + D8X[k], nz = iz + D8Z[k];
+      if (nz < zlo || nz > zhi || nx < 1 || nx > GX - 2) continue;
+      const nc = nz * GX + nx;
+      if (fd[nc] !== INF || isSolid(grid[nc])) continue;
+      if (k >= 4 && (isSolid(grid[iz * GX + nx]) || isSolid(grid[nz * GX + ix]))) continue;
+      fd[nc] = v; bfsQ[tail++] = nc;
+    }
+  }
+}
+function stepRats(dt) {
+  dens.fill(0);
+  const cnt = [0, 0], sx = [0, 0], sz = [0, 0];
+  for (let i = 0; i < N; i++) { const c = cellOf(rx[i], rz[i]); rc[i] = c; if (c >= 0) dens[c]++; }
+  for (const f of foods) f.eaters = 0;
+  for (let g = 0; g < 2; g++) {
+    const tc = targetCell(T[g]);
+    if ((tc !== flowMeta[g].c && G.t - flowMeta[g].t > 0.12) || G.t - flowMeta[g].t > 1.5) computeFlow(g);
+  }
+  let gn0 = 0, gn1 = 0; for (let i = 0; i < N; i++) rg[i] ? gn1++ : gn0++;
+  const r0 = [blobR(gn0), blobR(gn1)];
+  const boost = 1 + Math.min(2.2, G.climbN / 350);
+  const climbK = WALL_T / (2 * WALL_H + 1.5) * 0.35 * boost;
+  const dtv = Math.min(1, dt * 7), dth = Math.min(1, dt * 12), dty = Math.min(1, dt * 8);
+  let climb = 0, hall = 0;
+  for (let i = 0; i < N; i++) {
+    const c = rc[i];
+    if (c < 0) { killRat(i, 1); i--; continue; }
+    let lam = hazard[c], cause = hazCause[c];
+    const fg = fireG[c];
+    if (fg) { lam += fg === 2 ? OIL_RATE : FIRE_RATE; cause = fg === 2 ? 6 : 1; }
+    if (lam > 0 && Math.random() < lam * dt) { killRat(i, cause); i--; continue; }
+    if (killMark[c]) {
+      let hit = false;
+      for (const q of kreqs) {
+        if (q.n <= 0) continue;
+        const dx = rx[i] - q.x, dz = rz[i] - q.z;
+        if (dx * dx + dz * dz < q.r2) { q.n--; hit = true; killRat(i, q.cause); break; }
+      }
+      if (hit) { i--; continue; }
+    }
+    const g = rg[i], t = T[g];
+    const dx = t.x - rx[i], dz = t.z - rz[i];
+    const d = Math.sqrt(dx * dx + dz * dz) + 1e-6;
+    let fx = dx / d, fz = dz / d;
+    const fd = flow[g], dv = fd[c];
+    if (dv !== INF && dv * CS > d + 0.9) {
+      let best = dv, bk = -1; const iz = (c / GX) | 0, ix = c - iz * GX;
+      for (let k = 0; k < 8; k++) {
+        const v = fd[(iz + D8Z[k]) * GX + ix + D8X[k]];
+        if (v < best) { if (k >= 4 && (isSolid(grid[iz * GX + ix + D8X[k]]) || isSolid(grid[(iz + D8Z[k]) * GX + ix]))) continue; best = v; bk = k; }
+      }
+      if (bk >= 0) { const s = bk >= 4 ? 0.7071 : 1; fx = D8X[bk] * s; fz = D8Z[bk] * s; }
+    }
+    let want = clamp((d - r0[g] * 0.6) / 1.6, 0, 1);
+    const fi = foodG[c];
+    if (fi >= 0) { const f = foods[fi]; if (f.amt > 0) { f.eaters++; f.g = g; want *= 0.3; } }
+    const w = rph[i] + G.t * (1.3 + rsp[i]);
+    const wan = 0.5 * (1.15 - want);
+    fx += Math.sin(w) * wan; fz += Math.cos(w * 1.37) * wan;
+    const dc = dens[c];
+    const gx = dens[c - 1] - dens[c + 1], gz = dens[c - GX] - dens[c + GX];
+    const typ = grid[c];
+    let sp = MAXSP * rsp[i];
+    if (typ === 2) sp *= 0.42;
+    const sepK = 0.5 + (dc > 3 ? 0.1 * (dc - 3) : 0);
+    rvx[i] += (fx * sp * want + gx * sepK - rvx[i]) * dtv;
+    rvz[i] += (fz * sp * want + gz * sepK - rvz[i]) * dtv;
+    let mx = rvx[i] * dt, mz = rvz[i] * dt;
+    if (typ === 3) { mx *= 0.5; mz *= climbK; climb++; }
+    let nx = rx[i] + mx, nz = rz[i] + mz;
+    if (solidAt(nx, nz)) {
+      if (!solidAt(nx, rz[i])) { nz = rz[i]; rvz[i] *= -0.2; }
+      else if (!solidAt(rx[i], nz)) { nx = rx[i]; rvx[i] *= -0.2; }
+      else { nx = rx[i]; nz = rz[i]; rvx[i] *= -0.3; rvz[i] *= -0.3; }
+    }
+    rx[i] = nx; rz[i] = nz;
+    const v2 = rvx[i] * rvx[i] + rvz[i] * rvz[i];
+    if (v2 > 0.05) rh[i] += angDiff(rh[i], Math.atan2(rvx[i], rvz[i])) * dth;
+    const ty = typ === 2 ? -0.07 : dc > 4 ? Math.min(1.7, (dc - 4) * 0.034) : 0;
+    ry[i] += (ty - ry[i]) * dty;
+    cnt[g]++; sx[g] += nx; sz[g] += nz;
+    if (nz > HALL.z0 + 0.5 && nx > HALL.x0 && nx < HALL.x1) hall++;
+  }
+  for (let g = 0; g < 2; g++) { gc[g].n = cnt[g]; if (cnt[g]) { gc[g].x = sx[g] / cnt[g]; gc[g].z = sz[g] / cnt[g]; } }
+  G.climbN = climb; G.hallN = hall;
+}
+function stepFoods(dt) {
+  for (const f of foods) {
+    if (f.amt <= 0 || f.eaters <= 0) continue;
+    const e = Math.min(f.amt, f.eaters * EAT * dt);
+    f.amt -= e; f.acc += e * BIRTH;
+    if (f.kind === 'grain') G.grainEaten += e;
+    while (f.acc >= 1 && N < MAXR) {
+      f.acc -= 1;
+      const a = rnd(0, TAU), r = Math.sqrt(Math.random()) * f.r * 0.85;
+      const i = spawnRat(f.x + Math.sin(a) * r, f.z + Math.cos(a) * r, f.g);
+      if (i >= 0 && solidAt(rx[i], rz[i])) { rx[i] = f.x; rz[i] = f.z; }
+    }
+    f.tick -= dt;
+    if (f.tick <= 0) { f.tick = rnd(0.05, 0.14); if (nearCam(f.x, f.z, 30)) SND.crunch(Math.min(0.09, 0.03 + f.eaters * 0.001)); }
+    if (!f.seen && f.kind === 'grain') { f.seen = true; if (!G.grainMsg) { G.grainMsg = true; toast('穀物の山だ!食べつくせ', 'gold'); } }
+    if (f.amt <= 0) {
+      f.amt = 0;
+      rectCells(Math.floor((f.x - f.r) * 2) / 2, Math.floor((f.z - f.r) * 2) / 2, Math.ceil((f.x + f.r) * 2) / 2, Math.ceil((f.z + f.r) * 2) / 2, (c) => { if (foodG[c] === f.id) foodG[c] = -1; });
+    }
+  }
+}
+
+// ---------- 敵 ----------
+function clearMarks() {
+  for (const c of hazList) { hazard[c] = 0; hazCause[c] = 0; } hazList.length = 0;
+  for (const c of killList) killMark[c] = 0; killList.length = 0; kreqs.length = 0;
+}
+function killReq(x, z, r, n, cause) {
+  kreqs.push({ x, z, r2: r * r, n, cause });
+  rectCells(Math.floor((x - r) * 2) / 2, Math.floor((z - r) * 2) / 2, Math.ceil((x + r) * 2) / 2, Math.ceil((z + r) * 2) / 2, (c) => { if (!killMark[c]) { killMark[c] = 1; killList.push(c); } });
+}
+function stampCone(x, z, yaw, r, half, rate, cause) {
+  rectCells(Math.floor((x - r) * 2) / 2, Math.floor((z - r) * 2) / 2, Math.ceil((x + r) * 2) / 2, Math.ceil((z + r) * 2) / 2, (c) => {
+    const dx = cellX(c) - x, dz = cellZ(c) - z, d2 = dx * dx + dz * dz;
+    if (d2 > r * r || (d2 > 0.3 && Math.abs(angDiff(yaw, Math.atan2(dx, dz))) > half)) return;
+    if (hazard[c] === 0) hazList.push(c);
+    hazard[c] += rate; hazCause[c] = cause;
+  });
+}
+function scanRats(x, z, R) {
+  let best = 1e9, bx = 0, bz = 0, n = 0;
+  rectCells(Math.floor((x - R) * 2) / 2, Math.floor((z - R) * 2) / 2, Math.ceil((x + R) * 2) / 2, Math.ceil((z + R) * 2) / 2, (c) => {
+    const k = dens[c]; if (!k) return;
+    const dx = cellX(c) - x, dz = cellZ(c) - z, d2 = dx * dx + dz * dz;
+    if (d2 > R * R) return;
+    n += k;
+    if (d2 < best) { best = d2; bx = cellX(c); bz = cellZ(c); }
+  });
+  return n ? { n, x: bx, z: bz, d: Math.sqrt(best) } : null;
+}
+function moveEnemy(e, tx, tz, sp, dt) {
+  const dx = tx - e.x, dz = tz - e.z, d = Math.hypot(dx, dz);
+  if (d < 1e-3) return;
+  const nx = e.x + dx / d * sp * dt, nz = e.z + dz / d * sp * dt;
+  if (!solidAt(nx, nz) && !fireG[cellOf(nx, nz)]) { e.x = nx; e.z = nz; }
+  else if (!solidAt(nx, e.z)) e.x = nx;
+  else if (!solidAt(e.x, nz)) e.z = nz;
+  e.walk += dt * sp * 4.5;
+}
+function enemyDie(e) {
+  e.dead = true; e.deadT = 0; e.fallDir = Math.random() < 0.5 ? 1 : -1;
+  G.kills++;
+  SND.overwhelm();
+  if (e.type === 'cat') SND.cat(); else SND.scream(e.type);
+  for (let k = 0; k < 40; k++) emit(3, e.x, e.y + rnd(0.4, 1.4), e.z, rnd(-2.5, 2.5), rnd(1, 4.5), rnd(-2.5, 2.5), rnd(0.6, 1.2), rnd(0.07, 0.16), 0.32, 0.015, 0.012);
+  if (e.y < 1) decals.push({ x: e.x + rnd(-0.3, 0.3), z: e.z + rnd(-0.3, 0.3), r: e.type === 'cat' ? 0.7 : rnd(1.1, 1.5), t: 0 });
+  if (e.type === 'archer') { e.fallDir = 1; e.vy = 2; }
+  G.shake = Math.max(G.shake, 0.35);
+  if (e.type === 'soldier' && !G.firstKill) { G.firstKill = true; toast('兵士を飲み込んだ!', 'gold'); }
+}
+function stepEnemies(dt) {
+  let alive = 0;
+  for (const e of enemies) {
+    if (e.dead) {
+      e.deadT += dt; e.fall = Math.min(1.45, e.fall + dt * 2.6);
+      if (e.type === 'archer' && e.y > 0) { e.vy -= 9.8 * dt; e.y = Math.max(0, e.y + e.vy * dt); e.z += dt * 3; if (e.y === 0 && !e.landed) { e.landed = true; decals.push({ x: e.x, z: e.z, r: 1.2, t: 0 }); SND.thunk(); } }
+      continue;
+    }
+    if (e.gone) continue;
+    if (e.type === 'soldier') alive++;
+    e.t += dt; e.scan = (e.scan || 0) - dt;
+    if (e.scan <= 0) { e.scan = 0.2 + Math.random() * 0.05; e.aim = scanRats(e.x, e.z, e.type === 'archer' ? 3 : e.type === 'cat' ? 10 : e.type === 'villager' ? 8 : 14); }
+    const a = e.aim;
+    if (e.type === 'soldier') {
+      const sp = G.alarm ? 2.0 : 1.5;
+      if (a) {
+        e.yaw += clamp(angDiff(e.yaw, Math.atan2(a.x - e.x, a.z - e.z)), -1.5 * dt, 1.5 * dt);
+        if (a.d > 1.3) moveEnemy(e, a.x, a.z, sp, dt);
+        if (a.d < 4.2) {
+          e.swing += dt * 5.5;
+          stampCone(e.x, e.z, e.yaw + Math.sin(e.swing) * 0.45, 2.8, 0.8, TORCH_RATE, 2);
+          e.act -= dt; if (e.act <= 0) { e.act = rnd(0.5, 0.9); if (nearCam(e.x, e.z, 25)) SND.whoosh(); }
+        }
+      } else if (Math.hypot(e.home.x - e.x, e.home.z - e.z) > 1) moveEnemy(e, e.home.x, e.home.z, 1.0, dt);
+    } else if (e.type === 'villager') {
+      if (a && a.n >= 110 && !e.flee) { e.flee = true; SND.scream('villager'); }
+      if (e.flee) {
+        if (a) { const fx = e.x - a.x, fz = e.z - a.z, d = Math.hypot(fx, fz) || 1; moveEnemy(e, e.x + fx / d * 3, e.z + fz / d * 3 + 1, 3.4, dt); e.yaw = Math.atan2(fx, fz); }
+        if (!nearCam(e.x, e.z, 45) || (gc[0].n && Math.abs(e.z - gc[0].z) > 35)) e.gone = true;
+      } else if (a) {
+        e.yaw += clamp(angDiff(e.yaw, Math.atan2(a.x - e.x, a.z - e.z)), -3 * dt, 3 * dt);
+        if (a.d > 1.1) moveEnemy(e, a.x, a.z, 1.3, dt);
+        e.act -= dt;
+        if (a.d < 2.4 && e.act <= 0) { e.act = 0.85; e.swing = 1; killReq(e.x + Math.sin(e.yaw) * 1.0, e.z + Math.cos(e.yaw) * 1.0, 1.1, 4, 4); if (nearCam(e.x, e.z, 25)) SND.whoosh(); }
+      }
+      e.swing = Math.max(0, e.swing - dt * 3);
+    } else if (e.type === 'cat') {
+      if (a && a.n >= 200 && a.d < 5) e.flee = true;
+      if (e.flee) {
+        if (a) { const fx = e.x - a.x, fz = e.z - a.z, d = Math.hypot(fx, fz) || 1; moveEnemy(e, e.x + fx / d * 3, e.z + fz / d * 3, 4.2, dt); e.yaw = Math.atan2(fx, fz); }
+        if (!a || a.d > 9) e.flee = false;
+      } else if (a) {
+        e.yaw += clamp(angDiff(e.yaw, Math.atan2(a.x - e.x, a.z - e.z)), -5 * dt, 5 * dt);
+        if (a.d > 0.5) moveEnemy(e, a.x, a.z, 3.3, dt);
+        e.act -= dt;
+        if (a.d < 0.9 && e.act <= 0) { e.act = 0.3; killReq(a.x, a.z, 0.7, 1, 3); e.swing = 1; }
+      }
+      e.swing = Math.max(0, e.swing - dt * 5);
+    } else if (e.type === 'archer') {
+      e.act -= dt;
+      if (e.act <= 0 && N > 0) {
+        e.act = (G.alarm ? 0.85 : 1.5) * rnd(0.8, 1.2);
+        for (let k = 0; k < 8; k++) {
+          const i = (Math.random() * N) | 0;
+          if (rz[i] > WALL_Z - 38 && rz[i] < WALL_Z + 0.5 * WALL_T && Math.abs(rx[i] - e.x) < 24) {
+            const vis = ratVisual(i);
+            arrows.push({ x0: e.x, y0: WALL_H + 1.6, z0: e.z - 0.6, x1: rx[i], y1: vis.y, z1: rz[i], t: 0, T: 0.5 + Math.hypot(rx[i] - e.x, rz[i] - e.z) * 0.012 });
+            if (nearCam(e.x, e.z, 40)) SND.arrow();
+            e.swing = 1;
+            break;
+          }
+        }
+      }
+      e.swing = Math.max(0, e.swing - dt * 2);
+    }
+    // 群れに囲まれると、抵抗できずに沈む
+    const rr = e.type === 'cat' ? 1.0 : e.type === 'archer' ? 1.6 : 1.3;
+    const cont = sumDens(e.x, e.z, rr);
+    e.cont = cont;
+    const need = NEED[e.type];
+    if (cont >= need) e.dmg += dt * cont / need * 1.3; else e.dmg = Math.max(0, e.dmg - dt * 0.4);
+    if (e.dmg >= 1) enemyDie(e);
+  }
+  // 警鐘のあとは兵士が湧き出す
+  if (G.state === 'play' && G.alarm >= 1) {
+    G.spawnT -= dt;
+    if (G.spawnT <= 0 && alive < 14 && gc[0].n > 0) {
+      G.spawnT = 5;
+      const z = gc[0].z;
+      let x, sz;
+      if (z < 335) { x = rnd(-2, 2); sz = Math.min(z + 26, 343); }
+      else if (z < WALL_Z) { x = Math.random() < 0.5 ? -25 : 25; sz = rnd(350, 374); }
+      else { x = Math.random() < 0.5 ? -20 : 20; sz = rnd(392, 408); }
+      if (!solidAt(x, sz)) makeEnemy('soldier', x, sz, { yaw: Math.PI });
+    }
+  }
+}
+const arrows = [], decals = [];
+function stepArrows(dt) {
+  for (let k = arrows.length - 1; k >= 0; k--) {
+    const a = arrows[k]; a.t += dt;
+    if (a.t >= a.T) {
+      killReq(a.x1, a.z1, 0.9, 5, 5);
+      if (nearCam(a.x1, a.z1, 30)) SND.thunk();
+      for (let j = 0; j < 6; j++) emit(1, a.x1, a.y1 + 0.1, a.z1, rnd(-1.5, 1.5), rnd(0.5, 2.5), rnd(-1.5, 1.5), rnd(0.2, 0.4), 0.05, 2.0, 1.2, 0.6);
+      stuck.push({ x: a.x1, y: a.y1, z: a.z1, yaw: Math.atan2(a.x1 - a.x0, a.z1 - a.z0), t: 6 });
+      arrows.splice(k, 1);
+    }
+  }
+  for (let k = stuck.length - 1; k >= 0; k--) { stuck[k].t -= dt; if (stuck[k].t <= 0) stuck.splice(k, 1); }
+  for (const d of decals) d.t += dt;
+}
+const stuck = [];
+function stepOils(dt) {
+  for (const o of oils) {
+    if (o.state === 0) {
+      if (sumDens(o.x, o.z, o.r) >= 10) { o.state = 1; o.t = 0.9; SND.creak(); if (nearCam(o.x, o.z, 30)) toast('街灯が倒れる!油だ!', 'red', 1.6); }
+    } else if (o.state === 1) {
+      o.t -= dt; o.tip = Math.min(1, o.tip + dt * 1.25);
+      if (o.t <= 0) { o.state = 2; o.t = 6; rebuildFire(); SND.ignite(); G.shake = Math.max(G.shake, 0.5); }
+    } else if (o.state === 2) {
+      o.t -= dt;
+      if (o.t <= 0) { o.state = 3; rebuildFire(); }
+    }
+  }
+}
+
+// ---------- 粒(炎・火の粉・煙・血) ----------
+const pa = { x: new Float32Array(MP), y: new Float32Array(MP), z: new Float32Array(MP), vx: new Float32Array(MP), vy: new Float32Array(MP), vz: new Float32Array(MP),
+  l: new Float32Array(MP), ml: new Float32Array(MP), s: new Float32Array(MP), r: new Float32Array(MP), g: new Float32Array(MP), b: new Float32Array(MP), k: new Uint8Array(MP) };
+let PN = 0;
+const PK = Object.keys(pa);
+// 種類: 0 炎 / 1 火花 / 2 煙 / 3 血
+function emit(kind, x, y, z, vx, vy, vz, life, size, r, g, b) {
+  if (PN >= MP) return;
+  const i = PN++;
+  pa.x[i] = x; pa.y[i] = y; pa.z[i] = z; pa.vx[i] = vx; pa.vy[i] = vy; pa.vz[i] = vz; pa.l[i] = life; pa.ml[i] = life; pa.s[i] = size;
+  pa.r[i] = r; pa.g[i] = g; pa.b[i] = b; pa.k[i] = kind;
+}
+function stepParticles(dt) {
+  for (let i = 0; i < PN; i++) {
+    pa.l[i] -= dt;
+    if (pa.l[i] <= 0) { const j = --PN; if (i !== j) for (const key of PK) pa[key][i] = pa[key][j]; i--; continue; }
+    const k = pa.k[i];
+    if (k === 0) { pa.vy[i] += 2.2 * dt; pa.vx[i] *= 0.97; pa.vz[i] *= 0.97; }
+    else if (k === 2) { pa.vy[i] += 0.5 * dt; pa.vx[i] *= 0.99; pa.vz[i] *= 0.99; }
+    else { pa.vy[i] -= 9.8 * dt; }
+    pa.x[i] += pa.vx[i] * dt; pa.y[i] += pa.vy[i] * dt; pa.z[i] += pa.vz[i] * dt;
+    if (pa.y[i] < 0.02 && k >= 1) { pa.y[i] = 0.02; pa.vy[i] *= -0.25; pa.vx[i] *= 0.5; pa.vz[i] *= 0.5; }
+  }
+}
+let fxBudget = 0;
+function deathFx(x, y, z, cause) {
+  if (fxBudget <= 0) return;
+  fxBudget--;
+  if (cause === 1 || cause === 2 || cause === 6) {
+    for (let k = 0; k < 3; k++) emit(1, x, y + 0.1, z, rnd(-1.5, 1.5), rnd(1, 3.5), rnd(-1.5, 1.5), rnd(0.3, 0.7), 0.05, 3.0, 1.2, 0.3);
+    emit(2, x, y + 0.2, z, rnd(-0.3, 0.3), rnd(0.5, 1), rnd(-0.3, 0.3), rnd(0.8, 1.5), 0.5, 0.05, 0.045, 0.04);
+  } else for (let k = 0; k < 3; k++) emit(3, x, y + 0.1, z, rnd(-1.2, 1.2), rnd(0.8, 2.5), rnd(-1.2, 1.2), rnd(0.4, 0.8), 0.06, 0.3, 0.01, 0.01);
+  G.shriekT -= 1;
+  if (G.shriekT <= 0 && nearCam(x, z, 30)) { G.shriekT = 3; SND.shriek(); }
+}
+
+// ---------- 遊びの状態 ----------
+const G = { state: 'title', t: 0, time: 0, maxN: 0, kills: 0, deaths: {}, alarm: 0, split: false, climbN: 0, hallN: 0, hurt: 0, shake: 0,
+  spawnT: 0, winT: 0, loseT: 0, banner: 0, milestone: 0, grainEaten: 0, grainMsg: false, firstKill: false, shriekT: 0, patT: 0, sqT: 0,
+  hints: {}, wallView: 0, lastZ: 0, titleT: 0, marker: 0 };
+const MILESTONES = [50, 100, 500, 1000, 2000, 5000, 10000];
+function nearCam(x, z, r) { return Math.abs(x - cam.c[0]) < r && Math.abs(z - cam.c[2]) < r * 1.4; }
+function resetCommon() {
+  N = 0; PN = 0; arrows.length = 0; decals.length = 0; stuck.length = 0;
+  flowMeta[0].t = flowMeta[1].t = -9; flowMeta[0].c = flowMeta[1].c = -2;
+  G.t = 0; G.time = 0; G.maxN = 0; G.kills = 0; G.deaths = { fire: 0, torch: 0, cat: 0, broom: 0, arrow: 0, oil: 0 };
+  G.alarm = 0; G.split = false; G.climbN = 0; G.hallN = 0; G.hurt = 0; G.shake = 0; G.spawnT = 3; G.winT = 0; G.loseT = 0;
+  G.banner = 0; G.milestone = 0; G.grainEaten = 0; G.grainMsg = false; G.firstKill = false; G.hints = {}; G.wallView = 0;
+}
+function titleScene() {
+  genWorld(); uploadStatic(); resetCommon();
+  G.state = 'title';
+  for (let k = 0; k < 1600; k++) { let x, z; do { x = rnd(-22, 22); z = rnd(352, 372); } while (solidAt(x, z)); spawnRat(x, z, 0); }
+  T[0] = { x: 0, z: WALL_Z + 10 }; T[1] = { x: 0, z: WALL_Z + 10 };
+  for (const e of enemies) if (e.type !== 'archer') e.gone = true;
+  G.titleT = 0;
+  snapCam();
+}
+function startGame() {
+  genWorld(); uploadStatic(); resetCommon();
+  for (let k = 0; k < 12; k++) spawnRat(rnd(-1.8, 1.8), rnd(1, 4), 0);
+  T[0] = { x: 0, z: 5 }; T[1] = { x: 0, z: 5 };
+  G.state = 'play';
+  $('title').classList.remove('show'); $('result').classList.remove('show'); $('hud').style.display = 'block';
+  hint('ドラッグした所へ、群れが走る。まずは食べ物(光る残飯)へ', 7);
+  snapCam();
+  updateHUD(true);
+}
+// テスト・動画用の段取り: 群れを指定の場所・数にして、その場面から始める(遊びの確かめには使わない)
+function debugWarp(z, n, x = 0, time = null) {
+  N = 0;
+  const R = blobR(n) * 1.2;
+  for (let k = 0; k < n; k++) {
+    let px, pz, tries = 0;
+    do { const a = rnd(0, TAU), r = Math.sqrt(Math.random()) * R; px = x + Math.sin(a) * r; pz = z + Math.cos(a) * r; } while (solidAt(px, pz) && ++tries < 30);
+    if (!solidAt(px, pz)) spawnRat(px, pz, 0);
+  }
+  T[0] = { x, z }; T[1] = { x, z }; G.split = false;
+  flowMeta[0].t = flowMeta[1].t = -9;
+  if (time !== null) G.time = time;
+  G.maxN = Math.max(G.maxN, N);
+  G.milestone = MILESTONES.filter((m) => N >= m).length;
+  G.wallView = 0;
+  stepRats(0.001);
+  snapCam();
+}
+function toggleSplit() {
+  if (G.state !== 'play') return;
+  if (!G.split) {
+    if (N < 8) return;
+    for (let i = 0; i < N; i++) rg[i] = i & 1;
+    G.split = true;
+    T[1] = { x: gc[0].x, z: gc[0].z };
+    flowMeta[1].t = -9;
+    toast('半分を、ここにおとりとして残す');
+    if (!G.hints.split) { G.hints.split = true; hint('もう一度押すと合流する', 4); }
+  } else {
+    for (let i = 0; i < N; i++) rg[i] = 0;
+    G.split = false;
+    toast('合流!');
+  }
+  SND.split();
+  updateHUD(true);
+}
+function stepGame(dt) {
+  if (G.state === 'title') {
+    G.titleT += dt;
+    T[0].x = Math.sin(G.t * 0.25) * 10; T[0].z = WALL_Z + 9;
+    if (G.titleT > 26 || N < 200) titleScene();
+    return;
+  }
+  if (G.state === 'play') {
+    G.time += dt;
+    if (G.alarm === 0 && G.time >= ALARM_AT) { G.alarm = 1; G.bellT = 0; toast('警鐘が鳴った!兵士が集まってくる', 'red', 2.6); }
+    if (G.alarm === 1) {
+      G.bellT -= dt; if (G.bellT <= 0) { G.bellT = 1.4; SND.bell(); }
+      if (G.time >= ALARM_AT + ALARM_LEN) {
+        G.alarm = 2;
+        const gaps = [rnd(-24, -6), rnd(6, 24)];
+        for (let x = -28; x < 28; x += 2) { const m = x + 1; if (gaps.some((g) => Math.abs(m - g) < 3)) continue; fires.push({ x0: x, z0: WALL_Z - 3.5, x1: x + 2, z1: WALL_Z, on: true, kind: 'oil' }); }
+        rebuildFire();
+        toast('城壁の下に油の火!すき間を探せ', 'red', 2.8); SND.ignite();
+      }
+    }
+    // 数の節目
+    while (G.milestone < MILESTONES.length && N >= MILESTONES[G.milestone]) {
+      G.milestone++;
+      if (G.milestone >= 2) { toast(fmt(MILESTONES[G.milestone - 1]) + '匹!', 'gold', 1.6); SND.milestone(G.milestone - 2); popCount(); }
+    }
+    G.maxN = Math.max(G.maxN, N);
+    if (G.split && (gc[0].n === 0 || gc[1].n === 0)) { for (let i = 0; i < N; i++) rg[i] = 0; if (gc[0].n === 0) T[0] = { x: T[1].x, z: T[1].z }; G.split = false; updateHUD(true); }
+    // ヒント(初めてその場所に来たとき)
+    const z = gc[0].n ? gc[0].z : gc[1].n ? gc[1].z : G.lastZ;
+    G.lastZ = z;
+    const once = (k, z0, msg, dur = 5) => { if (z > z0 && !G.hints[k]) { G.hints[k] = true; hint(msg, dur); } };
+    once('village', 48, '村に出た。猫は少ない群れを狩る。数で囲めば飲み込める');
+    once('granary', 150, `穀物倉は道の${world.granSide > 0 ? '左' : '右'}の庭。寄って増やすか、先へ急ぐか`, 6);
+    once('town', 238, `炎のバリケードは突っ切ると3割焼ける。脇の路地(最初は${world.townSide > 0 ? '左' : '右'})から回り込めば無傷`, 6);
+    once('soldier', 262, 'たいまつは前にしか効かない。分ける(Space)でおとりを残し、背中から', 6);
+    once('wall', 348, '門は閉じている。城壁は登るしかない。群れが大きいほど速く登れる', 6);
+    once('hall', 400, '大広間を、群れで埋めつくせ', 5);
+    // 勝ち負け
+    const need = Math.min(1600, Math.max(120, Math.floor(N * 0.55)));
+    if (G.hallN >= need && N > 0) { G.state = 'win'; G.winT = 0; G.finalN = N; SND.victory(); toast('落城!', 'gold', 3); G.shake = 0.8; }
+    if (N === 0) { G.state = 'lose'; G.loseT = 0; SND.lose(); }
+  } else if (G.state === 'win') {
+    G.winT += dt; G.banner = Math.min(1, G.banner + dt * 0.7);
+    if (G.winT > 4.5) showResult(true);
+  } else if (G.state === 'lose') {
+    G.loseT += dt; if (G.loseT > 2.2) showResult(false);
+  }
+}
+function soundTick(dt) {
+  if (!canPlay()) return;
+  const n = N, moving = G.state === 'play' || G.state === 'win' || G.state === 'title';
+  if (n > 0 && moving) {
+    const lg = Math.log10(n + 1);
+    G.patT -= dt; if (G.patT <= 0) { G.patT = rnd(0.03, 0.1) / (0.6 + lg); SND.patter(Math.min(0.07, 0.015 + lg * 0.014)); }
+    G.sqT -= dt; if (G.sqT <= 0) { G.sqT = rnd(0.2, 1.1) / (0.5 + lg); SND.squeak(rnd(0.02, 0.05)); }
+  }
+  G.fireT = (G.fireT || 0) - dt;
+  if (G.fireT <= 0) {
+    G.fireT = rnd(0.03, 0.12);
+    let near = 0;
+    for (const f of fires) if (f.on && nearCam((f.x0 + f.x1) / 2, (f.z0 + f.z1) / 2, 18)) near++;
+    for (const o of oils) if (o.state === 2 && nearCam(o.x, o.z, 18)) near++;
+    if (near) SND.fire(Math.min(0.1, 0.03 * near));
+  }
+  G.sndT = (G.sndT || 0) - dt;
+  if (G.sndT <= 0) {
+    G.sndT = 0.2;
+    const t = AC.currentTime;
+    windG.gain.setTargetAtTime(0.05 + 0.035 * Math.sin(G.t * 0.4), t, 0.5);
+    rumbleG.gain.setTargetAtTime(n > 0 ? clamp((Math.log10(n + 1) - 2) / 2, 0, 1) * 0.35 : 0, t, 0.4);
+  }
+}
+
+// ---------- カメラ ----------
+const cam = { e: [0, 14, -10], c: [0, 0, 4] };
+const Pm = M4(), Vm = M4(), VP = M4(), IVP = M4();
+function camWant() {
+  const g = gc[0].n ? gc[0] : gc[1];
+  if (G.state === 'title') {
+    const a = G.t * 0.06;
+    return [[Math.sin(a) * 12 + 5, WALL_H + 7, WALL_Z - 19], [Math.sin(a) * 4, WALL_H * 0.5, WALL_Z + 1]];
+  }
+  if (G.state === 'win' || (G.state === 'result' && G.won)) return [[0, 24, 401], [0, 1, 434]];
+  const R = blobR(Math.max(1, g.n));
+  // 城壁を登っている間は、広場の側から斜めに見上げる(壁の面を登る波と、越えていく頂が見える)
+  if (G.wallView > 0.5) return [[g.x * 0.6 + 7, WALL_H + 6, WALL_Z - 15 - R * 0.35], [g.x * 0.6, WALL_H * 0.55, WALL_Z + 1.5]];
+  const H = 8 + R * 1.2, D = 6 + R;
+  return [[g.x * 0.75, H, g.z - D], [g.x * 0.9, 0, g.z + 2 + R * 0.3]];
+}
+function snapCam() { const [e, c] = camWant(); cam.e = e.slice(); cam.c = c.slice(); }
+function updateCam(dt) {
+  if (G.state === 'play') {
+    const g = gc[0].n ? gc[0] : gc[1];
+    const climbing = G.climbN > Math.max(25, N * 0.12) || (G.climbN > 0 && g.z > WALL_Z - 5 && g.z < WALL_Z + WALL_T + 3);
+    G.wallView = clamp(G.wallView + (climbing ? dt : -dt) * 1.5, 0, 1);
+  }
+  const [e, c] = camWant();
+  const k = 1 - Math.exp(-dt * (G.state === 'title' ? 1 : 2.6));
+  for (let i = 0; i < 3; i++) { cam.e[i] += (e[i] - cam.e[i]) * k; cam.c[i] += (c[i] - cam.c[i]) * k; }
+  G.shake = Math.max(0, G.shake - dt * 1.5);
+}
+function screenToGround(px, py) {
+  const nx = px / innerWidth * 2 - 1, ny = 1 - py / innerHeight * 2;
+  const un = (z) => { const v = [nx, ny, z, 1], o = [0, 0, 0, 0]; for (let i = 0; i < 4; i++) o[i] = IVP[i] * v[0] + IVP[4 + i] * v[1] + IVP[8 + i] * v[2] + IVP[12 + i] * v[3]; return [o[0] / o[3], o[1] / o[3], o[2] / o[3]]; };
+  const a = un(-1), b = un(1);
+  const dy = b[1] - a[1];
+  let t = dy < -1e-6 ? -a[1] / dy : 1;
+  let x = a[0] + (b[0] - a[0]) * t, z = a[2] + (b[2] - a[2]) * t;
+  const ex = x - cam.e[0], ez = z - cam.e[2], d = Math.hypot(ex, ez);
+  if (dy >= -1e-6 || d > 70) { const s = 70 / (d || 1); x = cam.e[0] + ex * s; z = cam.e[2] + ez * s; }
+  return { x: clamp(x, X0 + 1, -X0 - 1), z: clamp(z, Z0 + 1, Z0 + GZ * CS - 1) };
+}
+
+// ---------- 入力 ----------
+const ptr = { down: false, x: 0, y: 0, id: null };
+const keys = {};
+cv.addEventListener('pointerdown', (e) => {
+  if (G.state !== 'play') return;
+  ptr.down = true; ptr.x = e.clientX; ptr.y = e.clientY; ptr.id = e.pointerId;
+  try { cv.setPointerCapture(e.pointerId); } catch (err) { /* なし */ }
+});
+cv.addEventListener('pointermove', (e) => { if (ptr.down && e.pointerId === ptr.id) { ptr.x = e.clientX; ptr.y = e.clientY; } });
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, (e) => { if (e.pointerId === ptr.id) ptr.down = false; });
+addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) toggleSplit(); }
+  if (e.code === 'Enter' && !e.repeat) { if (G.state === 'title') startGame(); else if (G.state === 'result') startGame(); }
+  if (e.code === 'KeyM' && !e.repeat) toggleSound();
+  if (e.code.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; ptr.down = false; });
+function steer() {
+  if (G.state !== 'play') return;
+  const g = gc[0].n ? gc[0] : gc[1];
+  if (ptr.down) { const p = screenToGround(ptr.x, ptr.y); T[0].x = p.x; T[0].z = p.z; G.marker = 1; return; }
+  // 画面の右は世界の -x(カメラが +z を向いているため)
+  let kx = (keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0);
+  let kz = (keys.ArrowUp || keys.KeyW ? 1 : 0) - (keys.ArrowDown || keys.KeyS ? 1 : 0);
+  if (kx || kz) {
+    const l = Math.hypot(kx, kz), R = blobR(g.n);
+    T[0].x = clamp(g.x + kx / l * (R + 4), X0 + 1, -X0 - 1); T[0].z = g.z + kz / l * (R + 4);
+    G.marker = 1;
+  }
+}
+function toggleSound() {
+  save.sound = !save.sound; persist();
+  if (master) master.gain.value = save.sound ? 0.9 : 0;
+  $('snd').textContent = save.sound ? '♪' : '×';
+}
+$('snd').addEventListener('click', (e) => { e.stopPropagation(); toggleSound(); });
+$('snd').textContent = save.sound ? '♪' : '×';
+$('split').addEventListener('click', (e) => { e.stopPropagation(); toggleSplit(); });
+$('b-start').addEventListener('click', () => { unlockAudio(); SND.click(); startGame(); });
+$('b-again').addEventListener('click', () => { unlockAudio(); SND.click(); startGame(); });
+
+// ---------- 表示 ----------
+let hudCache = {};
+function setText(id, s) { if (hudCache[id] !== s) { hudCache[id] = s; $(id).textContent = s; } }
+function popCount() { const n = $('n'); n.classList.remove('pop'); void n.offsetWidth; n.classList.add('pop'); }
+function updateHUD(force) {
+  if (force) hudCache = {};
+  setText('n', fmt(N));
+  const z = G.lastZ || 0;
+  setText('zone', zoneName(z) + (G.split ? ` ― おとり ${fmt(gc[1].n)}匹` : ''));
+  setText('split-t', G.split ? '合流' : '分ける');
+  $('split').classList.toggle('on', G.split);
+  const bell = $('bell');
+  if (G.alarm === 0) {
+    const r = Math.max(0, ALARM_AT - G.time);
+    setText('bell-t', `${Math.floor(r / 60)}:${String(Math.floor(r % 60)).padStart(2, '0')}`);
+    bell.style.setProperty('--p', (G.time / ALARM_AT).toFixed(3));
+    bell.className = '';
+  } else if (G.alarm === 1) { setText('bell-t', '鳴る'); bell.style.setProperty('--p', '1'); bell.className = 'ring'; }
+  else { setText('bell-t', '油火'); bell.style.setProperty('--p', '1'); bell.className = 'done'; }
+}
+let toastT = 0;
+function toast(msg, cls = '', dur = 2.2) {
+  const t = $('toast'); t.textContent = msg; t.className = 'show ' + cls; toastT = dur;
+}
+let hintT = 0;
+function hint(msg, dur = 5) { const h = $('hint'); h.textContent = msg; h.classList.add('show'); hintT = dur; }
+function showResult(win) {
+  G.state = 'result'; G.won = win;
+  const best = Math.max(save.best, Math.round(G.maxN));
+  const rec = Math.round(G.maxN) > save.best;
+  save.best = best; if (win) save.wins++; persist();
+  $('hud').style.display = 'none';
+  const h = $('r-head'); h.textContent = win ? '落城' : '全滅'; h.className = 'min' + (win ? ' win' : '');
+  $('r-sub').textContent = win ? `${fmt(G.finalN)}匹で、城の大広間を埋めつくした` : `${zoneName(G.lastZ)}で、群れが尽きた`;
+  const m = Math.floor(G.time / 60), s = Math.floor(G.time % 60);
+  $('r-grid').innerHTML = `<div>最後の数<b>${fmt(win ? G.finalN : 0)}匹</b></div><div>いちばん多いとき<b class="${rec ? 'rec' : ''}">${fmt(G.maxN)}匹</b></div>` +
+    `<div>飲み込んだ敵<b>${G.kills}</b></div><div>かかった時間<b>${m}:${String(s).padStart(2, '0')}</b></div>`;
+  const d = G.deaths, worst = Object.keys(d).sort((a, b) => d[b] - d[a])[0];
+  const HINTS = {
+    fire: `炎のバリケードで ${fmt(d.fire)}匹が焼けた。横の路地から回り込めば、数は減らない`,
+    torch: `たいまつで ${fmt(d.torch)}匹。分ける(Space)でおとりを残し、兵士の背中から飲み込もう`,
+    cat: `猫に ${fmt(d.cat)}匹。群れが少ないうちは狩られる。先に食べて増やしてから`,
+    broom: `ほうきで ${fmt(d.broom)}匹。大群になれば、村人は逃げていく`,
+    arrow: `矢で ${fmt(d.arrow)}匹。群れが大きいほど城壁を速く登れる。登りきれば弓兵も飲み込める`,
+    oil: `油の火で ${fmt(d.oil)}匹。黒く光る油だまりには乗らないこと`,
+  };
+  let tip = worst && d[worst] > 20 ? HINTS[worst] : '';
+  if (G.grainEaten < 3000 && G.maxN < 5000) tip = `穀物倉(道の横の庭)を食べつくすと、一気に数千匹に増える。` + (tip ? '<br>' + tip : '');
+  if (!tip) tip = G.maxN >= 10000 ? '1万匹に届いた。次は、もっと減らさずに城まで' : '次は 1万匹を目指して';
+  $('r-hint').innerHTML = tip + (rec ? '<br>― 最多の記録を更新 ―' : '');
+  $('result').classList.add('show');
+}
+
+// ---------- 描く ----------
+const Q = { level: 0, scale: [1, 0.8, 0.64, 0.5, 0.38, 0.3, 0.25], lights: [16, 12, 9, 6, 4, 3, 3], bloom: [1, 1, 1, 1, 0, 0, 0],
+  ratStep: [1, 1, 1, 2, 3, 4, 5], lod: [0, 0, 1, 1, 1, 2, 3], part: [1, 1, 0.75, 0.5, 0.35, 0.3, 0.25],
+  eyes: [1, 1, 1, 1, 0.6, 0.45, 0.25], lite: [0, 0, 0, 0, 1, 1, 1],
+  acc: 0, n: 0, t: 0, good: 0 };
+function qualityTick(dt) {
+  Q.acc += dt; Q.n++; Q.t += dt;
+  if (Q.t < 0.5) return;
+  const avg = Q.acc / Q.n;
+  if (avg > 1 / 38 && Q.level < 6) { Q.level++; Q.good = 0; }
+  else if (avg < 1 / 56) { Q.good += Q.t; if (Q.good > 2.5 && Q.level > 0) { Q.level--; Q.good = 0; } }
+  else Q.good = 0;
+  Q.acc = 0; Q.n = 0; Q.t = 0;
+}
+const glowArr = [];
+function glow(x, y, z, s, r, g, b) { glowArr.push(x, y, z, s, r, g, b, 1); }
+const LP = new Float32Array(64), LC = new Float32Array(48);
+let nLights = 0;
+function collectLights() {
+  const L = [];
+  const fx = cam.c[0], fz = cam.c[2];
+  const add = (x, y, z, r, g, b, i, range) => { const d = (x - fx) ** 2 + (z - fz) ** 2; if (d < 4900) L.push([d, x, y, z, r * i, g * i, b * i, range]); };
+  const fl = (s) => 0.82 + 0.18 * Math.sin(G.t * 13 + s * 50) * Math.sin(G.t * 7.3 + s * 20);
+  for (const l of lamps) add(l.x, l.y, l.z, l.c[0], l.c[1], l.c[2], l.i * (l.kind === 'sewer' || l.kind === 'grate' ? 1 : fl(l.seed)), l.r);
+  for (const e of enemies) if (!e.dead && !e.gone && e.type === 'soldier' && e.torch) add(e.torch[0], e.torch[1], e.torch[2], 1, 0.55, 0.2, 4.5 * fl(e.seed), 9);
+  for (const f of fires) if (f.on) for (let x = f.x0 + 1.5; x < f.x1; x += 3) add(x, 1.2, (f.z0 + f.z1) / 2, 1, 0.5, 0.15, 7 * fl(x), 13);
+  for (const o of oils) if (o.state === 2) add(o.x, 1, o.z, 1, 0.5, 0.15, 8 * fl(o.x), 13);
+  L.sort((a, b) => a[0] - b[0]);
+  nLights = Math.min(L.length, Q.lights[Q.level]);
+  for (let i = 0; i < nLights; i++) { const l = L[i]; LP.set([l[1], l[2], l[3], l[7]], i * 4); LC.set([l[4], l[5], l[6]], i * 3); }
+}
+const MOON = nrm([0.35, 0.62, 0.7]);
+function setCommon(p) {
+  const u = p.u;
+  gl.uniform3fv(u.uCam, cam.e); gl.uniform3fv(u.uMoonDir, MOON); gl.uniform3f(u.uMoonCol, 0.19, 0.25, 0.42);
+  gl.uniform3f(u.uSkyAmb, 0.028, 0.04, 0.078); gl.uniform3f(u.uGndAmb, 0.012, 0.011, 0.013);
+  gl.uniform1i(u.uNL, nLights); gl.uniform4fv(u.uLP, LP); gl.uniform3fv(u.uLC, LC);
+  gl.uniform3f(u.uFogCol, 0.03, 0.042, 0.075); gl.uniform1f(u.uFogD, 0.0085); gl.uniform1f(u.uTime, G.t); gl.uniform1f(u.uLite, Q.level >= 3 ? 1 : 0);
+  if (u.uVP) gl.uniformMatrix4fv(u.uVP, false, VP);
+}
+function ratVisual(i) {
+  let x = rx[i], y = ry[i], z = rz[i], pitch = 0, yaw = rh[i];
+  if (z >= WALL_Z && z < WALL_Z + WALL_T) {
+    const s = (z - WALL_Z) / WALL_T;
+    yaw = Math.sin(rph[i] + G.t) * 0.25;
+    if (s < 0.42) { y = s / 0.42 * WALL_H; z = WALL_Z - 0.07; pitch = 1.35; }
+    else if (s < 0.58) { y = WALL_H + 0.03; z = WALL_Z + (s - 0.42) / 0.16 * WALL_T; }
+    else { y = (1 - s) / 0.42 * WALL_H; z = WALL_Z + WALL_T + 0.07; pitch = -1.35; }
+  }
+  return { x, y, z, pitch, yaw };
+}
+function fillRats(step) {
+  let k = 0;
+  const big = step > 1 ? 1 + (step - 1) * 0.25 : 1;
+  for (let i = 0; i < N; i += step) {
+    const v = ratVisual(i), o = k * 8;
+    // 画面の外のネズミは描かない(縦長の画面では、広場の左右の大半が外になる)
+    const cx = VP[0] * v.x + VP[4] * v.y + VP[8] * v.z + VP[12], cy = VP[1] * v.x + VP[5] * v.y + VP[9] * v.z + VP[13];
+    const cw = VP[3] * v.x + VP[7] * v.y + VP[11] * v.z + VP[15], m = cw * 0.06 + 0.5;
+    if (cw < 0.1 || cx < -cw - m || cx > cw + m || cy < -cw - m || cy > cw + m) continue;
+    ratInst[o] = v.x; ratInst[o + 1] = v.y; ratInst[o + 2] = v.z; ratInst[o + 3] = v.yaw;
+    ratInst[o + 4] = v.pitch; ratInst[o + 5] = rph[i]; ratInst[o + 6] = rsc[i] * big; ratInst[o + 7] = rtint[i];
+    k++;
+  }
+  return k;
+}
+function drawPerson(e) {
+  const ch = Math.cos(e.yaw), sh = Math.sin(e.yaw), fp = e.fall * e.fallDir, cp = Math.cos(fp), sp = Math.sin(fp);
+  const W = (lx, ly, lz) => { const y1 = ly * cp + lz * sp, z1 = -ly * sp + lz * cp; return [e.x + lx * ch + z1 * sh, e.y + y1, e.z - lx * sh + z1 * ch]; };
+  const part = (mesh, lx, ly, lz, sx, sy, sz, col, mat, xp = 0) => { const p = W(lx, ly, lz); inst(PRIMS[mesh], p[0], p[1], p[2], e.yaw, sx, sy, sz, fp + xp, col[0], col[1], col[2], mat); };
+  const walk = e.dead ? 0 : Math.sin(e.walk);
+  const struggle = e.cont > 4 && !e.dead ? Math.sin(G.t * 30) * 0.08 : 0;
+  const skin = [0.5, 0.36, 0.28];
+  const body = e.type === 'soldier' ? [0.32, 0.07, 0.06] : e.type === 'archer' ? [0.14, 0.2, 0.12] : [0.36, 0.28, 0.18];
+  const leg = e.type === 'villager' ? [0.22, 0.18, 0.14] : [0.12, 0.11, 0.12];
+  const metal = [0.5, 0.5, 0.54];
+  part('box', -0.12, 0.42, walk * 0.12, 0.17, 0.84, 0.19, leg, 14, walk * 0.4);
+  part('box', 0.12, 0.42, -walk * 0.12, 0.17, 0.84, 0.19, leg, 14, -walk * 0.4);
+  part('box', 0, 1.15, 0, 0.52, 0.64, 0.3, body, e.type === 'soldier' ? 12 : 14, struggle);
+  if (e.type === 'soldier') part('box', 0, 1.22, 0.02, 0.56, 0.4, 0.34, metal, 12, struggle);
+  part('sph', 0, 1.64, 0, 0.27, 0.3, 0.27, skin, 14);
+  if (e.type !== 'villager') part('cone', 0, 1.68, 0, 0.36, 0.3, 0.36, metal, 12);
+  else part('box', 0, 1.8, 0, 0.3, 0.08, 0.3, [0.25, 0.2, 0.12], 14);
+  part('box', -0.33, 1.12, walk * -0.1, 0.13, 0.56, 0.13, body, 14, -walk * 0.5);
+  const sw = e.type === 'soldier' ? Math.sin(e.swing) * 0.5 : e.swing * 1.4;
+  part('box', 0.33, 1.3, 0.22, 0.13, 0.56, 0.13, body, 14, -1.1 + sw * 0.6);
+  if (e.type === 'soldier') {
+    part('cyl', 0.34, 1.5, 0.5, 0.06, 0.7, 0.06, [0.25, 0.16, 0.08], 5, -0.55 + sw * 0.6);
+    const tp = W(0.34, 1.85, 0.74);
+    if (!e.dead) {
+      e.torch = tp;
+      glow(tp[0], tp[1], tp[2], 0.9, 2.4, 1.0, 0.25); glow(tp[0], tp[1] + 0.15, tp[2], 0.45, 3.5, 2.2, 0.8);
+      if (Math.random() < 0.5 * Q.part[Q.level]) emit(0, tp[0], tp[1], tp[2], rnd(-0.2, 0.2), rnd(0.6, 1.2), rnd(-0.2, 0.2), rnd(0.25, 0.45), 0.32, 2.2, 0.85, 0.22);
+    } else e.torch = null;
+  } else if (e.type === 'villager') {
+    part('cyl', 0.36, 1.1, 0.55, 0.05, 1.6, 0.05, [0.4, 0.3, 0.15], 5, 0.6 - e.swing * 1.6);
+    const bp = W(0.36, 0.45, 1.05 + e.swing * 0.3); inst(PRIMS.cone, bp[0], bp[1], bp[2], e.yaw, 0.35, 0.5, 0.2, Math.PI - 0.6 + e.swing, 0.5, 0.4, 0.2, 14);
+  } else if (e.type === 'archer') {
+    part('box', -0.1, 1.3, 0.45, 0.04, 1.3, 0.06, [0.3, 0.2, 0.1], 5, 0.1);
+  }
+}
+function drawCat(e) {
+  const ch = Math.cos(e.yaw), sh = Math.sin(e.yaw);
+  const W = (lx, ly, lz) => [e.x + lx * ch + lz * sh, ly, e.z - lx * sh + lz * ch];
+  const col = e.seed < 0.5 ? [0.05, 0.05, 0.055] : [0.45, 0.22, 0.08];
+  const roll = e.dead ? 1.4 : 0;
+  const part = (mesh, lx, ly, lz, sx, sy, sz, xp = 0) => { const p = W(lx, ly, lz); inst(PRIMS[mesh], p[0], p[1] * (e.dead ? 0.4 : 1), p[2], e.yaw + roll, sx, sy, sz, xp, col[0], col[1], col[2], 14); };
+  const wk = e.dead ? 0 : Math.sin(e.walk * 1.6);
+  part('box', 0, 0.32, 0, 0.2, 0.2, 0.52);
+  part('sph', 0, 0.46, 0.32 + e.swing * 0.12, 0.22, 0.2, 0.22);
+  part('cone', -0.07, 0.53, 0.32, 0.07, 0.1, 0.05); part('cone', 0.07, 0.53, 0.32, 0.07, 0.1, 0.05);
+  for (const [lx, lz, s] of [[-0.07, 0.18, 1], [0.07, 0.18, -1], [-0.07, -0.18, -1], [0.07, -0.18, 1]]) part('box', lx, 0.12, lz + wk * 0.06 * s, 0.06, 0.24, 0.06, wk * 0.4 * s);
+  part('cyl', 0, 0.48, -0.36, 0.04, 0.42, 0.04, -0.8 + Math.sin(G.t * 3 + e.seed * 9) * 0.3);
+  if (!e.dead) { const p = W(0, 0.48, 0.44 + e.swing * 0.12); glow(p[0] - ch * 0.05, p[1], p[2] + sh * 0.05, 0.06, 0.8, 2.6, 0.6); glow(p[0] + ch * 0.05, p[1], p[2] - sh * 0.05, 0.06, 0.8, 2.6, 0.6); }
+}
+function drawFood(f) {
+  const k = f.amt0 > 0 ? f.amt / f.amt0 : 0;
+  const B = PRIMS;
+  if (f.kind === 'grain') {
+    const s = 0.12 + 0.88 * Math.sqrt(k);
+    inst(B.cone, f.x, 0, f.z, f.seed * 6, f.r * 2.1 * Math.max(0.35, s), 2.6 * s + 0.05, f.r * 2.1 * Math.max(0.35, s), 0, 0.78, 0.56, 0.22, 6);
+    for (let j = 0; j < 5; j++) { const a = f.seed * 9 + j * 1.3; inst(B.box, f.x + Math.sin(a) * f.r * 1.05, 0.3, f.z + Math.cos(a) * f.r * 1.05, a, 0.55, 0.6, 0.45, 0, 0.55, 0.45, 0.3, 14); }
+  } else if (f.kind === 'stall') {
+    for (let j = 0; j < 7; j++) { if (j / 7 > k + 0.05) continue; const a = f.seed * 7 + j * 0.9; inst(B.sph, f.x + Math.sin(a) * 0.8, 0.25, f.z + Math.cos(a) * 0.8, 0, 0.5, 0.45, 0.5, 0, j % 2 ? 0.55 : 0.2, j % 2 ? 0.12 : 0.35, 0.06, 14); }
+    inst(B.box, f.x, 0.15, f.z, f.seed, 2.4 * Math.max(0.2, k), 0.3, 2.0 * Math.max(0.2, k), 0, 0.5, 0.35, 0.18, 14);
+  } else if (f.kind === 'bread') {
+    inst(B.cyl, f.x, 0.18, f.z, 0, 0.75, 0.36, 0.75, 0, 0.42, 0.3, 0.15, 5);
+    if (k > 0) inst(B.sph, f.x, 0.38, f.z, f.seed, 0.6 * Math.sqrt(k), 0.3, 0.45 * Math.sqrt(k), 0, 0.7, 0.45, 0.2, 14);
+  } else {
+    const n = f.kind === 'garbage' ? 4 : 2;
+    for (let j = 0; j < n; j++) { const a = f.seed * 11 + j * 1.7, s = (0.35 + 0.65 * Math.sqrt(k)) * (f.kind === 'garbage' ? 0.9 : 0.45); inst(B.sph, f.x + Math.sin(a) * f.r * 0.4, 0.1, f.z + Math.cos(a) * f.r * 0.4, a, s, s * 0.6, s, 0, 0.3 + j * 0.05, 0.24, 0.12, 14); }
+  }
+  // 食べ物の在りかが暗がりでも分かるように、ほのかに光らせる(残りが多いほど)
+  if (k > 0 && nearCam(f.x, f.z, 55)) glow(f.x, 0.6, f.z, f.r * 1.6 + 0.6, 0.18 * (0.4 + k), 0.13 * (0.4 + k), 0.04 * (0.4 + k));
+}
+function buildScene(dt) {
+  for (const k in PRIMS) PRIMS[k].n = 0;
+  glowArr.length = 0;
+  const B = PRIMS, pm = Q.part[Q.level];
+  for (const f of foods) if (Math.abs(f.z - cam.c[2]) < 80) drawFood(f);
+  for (const e of enemies) {
+    if (e.gone || Math.abs(e.z - cam.c[2]) > 70) continue;
+    if (e.type === 'cat') drawCat(e); else drawPerson(e);
+  }
+  // 油だまりと倒れる街灯
+  for (const o of oils) {
+    if (Math.abs(o.z - cam.c[2]) > 70) continue;
+    if (o.state < 2) inst(B.cyl, o.x, 0.01, o.z, 0, o.r * 2, 0.012, o.r * 2, 0, 0.02, 0.018, 0.012, 11);
+    const tipA = o.tip * 1.35, dir = Math.sign(o.x - o.lx) || 1;
+    inst(B.cyl, o.lx + Math.sin(tipA) * 1.6 * dir, Math.cos(tipA) * 1.6, o.lz, Math.PI / 2 * dir, 0.09, 3.2, 0.09, tipA, 0.08, 0.08, 0.09, 12);
+    const lpx = o.lx + Math.sin(tipA) * 3.2 * dir, lpy = Math.max(0.2, Math.cos(tipA) * 3.2);
+    if (o.state < 2) { inst(B.box, lpx, lpy, o.lz, 0, 0.32, 0.36, 0.32, 0, 3.4, 1.8, 0.7, 13); glow(lpx, lpy, o.lz, 1.0, 0.9, 0.45, 0.15); }
+    if (o.state === 2) emitFire(o.x - o.r * 0.8, o.z - o.r * 0.8, o.x + o.r * 0.8, o.z + o.r * 0.8, dt, pm);
+  }
+  for (const f of fires) if (f.on && Math.abs(f.z0 - cam.c[2]) < 60) emitFire(f.x0, f.z0, f.x1, f.z1, dt, pm);
+  for (const l of lamps) {
+    if (Math.abs(l.z - cam.c[2]) > 70) continue;
+    if (l.kind === 'brazier') { glow(l.x, 1.5, l.z, 1.6, 1.6, 0.7, 0.18); if (Math.random() < 0.7 * pm) emit(0, l.x + rnd(-0.25, 0.25), 1.3, l.z + rnd(-0.25, 0.25), rnd(-0.2, 0.2), rnd(0.8, 1.6), rnd(-0.2, 0.2), rnd(0.3, 0.6), 0.55, 2.0, 0.8, 0.2); }
+    else if (l.kind === 'wall') glow(l.x, l.y + 0.15, l.z, 0.9, 1.4, 0.65, 0.2);
+    else if (l.kind === 'post') glow(l.x, l.y, l.z, 1.1, 0.9, 0.5, 0.17);
+    else if (l.kind === 'sewer') glow(l.x, l.y, l.z, 0.8, 0.25, 0.9, 0.3);
+    else if (l.kind === 'chandelier') { for (let j = 0; j < 8; j++) { const a = j / 8 * TAU + G.t * 0.1; glow(l.x + Math.sin(a) * 1.6, l.y, l.z + Math.cos(a) * 1.6, 0.35, 2.4, 1.3, 0.4); } inst(B.cyl, l.x, l.y - 0.1, l.z, 0, 3.4, 0.12, 3.4, 0, 0.15, 0.12, 0.1, 12); }
+    else if (l.kind === 'grate') glow(l.x, 2.6, l.z, 2.4, 0.05, 0.07, 0.12);
+  }
+  // 矢・刺さった矢・血だまり
+  for (const a of arrows) {
+    const u = a.t / a.T, x = lerp(a.x0, a.x1, u), z = lerp(a.z0, a.z1, u), y = lerp(a.y0, a.y1, u) + Math.sin(u * Math.PI) * 2.5;
+    const pitch = Math.atan2(-(a.y1 - a.y0) / a.T - Math.cos(u * Math.PI) * Math.PI * 2.5 / a.T, Math.hypot(a.x1 - a.x0, a.z1 - a.z0) / a.T);
+    inst(B.box, x, y, z, Math.atan2(a.x1 - a.x0, a.z1 - a.z0), 0.03, 0.03, 0.9, -pitch, 0.35, 0.28, 0.2, 5);
+    glow(x, y, z, 0.12, 0.6, 0.5, 0.4);
+  }
+  for (const s of stuck) inst(B.box, s.x, s.y + 0.25, s.z, s.yaw, 0.03, 0.03, 0.8, -0.9, 0.35, 0.28, 0.2, 5);
+  for (const d of decals) { const g = Math.min(1, d.t / 2.5); inst(B.cyl, d.x, 0.012, d.z, 0, d.r * 2 * (0.3 + 0.7 * g), 0.01, d.r * 2 * (0.3 + 0.7 * g), 0, 0.16, 0.008, 0.008, 11); }
+  // 大広間の旗(落城で落ちる)
+  if (cam.c[2] > 330) {
+    const b = G.banner, drop = b * b * 7.5;
+    inst(B.box, 0, 8.6 - drop, 451.3 - b * 1.5, 0, 4.4, 7.2, 0.08, b * 1.3, 0.42, 0.03, 0.04, 14);
+    inst(B.box, 0, 9.4 - drop, 451.2 - b * 1.5, 0, 1.6, 1.6, 0.1, b * 1.3, 0.75, 0.55, 0.15, 12);
+    inst(B.cyl, 0, 12.3, 451.4, 0, 0.12, 5.2, 0.12, Math.PI / 2, 0.3, 0.25, 0.1, 12);
+  }
+  // 行き先の目印
+  if (G.state === 'play' && G.marker > 0) {
+    G.marker = Math.max(0, G.marker - dt * 0.8);
+    for (let j = 0; j < 10; j++) { const a = j / 10 * TAU + G.t * 1.5; glow(T[0].x + Math.sin(a) * 0.9, 0.08, T[0].z + Math.cos(a) * 0.9, 0.25, 0.5 * G.marker, 0.6 * G.marker, 0.9 * G.marker); }
+  }
+  if (G.split && gc[1].n) for (let j = 0; j < 8; j++) { const a = j / 8 * TAU - G.t; glow(T[1].x + Math.sin(a) * 1.2, 0.08, T[1].z + Math.cos(a) * 1.2, 0.25, 0.9, 0.45, 0.12); }
+}
+function emitFire(x0, z0, x1, z1, dt, pm) {
+  const area = (x1 - x0) * (z1 - z0);
+  let n = area * 9 * dt * pm;
+  while (n > 0) {
+    if (n < 1 && Math.random() > n) break;
+    n--;
+    const x = rnd(x0, x1), z = rnd(z0, z1);
+    emit(0, x, rnd(0, 0.4), z, rnd(-0.3, 0.3), rnd(1.2, 2.6), rnd(-0.3, 0.3), rnd(0.35, 0.8), rnd(0.6, 1.1), 2.4, 0.9, 0.22);
+    if (Math.random() < 0.12) emit(1, x, 0.8, z, rnd(-1, 1), rnd(2, 5), rnd(-1, 1), rnd(0.6, 1.3), 0.05, 3.5, 1.4, 0.4);
+    if (Math.random() < 0.1) emit(2, x, 1.6, z, rnd(-0.3, 0.3), rnd(1, 1.8), rnd(-0.3, 0.3), rnd(1.5, 2.6), 1.4, 0.03, 0.028, 0.026);
+  }
+  for (let x = x0 + 0.75; x < x1; x += 1.5) glow(x, 0.7, (z0 + z1) / 2, 2.2, 0.5, 0.2, 0.05);
+}
+function fillParticles() {
+  let n = 0;
+  const put = (x, y, z, s, r, g, b, a) => { if (n >= MPD) return; const o = n * 8; partData[o] = x; partData[o + 1] = y; partData[o + 2] = z; partData[o + 3] = s; partData[o + 4] = r; partData[o + 5] = g; partData[o + 6] = b; partData[o + 7] = a; n++; };
+  // 先に重ねて描く粒(煙・血)
+  for (let i = 0; i < PN; i++) {
+    const k = pa.k[i]; if (k !== 2 && k !== 3) continue;
+    const t = pa.l[i] / pa.ml[i];
+    if (k === 2) put(pa.x[i], pa.y[i], pa.z[i], pa.s[i] * (2 - t), pa.r[i], pa.g[i], pa.b[i], 0.55 * Math.min(1, t * 2) * Math.min(1, (1 - t) * 5));
+    else put(pa.x[i], pa.y[i], pa.z[i], pa.s[i], pa.r[i], pa.g[i], pa.b[i], 0.95 * Math.min(1, t * 3));
+  }
+  const nAlpha = n;
+  for (let i = 0; i < PN; i++) {
+    const k = pa.k[i]; if (k !== 0 && k !== 1) continue;
+    const t = pa.l[i] / pa.ml[i];
+    if (k === 0) put(pa.x[i], pa.y[i], pa.z[i], pa.s[i] * (0.35 + 0.65 * t), pa.r[i] * t, pa.g[i] * t * t, pa.b[i] * t * t, 1);
+    else put(pa.x[i], pa.y[i], pa.z[i], pa.s[i], pa.r[i] * t, pa.g[i] * t, pa.b[i] * t, 1);
+  }
+  for (let j = 0; j < glowArr.length; j += 8) put(glowArr[j], glowArr[j + 1], glowArr[j + 2], glowArr[j + 3], glowArr[j + 4], glowArr[j + 5], glowArr[j + 6], 1);
+  return [nAlpha, n];
+}
+function render(dt) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1), sc = Q.scale[Q.level];
+  const W = Math.max(2, Math.round(innerWidth * dpr * sc)), H = Math.max(2, Math.round(innerHeight * dpr * sc));
+  if (cv.width !== W || cv.height !== H || !FB) { cv.width = W; cv.height = H; makeTargets(W, H); }
+  const aspect = innerWidth / Math.max(1, innerHeight);
+  const fovY = aspect < 1.2 ? Math.min(80 * Math.PI / 180, 2 * Math.atan(Math.tan(28 * Math.PI / 180) / aspect)) : 48 * Math.PI / 180;
+  persp(Pm, fovY, aspect, 0.25, 700);
+  const sh = G.shake * G.shake * 0.6;
+  const eye = [cam.e[0] + rnd(-sh, sh), cam.e[1] + rnd(-sh, sh), cam.e[2]];
+  lookAt(Vm, eye, cam.c); mul(VP, Pm, Vm); invert(IVP, VP);
+  const PS = H * Pm[5] * 0.5;
+  collectLights();
+  buildScene(dt);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, FB.s.fb); gl.viewport(0, 0, W, H);
+  gl.clearColor(0.03, 0.042, 0.075, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(true); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
+  // 手前にあることが多いものから描く(奥の重い石畳や壁を、隠れた所で塗らずにすむ)
+  const LT = Q.lite[Q.level];
+  const nr = fillRats(Q.ratStep[Q.level]);
+  const lod = Q.lod[Q.level];
+  if (nr) {
+    gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+    if (LT) {
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, ratTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1024, Math.ceil(nr * 2 / 1024), gl.RGBA, gl.FLOAT, ratInst, 0);
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, ratGeoTex[lod]);
+      gl.useProgram(P.ratP.p); setCommon(P.ratP); gl.uniform1i(P.ratP.u.uInst, 2); gl.uniform1i(P.ratP.u.uGeo, 3); gl.uniform1i(P.ratP.u.uNV, ratCounts[lod]);
+      gl.bindVertexArray(VAO.full); gl.drawArrays(gl.TRIANGLES, 0, ratCounts[lod] * nr);
+      gl.activeTexture(gl.TEXTURE0);
+    } else {
+      gl.bindBuffer(gl.ARRAY_BUFFER, ratBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, ratInst, 0, nr * 8);
+      gl.useProgram(P.rat.p); setCommon(P.rat);
+      gl.bindVertexArray(VAO.rat[lod]); gl.drawArraysInstanced(gl.TRIANGLES, 0, ratCounts[lod], nr);
+    }
+    gl.disable(gl.CULL_FACE);
+  }
+  const pi = LT ? P.instL : P.inst; gl.useProgram(pi.p); setCommon(pi);
+  for (const k in PRIMS) {
+    const b = PRIMS[k]; if (!b.n) continue;
+    gl.bindVertexArray(b.vao); gl.bindBuffer(gl.ARRAY_BUFFER, b.ib); gl.bufferSubData(gl.ARRAY_BUFFER, 0, b.data, 0, b.n * 12);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, b.count, b.n);
+  }
+  const pw = LT ? P.worldL : P.world; gl.useProgram(pw.p); setCommon(pw); gl.bindVertexArray(VAO.world); drawStatic();
+  gl.depthMask(false);
+  gl.useProgram(P.sky.p); setCommon(P.sky); gl.uniformMatrix4fv(P.sky.u.uInv, false, IVP); gl.bindVertexArray(VAO.full); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const [nA, nAll] = fillParticles();
+  gl.enable(gl.BLEND);
+  if (nAll) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, partData, 0, nAll * 8);
+    gl.useProgram(P.part.p); gl.uniformMatrix4fv(P.part.u.uVP, false, VP); gl.uniform1f(P.part.u.uPS, PS); gl.uniform3fv(P.part.u.uCam, cam.e); gl.uniform1f(P.part.u.uFogD, 0.0085);
+    gl.bindVertexArray(VAO.part);
+    if (nA) { gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.drawArrays(gl.POINTS, 0, nA); }
+  }
+  gl.blendFunc(gl.ONE, gl.ONE);
+  if (nr) {
+    const pe = LT ? P.eyeP : P.eye, u = pe.u, ne = Math.ceil(nr * Q.eyes[Q.level]);
+    gl.useProgram(pe.p);
+    gl.uniformMatrix4fv(u.uVP, false, VP); gl.uniform3fv(u.uCam, cam.e); gl.uniform1f(u.uPS, PS); gl.uniform1i(u.uNL, nLights); gl.uniform4fv(u.uLP, LP); gl.uniform3fv(u.uLC, LC); gl.uniform1f(u.uFogD, 0.0085);
+    if (LT) { gl.uniform1i(u.uInst, 2); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, ratTex); gl.activeTexture(gl.TEXTURE0); gl.bindVertexArray(VAO.full); gl.drawArrays(gl.POINTS, 0, ne * 2); }
+    else { gl.bindVertexArray(VAO.eye); gl.drawArraysInstanced(gl.POINTS, 0, 2, ne); }
+  }
+  if (nAll > nA) { gl.useProgram(P.part.p); gl.bindVertexArray(VAO.part); gl.drawArrays(gl.POINTS, nA, nAll - nA); }
+  gl.disable(gl.BLEND); gl.depthMask(true); gl.disable(gl.DEPTH_TEST);
+  // 光のにじみ(ブルーム)
+  const bloom = Q.bloom[Q.level];
+  gl.bindVertexArray(VAO.full);
+  if (bloom) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, FB.a.fb); gl.viewport(0, 0, FB.a.w, FB.a.h);
+    gl.useProgram(P.bright.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, FB.s.tex); gl.uniform1i(P.bright.u.uT, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.useProgram(P.blur.p); gl.uniform1i(P.blur.u.uT, 0);
+    for (let k = 0; k < 2; k++) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, FB.b.fb); gl.bindTexture(gl.TEXTURE_2D, FB.a.tex); gl.uniform2f(P.blur.u.uDir, (1 + k) / FB.a.w, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, FB.a.fb); gl.bindTexture(gl.TEXTURE_2D, FB.b.tex); gl.uniform2f(P.blur.u.uDir, 0, (1 + k) / FB.a.h); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+  gl.useProgram(P.comp.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, FB.s.tex); gl.uniform1i(P.comp.u.uS, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, FB.a.tex); gl.uniform1i(P.comp.u.uB, 1);
+  gl.uniform1f(P.comp.u.uBloom, bloom ? 0.85 : 0); gl.uniform1f(P.comp.u.uExp, HDRok ? 1.3 : 1.1); gl.uniform1f(P.comp.u.uTime, G.t);
+  gl.uniform3f(P.comp.u.uTint, G.hurt * 0.1, G.hurt * 0.006, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.activeTexture(gl.TEXTURE0);
+}
+
+// ---------- 進める ----------
+function update(dt) {
+  G.t += dt;
+  clearMarks();
+  stepEnemies(dt);
+  stepArrows(dt);
+  stepOils(dt);
+  stepRats(dt);
+  stepFoods(dt);
+  stepParticles(dt);
+  stepGame(dt);
+  G.hurt = Math.max(0, G.hurt - dt * 0.8);
+}
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
+  qualityTick(dt);
+  fxBudget = 14;
+  steer();
+  let sim = dt * (window.__simSpeed || 1);
+  while (sim > 1e-5) { const h = Math.min(sim, 1 / 20); update(h); sim -= h; }
+  updateCam(dt);
+  soundTick(dt);
+  if (G.state === 'play' || G.state === 'win' || G.state === 'lose') updateHUD(false);
+  if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
+  if (hintT > 0) { hintT -= dt; if (hintT <= 0) $('hint').classList.remove('show'); }
+  render(dt);
+}
+
+// ---------- テスト用の窓口(読み取り専用) ----------
+window.gameTest = {
+  state: () => G.state, score: () => Math.round(G.maxN), count: () => N, maxCount: () => Math.round(G.maxN),
+  webgl: () => !!gl, quality: () => Q.level, zone: () => zoneName(G.lastZ), time: () => G.time,
+  center: (g = 0) => ({ x: gc[g].x, z: gc[g].z, n: gc[g].n }), target: (g = 0) => ({ x: T[g].x, z: T[g].z }),
+  foods: () => foods.map((f) => ({ x: f.x, z: f.z, amt: Math.round(f.amt), kind: f.kind })),
+  enemies: () => enemies.map((e) => ({ type: e.type, x: e.x, z: e.z, dead: e.dead, gone: !!e.gone })),
+  kills: () => G.kills, deaths: () => ({ ...G.deaths }), alarm: () => ({ time: G.time, at: ALARM_AT, phase: G.alarm }),
+  split: () => G.split, climbing: () => G.climbN, hall: () => G.hallN, side: () => ({ granary: world.granSide, town: world.townSide }),
+  particles: () => PN, lights: () => nLights,
+  screenOf: (x, z, y = 0) => {
+    const v = [x, y, z, 1], o = [0, 0, 0, 0];
+    for (let i = 0; i < 4; i++) o[i] = VP[i] * v[0] + VP[4 + i] * v[1] + VP[8 + i] * v[2] + VP[12 + i] * v[3];
+    return { x: (o[0] / o[3] + 1) / 2 * innerWidth, y: (1 - o[1] / o[3]) / 2 * innerHeight, front: o[3] > 0 };
+  },
+};
+
+if (!gl) { $('nogl').style.display = 'grid'; }
+else {
+  initGL();
+  titleScene();
+  $('title').classList.add('show');
+  $('t-best').textContent = save.best > 0 ? `これまでの最多: ${fmt(save.best)}匹` : '';
+  requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>

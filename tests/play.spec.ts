@@ -8,15 +8,15 @@ import { measureFps } from './perf';
 
 // ============================================================================
 //  プレイテスト: 今日のゲームが壊れていないかを、実際に操作して確かめる(最小限)。
-//  対象: ビル爆破解体(2026-10-15・オーナーの注文)
-//  図面の柱をタップして爆薬を仕掛け、発破。ビルが崩れ、結果の判子が出て、次の現場へ進む。
+//  対象: ネズミ1万匹で城攻め(2026-10-16・オーナーの注文)
+//  12匹の群れをドラッグで食べ物へ導いて増やし、敵を飲み込みながら城へ。大広間を埋めると落城。
 //
 //  ・ひと通り遊べるか(1本)/ 投稿用の動画 / 見直し用のスクショ / スマホで重くない(仕上げの最後に1回)
-//  ・早送り(__simSpeed)は、崩れ終わるまでを短い時間で回すためだけに使う
+//  ・早送り(__simSpeed)は、長い道のりを短い時間で回すためだけに使う
 //  ・Math.random は種つきの乱数に差しかえる(ゲームは変えない)
 // ============================================================================
 
-const EXPECTED = '2026-10-15-bill-bakuha';
+const EXPECTED = '2026-10-16-nezumi-shiro';
 const target = latestGame();
 const url = () => pathToFileURL(target!.html).href;
 const gt = <T>(page: Page, fn: string, ...args: unknown[]) =>
@@ -28,7 +28,7 @@ function installInit(cfg: Cfg) {
   let s = cfg.seed >>> 0;
   Math.random = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   try {
-    if (!localStorage.getItem('bill-bakuha-v1')) localStorage.setItem('bill-bakuha-v1', JSON.stringify({ sound: !!cfg.sound }));
+    if (!localStorage.getItem('nezumi-shiro-v1')) localStorage.setItem('nezumi-shiro-v1', JSON.stringify({ sound: !!cfg.sound }));
   } catch { /* なし */ }
 }
 async function open(page: Page, cfg: Cfg) {
@@ -42,17 +42,17 @@ async function open(page: Page, cfg: Cfg) {
 }
 async function start(page: Page) {
   await page.locator('#b-start').click();
-  await expect.poll(() => gt<string>(page, 'state')).toBe('plan');
+  await expect.poll(() => gt<string>(page, 'state')).toBe('play');
 }
 // 動画とスクショで、場面の手前まで一気に進めるための段取り(遊びの確かめには使わない)
 const stage = (page: Page, code: string) => page.evaluate((c) => (0, eval)(c), code);
-// 爆薬の置き方: 'implode' = 全部の階の全部の柱を、下の階から順に / 'fell' = いちばん下の階だけ、空き地の側を先に
-const CHARGE = {
-  implode: `(() => { job.levels.forEach((st, li) => B.cols.forEach((c, ci) => placeCharge(st, ci, Math.min(2, li)))); })()`,
-  hook: `(() => { job.levels.forEach((st, li) => B.cols.forEach((c, ci) => placeCharge(st, ci, li === 0 ? (c.x < 0 ? 0 : 1) : Math.min(2, li)))); })()`,
-  fell: `(() => { const si = job.sides.findIndex((s) => s.kind === 'open'); const n = SIDES[si].n; B.cols.forEach((c, ci) => placeCharge(0, ci, c.x * n[0] + c.z * n[1] > 0.1 ? 0 : 2)); })()`,
-};
-const snapCam = `cam.yaw = G.blastYaw; cam.g.yaw = G.blastYaw; cam.dist = fitDist(job.H) * 1.02; cam.ty = job.H * 0.47; cam.pitch = 0.04;`;
+const NO_HINTS = `G.hints = { village: 1, granary: 1, town: 1, soldier: 1, wall: 1, hall: 1, split: 1 }; hint('', 0.01);`;
+// 世界の (x, z) を画面の座標にして、画面の内側に収める
+async function screenPos(page: Page, x: number, z: number) {
+  const p = await gt<{ x: number; y: number; front: boolean }>(page, 'screenOf', x, z);
+  const vp = page.viewportSize()!;
+  return { x: Math.min(vp.width - 10, Math.max(10, p.x)), y: Math.min(vp.height - 10, Math.max(vp.height * 0.08, p.front ? p.y : 0)) };
+}
 
 test.describe('プレイテスト', () => {
   test.skip(target === null, 'games/ にまだゲームがありません');
@@ -61,55 +61,85 @@ test.describe('プレイテスト', () => {
     expect(target!.name, 'tests/play.spec.ts が前のゲーム用のままです。今日のゲームに合わせて書き直してください').toBe(EXPECTED);
   });
 
-  test('ひと通り遊べる: 図面の柱をタップして爆薬を仕掛け、発破するとビルが崩れ、判子の結果が出て、次の現場へ進める', async ({ page }) => {
-    test.setTimeout(240_000);
+  test('ひと通り遊べる: ドラッグで群れを食べ物へ導くと増え、敵を飲み込みながら城へ進み、大広間を埋めると落城して遊び直せる', async ({ page }) => {
+    test.setTimeout(300_000);
     const errors = await open(page, { seed: 3, sound: true });
     expect(await gt<boolean>(page, 'webgl'), 'WebGL2 が使えていません').toBe(true);
     await start(page);
-    const job = await gt<any>(page, 'job');
-    // 全部の階の、全部の柱をタップする(人がふつうにクリックする速さで)
-    for (let li = 0; li < job.levels.length; li++) {
-      await page.locator(`#lv-${li}`).click();
-      await page.waitForTimeout(150);
-      const cols = await gt<any[]>(page, 'planColumns');
-      for (const c of cols) { await page.mouse.click(c.x, c.y); await page.waitForTimeout(60); }
-    }
-    expect(await gt<number>(page, 'charges'), '柱をタップしても爆薬が仕掛けられません').toBe(job.cols * job.levels.length);
-    const H = job.height;
-    await page.locator('#b-fire').click();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('count');
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 15_000 }).toBe('blast');
+    expect(await gt<number>(page, 'count')).toBe(12);
+    // 雑な自動プレイヤー: 前方の近い食べ物へ、なければ道の先へ、指(マウス)を押したまま動かす
+    await page.evaluate(() => { (window as any).__simSpeed = 3; });
     const t0 = Date.now();
-    await page.waitForTimeout(1500);
-    const mid = await gt<any>(page, 'building');
-    expect(await gt<number>(page, 'debris'), '発破してもがれきが出ません').toBeGreaterThan(20);
-    await page.evaluate(() => { (window as any).__simSpeed = 4; });
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 180_000 }).toBe('result');
-    await page.evaluate(() => { (window as any).__simSpeed = 1; });
-    const res = await gt<any>(page, 'result');
-    const b = await gt<any>(page, 'building');
-    console.log(`  ${job.floors}階 ${Math.round(H)}m → 途中 ${Math.round(mid.maxH)}m → 最後 ${Math.round(b.maxH)}m / 結果「${res.head}」★${res.stars} 収支${res.delta}万 / がれき${await gt<number>(page, 'debris')} / ${((Date.now() - t0) / 1000).toFixed(0)}秒`);
-    expect(b.maxH, '全部の柱を爆破しても崩れきりません').toBeLessThan(H * 0.3);
+    let first = await screenPos(page, 0, 8);
+    await page.mouse.move(first.x, first.y);
+    await page.mouse.down();
+    let firstGrow = 0;
+    let lastLog = 0;
+    while (Date.now() - t0 < 170_000) {
+      const st = await gt<string>(page, 'state');
+      if (st !== 'play') break;
+      const c = await gt<{ x: number; z: number; n: number }>(page, 'center');
+      if (c.z > 384) break; // 城壁を越えた
+      const foods = (await gt<any[]>(page, 'foods')).filter((f) => f.amt > 0 && f.z > c.z - 5 && f.z < c.z + 40);
+      foods.sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z));
+      const wp = foods.length ? foods[0] : { x: 0, z: c.z + 14 };
+      const p = await screenPos(page, wp.x, wp.z);
+      await page.mouse.move(p.x, p.y, { steps: 4 });
+      if (!firstGrow && (await gt<number>(page, 'count')) > 12) firstGrow = (Date.now() - t0) / 1000;
+      if (Date.now() - lastLog > 20_000) {
+        lastLog = Date.now();
+        console.log(`  ${((Date.now() - t0) / 1000).toFixed(0)}秒: ${await gt<string>(page, 'zone')} z=${c.z.toFixed(0)} ${c.n}匹(最多${await gt<number>(page, 'maxCount')}) 敵${await gt<number>(page, 'kills')} 時間${(await gt<number>(page, 'time')).toFixed(0)}`);
+      }
+      await page.waitForTimeout(200);
+    }
+    await page.mouse.up();
+    const c = await gt<{ x: number; z: number; n: number }>(page, 'center');
+    const maxN = await gt<number>(page, 'maxCount');
+    const kills = await gt<number>(page, 'kills');
+    const deaths = await gt<Record<string, number>>(page, 'deaths');
+    console.log(`  自動プレイ: ${await gt<string>(page, 'state')} z=${c.z.toFixed(0)} 残り${await gt<number>(page, 'count')}匹 最多${maxN} 飲み込んだ敵${kills} 失った ${JSON.stringify(deaths)} ゲーム内${(await gt<number>(page, 'time')).toFixed(0)}秒 / 初めて増えた ${firstGrow}秒`);
+    expect(firstGrow, '食べ物へ導いても群れが増えません').toBeGreaterThan(0);
+    expect(maxN, '食べ物を食べても群れがほとんど増えません').toBeGreaterThan(300);
+    expect(kills, '群れで敵を飲み込めません').toBeGreaterThan(0);
+    expect(c.z > 300 || (await gt<string>(page, 'state')) !== 'play', '群れが城下町まで進めません').toBeTruthy();
+    // 終わりまで: (自動プレイが城に届かなかったときは)中庭まで段取りで進め、大広間へ導く
+    if ((await gt<string>(page, 'state')) === 'play') {
+      await page.evaluate(() => { (window as any).__simSpeed = 1; });
+      await stage(page, `debugWarp(WALL_Z + WALL_T + 5, 3000, 0)`);
+      await page.waitForTimeout(1500); // カメラが城壁の場面から戻るのを待つ
+      const vp = page.viewportSize()!;
+      await page.mouse.move(vp.width / 2, vp.height / 2);
+      await page.mouse.down();
+      const t1 = Date.now();
+      while (Date.now() - t1 < 40_000 && (await gt<string>(page, 'state')) === 'play') {
+        const p = await screenPos(page, 0, 432);
+        await page.mouse.move(p.x, p.y, { steps: 3 });
+        await page.waitForTimeout(250);
+      }
+      await page.mouse.up();
+      const c2 = await gt<{ x: number; z: number; n: number }>(page, 'center');
+      console.log(`  大広間: ${await gt<number>(page, 'hall')}匹 / 飲み込んだ敵 ${await gt<number>(page, 'kills')} / ${((Date.now() - t1) / 1000).toFixed(0)}秒 / 群れ x=${c2.x.toFixed(0)} z=${c2.z.toFixed(0)} / 失った ${JSON.stringify(await gt(page, 'deaths'))} 警鐘 ${JSON.stringify(await gt(page, 'alarm'))}`);
+    }
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 20_000 }).toBe('result');
     await expect(page.locator('#result')).toBeVisible();
-    await expect(page.locator('#r-stamp')).toHaveText(res.head);
-    await page.locator('#b-next').click();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('plan');
-    expect((await gt<any>(page, 'job')).idx).toBe(1);
+    console.log(`  結果: ${await page.locator('#r-head').textContent()} / ${await page.locator('#r-sub').textContent()}`);
+    await page.locator('#b-again').click();
+    await expect.poll(() => gt<string>(page, 'state')).toBe('play');
+    expect(await gt<number>(page, 'count')).toBe(12);
     expect(errors).toEqual([]);
   });
 
-  test('スマホで重くない(CPU 4倍遅くても、30階のビルが崩れて土煙が広がる場面で 30fps 以上)', async ({ page }, info) => {
+  test('スマホで重くない(CPU 4倍遅くても、1万匹が城壁を登る場面で 30fps 以上)', async ({ page }, info) => {
     test.skip(info.project.name !== 'mobile', 'スマホの設定で測る');
     test.setTimeout(180_000);
     await open(page, { seed: 71 });
-    await stage(page, `forcedJob = { type: 'tower', F: 30 };`);
     await page.locator('#b-start').tap();
-    await expect.poll(() => gt<string>(page, 'state')).toBe('plan');
-    await stage(page, CHARGE.implode + '; fireNow();' + snapCam);
-    await page.waitForTimeout(6000);
-    const busy = await page.evaluate(() => { const g = (window as any).gameTest; return { dust: g.dust(), debris: g.debris(), q: g.quality() }; });
+    await expect.poll(() => gt<string>(page, 'state')).toBe('play');
+    await stage(page, `debugWarp(WALL_Z - 14, 10000, 0, 120); T[0] = { x: 0, z: WALL_Z + 12 }; ${NO_HINTS}`);
+    await page.waitForTimeout(7000);
+    const busy = await page.evaluate(() => { const g = (window as any).gameTest; return { n: g.count(), climb: g.climbing(), q: g.quality(), p: g.particles() }; });
     const perf = await measureFps(page, 3000);
-    console.log(`  重さ: 平均${perf.fps}fps / p95 ${perf.p95}ms(mobile・CPU 4倍遅い)・画質の段階 ${busy.q}・土煙 ${busy.dust}・がれき ${busy.debris}`);
+    console.log(`  重さ: 平均${perf.fps}fps / p95 ${perf.p95}ms(mobile・CPU 4倍遅い)・画質の段階 ${busy.q}・${busy.n}匹(登っている ${busy.climb})・粒 ${busy.p}`);
     expect(perf.fps, 'スマホで重すぎます').toBeGreaterThanOrEqual(30);
     expect(perf.p95, 'スマホでカクつきます').toBeLessThanOrEqual(50);
   });
@@ -123,89 +153,93 @@ test.describe('プレイテスト', () => {
       await page.goto(url());
       await expect.poll(() => page.evaluate(() => !!(window as any).gameTest), { timeout: 30_000 }).toBeTruthy();
     };
-    const startP = async (page: Page, forced = '') => {
-      if (forced) await stage(page, forced);
+    const startP = async (page: Page) => {
       await page.locator('#b-start').click();
-      await expect.poll(() => gt<string>(page, 'state'), { timeout: 15_000 }).toBe('plan');
+      await expect.poll(() => gt<string>(page, 'state'), { timeout: 15_000 }).toBe('play');
     };
     const rest = (page: Page, clip: { until: number }) => page.waitForTimeout(Math.max(0, clip.until - Date.now()));
+    // 群れを (x, z) へ導き続ける(指を押したまま、カメラが動いても狙いを合わせ直す)
+    const lead = async (page: Page, until: number, pick: () => Promise<{ x: number; z: number }>) => {
+      let p = await pick(); let s = await screenPos(page, p.x, p.z);
+      await page.mouse.move(s.x, s.y); await page.mouse.down();
+      while (Date.now() < until) {
+        p = await pick(); s = await screenPos(page, p.x, p.z);
+        await page.mouse.move(s.x, s.y, { steps: 3 });
+        await page.waitForTimeout(150);
+      }
+      await page.mouse.up();
+    };
     await recordScenes(browser, target!.dir, [
-      // ① つかみ: 30階のタワーが西へ傾きながら崩れ、1階・11階・21階の閃光が下から上へ連なる
+      // ① つかみ: 1万匹が月夜の城壁を波のように登って越えてくる。城の内側から見下ろすと、何千もの目が光る
       {
         seconds: 4,
-        shortSeconds: 4.5,
+        shortSeconds: 5,
         setup: async (page) => {
           await openFor(page, { seed: 81, sound: true });
-          await startP(page, `forcedJob = { type: 'tower', F: 30 };`);
-          await stage(page, CHARGE.hook);
-          await page.waitForTimeout(300);
+          await startP(page);
+          await stage(page, `debugWarp(WALL_Z - 13, 10400, 0, 150); T[0] = { x: 0, z: WALL_Z + 12 }; ${NO_HINTS}`);
         },
         play: async (page, clip) => {
-          await stage(page, 'fireNow();' + snapCam);
-          await page.waitForTimeout(700);
+          await expect.poll(() => gt<number>(page, 'climbing'), { timeout: 20_000, intervals: [100] }).toBeGreaterThan(2200);
+          await page.waitForTimeout(600);
           clip.mark();
-          await page.waitForTimeout(900);
+          await page.waitForTimeout(1300);
           if (!SHORT) await page.screenshot({ path: path.join(target!.dir, 'screenshot.png') });
           await rest(page, clip);
         },
       },
-      // ② 基本: 図面の柱をタップして爆薬を仕掛け(順番の色を変えながら)、発破を押して 3・2・1
+      // ② 基本: 下水道の12匹をドラッグで残飯へ導くと、食べた分だけ増えていく
       {
-        seconds: 6,
-        shortSeconds: 4,
+        seconds: 5,
+        shortSeconds: 3.5,
         setup: async (page) => {
           await openFor(page, { seed: 82, sound: true });
           await startP(page);
-          await page.waitForTimeout(1200);
+          await page.waitForTimeout(600);
         },
         play: async (page, clip) => {
           clip.mark();
-          const click = async (li: number, d: number, every: number) => {
-            await page.locator(`.br[data-d="${d}"]`).click();
-            await page.locator(`#lv-${li}`).click();
-            const cols = await gt<any[]>(page, 'planColumns');
-            for (const [i, c] of cols.entries()) if (i % every === 0) { await page.mouse.click(c.x, c.y); await page.waitForTimeout(SHORT ? 40 : 70); }
-          };
-          await click(0, 0, 1);
-          await click(1, 1, 1);
-          await click(2, 2, 1);
-          await page.locator('#b-fire').click();
+          await lead(page, clip.until - 200, async () => {
+            const c = await gt<{ x: number; z: number }>(page, 'center');
+            const f = (await gt<any[]>(page, 'foods')).filter((f) => f.amt > 0 && f.z > c.z - 3).sort((a, b) => a.z - b.z)[0];
+            return f || { x: 0, z: c.z + 10 };
+          });
           await rest(page, clip);
         },
       },
-      // ③ 発破: 空き地の側の柱が先に飛び、ビルが空き地へ倒れこんで土煙が上がる
+      // ③ 穀物倉: 700匹が穀物の山に群がり、数が一気に跳ね上がる
       {
         seconds: 6,
         shortSeconds: 4,
         setup: async (page) => {
           await openFor(page, { seed: 83, sound: true });
           await startP(page);
-          await stage(page, CHARGE.fell);
+          await stage(page, `debugWarp(186, 700, world.granSide * 3, 70); ${NO_HINTS}`);
           await page.waitForTimeout(300);
         },
         play: async (page, clip) => {
-          await stage(page, 'fireNow();' + snapCam);
-          await page.waitForTimeout(300);
           clip.mark();
+          await lead(page, clip.until - 100, async () => {
+            const c = await gt<{ x: number; z: number }>(page, 'center');
+            const f = (await gt<any[]>(page, 'foods')).filter((f) => f.kind === 'grain' && f.amt > 0).sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z))[0];
+            return f || { x: c.x, z: c.z + 8 };
+          });
           await rest(page, clip);
         },
       },
-      // ④ 結果: 煙が晴れて判子、次の無傷のビルが立っている(頭へ戻る)
+      // ④ 落城: 中庭の兵士を飲み込み、大群が大広間へなだれ込んで旗が落ちる
       {
-        seconds: 5,
-        shortSeconds: 3,
+        seconds: 7,
+        shortSeconds: 4.5,
         setup: async (page) => {
           await openFor(page, { seed: 84, sound: true });
           await startP(page);
-          await stage(page, CHARGE.implode + '; fireNow();' + snapCam + ' window.__simSpeed = 5;');
-          await expect.poll(() => gt<string>(page, 'state'), { timeout: 120_000 }).toBe('settle');
-          await stage(page, 'window.__simSpeed = 1;');
+          await stage(page, `debugWarp(WALL_Z + WALL_T + 6, 9200, 0, 120); ${NO_HINTS}`);
+          await page.waitForTimeout(300);
         },
         play: async (page, clip) => {
           clip.mark();
-          await expect.poll(() => gt<string>(page, 'state'), { timeout: 8_000 }).toBe('result');
-          await page.waitForTimeout(SHORT ? 800 : 1600);
-          await page.locator('#b-next').click();
+          await lead(page, clip.until - 100, async () => ({ x: 0, z: 434 }));
           await rest(page, clip);
         },
       },
@@ -217,22 +251,23 @@ test.describe('プレイテスト', () => {
     const shot = (name: string) => page.screenshot({ path: path.join(REVIEW, `${info.project.name}-${name}.png`) });
     fs.mkdirSync(REVIEW, { recursive: true });
     await open(page, { seed: 91 });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(2500);
     await shot('1title');
     await start(page);
     await page.waitForTimeout(1500);
-    await shot('2plan');
-    await stage(page, CHARGE.fell + '; updateHUD();');
-    await page.waitForTimeout(500);
-    await shot('3charged');
-    await stage(page, 'fireNow();' + snapCam);
-    await page.waitForTimeout(2500);
-    await shot('4blast');
-    await page.waitForTimeout(2500);
-    await shot('5fall');
-    await stage(page, 'window.__simSpeed = 5;');
-    await expect.poll(() => gt<string>(page, 'state'), { timeout: 120_000 }).toBe('result');
-    await page.waitForTimeout(800);
+    await shot('2sewer');
+    await stage(page, `debugWarp(110, 260, 0, 50)`);
+    await page.waitForTimeout(1500);
+    await shot('3village');
+    await stage(page, `debugWarp(255, 2500, 0, 100); T[0] = { x: 0, z: 270 };`);
+    await page.waitForTimeout(3000);
+    await shot('4fire');
+    await stage(page, `debugWarp(WALL_Z - 12, 8000, 0, 150); T[0] = { x: 0, z: WALL_Z + 12 };`);
+    await page.waitForTimeout(7000);
+    await shot('5wall');
+    await stage(page, `debugWarp(WALL_Z + WALL_T + 6, 6000, 0, 150); T[0] = { x: 0, z: 434 };`);
+    await expect.poll(() => gt<string>(page, 'state'), { timeout: 60_000 }).toBe('result');
+    await page.waitForTimeout(600);
     await shot('6result');
   });
 });
