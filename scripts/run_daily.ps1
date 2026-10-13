@@ -36,6 +36,9 @@ $AllowedTools = @(
     'Bash(git push:*)'
     'Bash(git diff:*)'
     'Bash(git log:*)'
+    # 作り終えた注文を消す・順番待ちの注文を移す(CLAUDE.md 手順2。2026-10-13 にオーナーが許可)
+    'Bash(git rm:*)'
+    'Bash(git mv:*)'
     'Bash(npx playwright test:*)'
     'Bash(npm test:*)'
     # Xのトレンドを確かめるための検索(CLAUDE.md 2章の手順3)
