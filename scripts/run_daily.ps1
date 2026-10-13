@@ -95,6 +95,18 @@ $weekdayMap = @{
     'Thursday' = '木曜日'; 'Friday' = '金曜日'; 'Saturday' = '土曜日'
 }
 
+# 同時に2つ動かさない(手で -Force で動かしている間に20:00の回が始まると、同じファイルを取り合うため)。
+# 前の回が途中で落ちて鍵が残っていても、その PID のプロセスがもう無ければ無視する
+$lock = Join-Path $logDir 'run.lock'
+if (Test-Path $lock) {
+    $old = (Get-Content $lock -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($old -and (Get-Process -Id ([int]$old) -ErrorAction SilentlyContinue)) {
+        Write-Log "別の制作が動いているので、何もせずに終わります(PID $old)"
+        exit 0
+    }
+}
+Set-Content -Path $lock -Value $PID
+
 Write-Log '=== 制作をはじめます ==='
 
 # 1. 最新を取り込む(GitHub Actions が posts.json を更新しているため)
@@ -232,4 +244,5 @@ if ($code -eq 0) {
     }
 }
 
+Remove-Item $lock -ErrorAction SilentlyContinue
 exit $code
