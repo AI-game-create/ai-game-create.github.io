@@ -424,5 +424,16 @@
     },
     "media": "video",
     "link": "body"
+  },
+  {
+    "date": "2026-10-15",
+    "slot": "release",
+    "tweet_id": "2110701289541718420",
+    "title": "ビル爆破解体",
+    "text": "【17日目】今日のゲームは『ビル爆破解体』です。夕暮れの街で古いビルの柱に爆薬を仕掛け、爆破の順番で倒れる向きを操って、隣のビルや線路を壊さずに空き地へ崩し落とす3D解体ゲーム。\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-15-bill-bakuha/",
+    "posted_at": "2026-10-15T20:56:17+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
