@@ -435,5 +435,16 @@
     "metrics": null,
     "media": "video",
     "link": "body"
+  },
+  {
+    "date": "2026-10-16",
+    "slot": "release",
+    "tweet_id": "2111063604816457986",
+    "title": "ネズミ1万匹で城攻め",
+    "text": "【18日目】今日のゲームは『ネズミ1万匹で城攻め』です。下水道から出た12匹を食べ物へ導いて増やし、炎や兵士をかわして1万匹の大群に。夜の城壁を乗り越え、大広間を埋めつくせ。苦手な動物の群れに挑戦しました🐀\nモデル：Opus5.5 #ゲーム制作\n▶ あそぶ https://ai-game-create.github.io/games/2026-10-16-nezumi-shiro/",
+    "posted_at": "2026-10-16T20:55:59+09:00",
+    "metrics": null,
+    "media": "video",
+    "link": "body"
   }
 ]
